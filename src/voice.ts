@@ -1,49 +1,45 @@
-import { execFile, execFileSync } from "node:child_process";
-import { promisify } from "node:util";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
-const execFileAsync = promisify(execFile);
+import path from "node:path";
 
-const piperCandidates = [
-  process.env.PIPER_EXE,
-  "C:\\tools\\piper\\piper.exe",
-  "piper"
+const kokoroModel = process.env.KOKORO_MODEL ?? path.join(process.cwd(), "tools", "kokoro", "kokoro-v1.0.int8.onnx");
+const kokoroVoices = process.env.KOKORO_VOICES ?? path.join(process.cwd(), "tools", "kokoro", "voices-v1.0.bin");
+const kokoroVoice = process.env.KOKORO_VOICE ?? "af_heart";
+const kokoroScript = path.join(process.cwd(), "src", "kokoro-tts.py");
+
+const pythonCandidates = [
+  process.env.PYTHON,
+  "python",
+  "python3"
 ].filter(Boolean) as string[];
 
-const piperModel = process.env.PIPER_MODEL ?? "C:\\tools\\piper\\voices\\en_US-lessac-medium.onnx";
-
 export async function makeVoice(text: string, outputWav: string): Promise<void> {
-  for (const candidate of piperCandidates) {
-    try {
-      execFileSync(candidate, ["-m", piperModel, "-f", outputWav], {
-        input: `${text}\n`,
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"]
-      });
-      return;
-    } catch {
-      // Try the next available engine.
-    }
+  if (!kokoroModel || !kokoroVoices) {
+    throw new Error("Set KOKORO_MODEL and KOKORO_VOICES to your Kokoro model and voices file. No other speech engine is configured.");
+  }
+  if (!(await exists(kokoroModel)) || !(await exists(kokoroVoices))) {
+    throw new Error(`Kokoro files were not found: ${kokoroModel}, ${kokoroVoices}`);
   }
 
-  const espeakCandidates = [
-    process.env.ESPEAK_NG_PATH,
-    "espeak-ng",
-    "C:\\Program Files\\eSpeak NG\\espeak-ng.exe"
-  ].filter(Boolean) as string[];
-
-  for (const candidate of espeakCandidates) {
+  for (const python of pythonCandidates) {
     try {
-      await execFileAsync(candidate, ["-s", "155", "-v", "en-us", "-w", outputWav, text]);
+      execFileSync(python, [
+        kokoroScript,
+        "--model", kokoroModel,
+        "--voices", kokoroVoices,
+        "--voice", kokoroVoice,
+        "--output", outputWav
+      ], { input: `${text}\n`, encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] });
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
     }
   }
 
-  throw new Error("No speech engine was found. Install Piper or espeak-ng.");
+  throw new Error("Kokoro could not be run. Install Python and kokoro-onnx, then set KOKORO_MODEL and KOKORO_VOICES.");
 }
 
-async function pathExists(filePath: string): Promise<boolean> {
+async function exists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
     return true;
