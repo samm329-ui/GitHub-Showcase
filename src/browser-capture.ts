@@ -1,7 +1,7 @@
 import CDP from "chrome-remote-interface";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CHROME_DEBUG_URL, CAPTURE_FPS, VIEWPORT } from "./config.js";
+import { CHROME_DEBUG_URL, VIEWPORT } from "./config.js";
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -25,11 +25,11 @@ export async function captureRepository(
       deviceScaleFactor: 1,
       mobile: true
     });
-    try { await Emulation.setEmulatedMedia({ media: "screen", colorScheme: "dark" }); } catch { /* older Chromium builds may not support this */ }
+    try { await Emulation.setEmulatedMedia({ media: "screen", colorScheme: "dark" }); } catch { /* optional */ }
     try { await Emulation.setUserAgentOverride({ userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36", platform: "Android" }); } catch { /* optional */ }
     await Page.navigate({ url });
     await Page.loadEventFired();
-    await sleep(2200);
+    await sleep(2500);
 
     await Runtime.evaluate({
       expression: `const __style = document.createElement("style");
@@ -57,24 +57,10 @@ export async function captureRepository(
         });
         document.body.appendChild(watermark);`
     });
+    await sleep(800);
 
-    const totalFrames = Math.max(1, Math.ceil(durationSeconds * CAPTURE_FPS));
-    const progressStep = Math.max(1, Math.ceil(totalFrames / 10));
-    for (let i = 0; i < totalFrames; i++) {
-      const shot = await Page.captureScreenshot({ format: "jpeg", quality: 84, fromSurface: true });
-      await fs.writeFile(
-        path.join(outputDir, `frame-${String(i).padStart(5, "0")}.jpg`),
-        Buffer.from(shot.data, "base64")
-      );
-      await Runtime.evaluate({
-        expression: `window.scrollBy(0, Math.max(1, (document.documentElement.scrollHeight - window.innerHeight) / ${Math.max(1, totalFrames - 1)}));`
-      });
-      await sleep(1000 / CAPTURE_FPS);
-      if (i % progressStep === 0 || i === totalFrames - 1) {
-        const percent = Math.round(((i + 1) / totalFrames) * 100);
-        console.log(`Capture progress: ${percent}% (${i + 1}/${totalFrames})`);
-      }
-    }
+    const shot = await Page.captureScreenshot({ format: "jpeg", quality: 90, fromSurface: true, captureBeyondViewport: true });
+    await fs.writeFile(path.join(outputDir, "fullpage.jpg"), Buffer.from(shot.data, "base64"));
   } finally {
     await client.close();
     try { await CDP.Close({ id: target.id, host: endpoint.hostname, port }); } catch { /* target may already be closed */ }
