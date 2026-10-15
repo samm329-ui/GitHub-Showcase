@@ -1,17 +1,24 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { CAPTURE_FPS, FPS } from "./config.js";
+import { FPS } from "./config.js";
 
 const execFileAsync = promisify(execFile);
 
-export async function renderVideo(framesDir: string, wavPath: string, captionsConcatPath: string, outputPath: string): Promise<void> {
+export async function renderVideo(
+  imagePath: string, wavPath: string, captionsConcatPath: string,
+  durationSeconds: number, outputPath: string
+): Promise<void> {
+  const duration = Math.max(1, durationSeconds);
   const filterComplex =
-    "[0:v]scale=1080:1920:flags=lanczos[base]; [2:v]format=yuva420p[captions]; [base][captions]overlay=shortest=1:eof_action=pass[v]";
+    `[0:v]crop=540:960:0:'min((ih-oh)*t/${duration},ih-oh)',scale=1080:1920:flags=lanczos,vignette=PI/5[base]; ` +
+    `[2:v]format=yuva420p[captions]; ` +
+    `[base][captions]overlay=shortest=1:eof_action=pass[v]`;
   await execFileAsync("ffmpeg", [
     "-y",
-    "-framerate", String(CAPTURE_FPS),
-    "-i", path.join(framesDir, "frame-%05d.jpg"),
+    "-loop", "1",
+    "-framerate", String(FPS),
+    "-i", imagePath,
     "-i", wavPath,
     "-f", "concat",
     "-safe", "0",
@@ -23,7 +30,7 @@ export async function renderVideo(framesDir: string, wavPath: string, captionsCo
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
     "-r", String(FPS),
     "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
-    "-shortest", "-t", String(20),
+    "-shortest", "-t", String(duration),
     "-pix_fmt", "yuv420p", "-movflags", "+faststart",
     outputPath
   ], { maxBuffer: 20 * 1024 * 1024 });
