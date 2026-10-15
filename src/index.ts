@@ -90,17 +90,18 @@ async function main(): Promise<void> {
   ]);
   const audioSeconds = Math.max(5, Math.min(MAX_SECONDS, Number(stdout.trim()) || 20));
 
-  console.log("Stage 3/5: Capturing the GitHub page with scrolling...");
+  console.log("Stage 3/5: Capturing full GitHub page...");
   await captureRepository(`https://github.com/${fullName}`, framesDir, Math.ceil(audioSeconds), {
     stars: facts.stars, license: facts.license, language: facts.language
   });
+  const imagePath = path.join(framesDir, "fullpage.jpg");
 
   console.log("Stage 4/5: Creating captions and rendering MP4...");
   const layers = await generateCaptionLayers(narration, audioSeconds, captionsDir);
   await fs.writeFile(captionsManifest, JSON.stringify(layers, null, 2), "utf8");
   const concatLines = layers.map(layer => `file '${layer.file.replace(/\\/g, "/")}'\nduration ${Math.max(0.05, layer.end - layer.start)}`).join("\n") + "\n";
   await fs.writeFile(captionsConcat, concatLines, "utf8");
-  await renderVideo(framesDir, wav, captionsConcat, output);
+  await renderVideo(imagePath, wav, captionsConcat, audioSeconds, output);
 
   const ffprobe = await execFileAsync("ffprobe", [
     "-v", "error", "-show_entries", "stream=codec_type,width,height", "-show_entries", "format=duration",
@@ -131,6 +132,6 @@ async function main(): Promise<void> {
 
 main().catch(error => {
   console.error("\nPipeline failed:", error instanceof Error ? error.message : error);
-  console.error("Check that Chrome remote debugging, FFmpeg, ffprobe, and espeak-ng are installed and available.");
+  console.error("Check that Chrome remote debugging on port 9222 is running, and that FFmpeg, ffprobe, Python, and Kokoro are available.");
   process.exitCode = 1;
 });
