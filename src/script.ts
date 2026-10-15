@@ -42,13 +42,15 @@ export function buildRepoFacts(repo: Repo, readme: string): RepoFacts {
 export function makeScript(repo: Repo, readme: string): string {
   const f = buildRepoFacts(repo, readme);
   const hook = makeHook(repo, f.purpose);
-  const purpose = trimWords(f.purpose, 17);
+  const purpose = trimWords(f.purpose, 16);
   const installLine = f.install;
   const accessLine = `${f.hosting}. ${f.cost}.`;
+  const useCase = inferUseCase(repo, readme, f);
   const licenseLine = licenseVoiceLine(f.license);
   const parts = [
     hook,
     `${(repo.full_name.split("/").pop() ?? repo.full_name)} is ${purpose}.`,
+    useCase ? `It is useful for ${useCase}.` : "",
     `To get started, ${installLine.charAt(0).toLowerCase() + installLine.slice(1)} ${accessLine}`,
     `${licenseLine} It has ${f.stars} GitHub stars, so it is worth a closer look.`
   ];
@@ -98,6 +100,17 @@ function licenseVoiceLine(license: string): string {
   if (/^(MIT|Apache-2\.0|BSD-2-Clause|BSD-3-Clause|ISC)$/i.test(license)) return `It lists the ${license} license.`;
   if (/no license detected/i.test(license)) return "No repository license was detected, so check the usage terms before using it.";
   return `Its listed license is ${license}. Check its terms before using it.`;
+}
+
+function inferUseCase(repo: Repo, readme: string, f: RepoFacts): string {
+  const text = `${repo.description ?? ""}\n${readme}\n${f.purpose}`.toLowerCase();
+  if (/self.hosted|run locally|docker/.test(text)) return "running your own instance where you control the data";
+  if (/automat/.test(text)) return "automating repetitive developer or business workflows";
+  if (/monito|metrics|observ/.test(text)) return "monitoring services and understanding system behavior";
+  if (/cli|command line|terminal/.test(text)) return "command-line workflows and developer tooling";
+  if (/web|dashboard|ui/.test(text)) return "building web-based tools and operational dashboards";
+  if (/api|sdk|library/.test(text)) return "integrating the project into other applications";
+  return "";
 }
 
 function cleanSentence(s: string): string {
