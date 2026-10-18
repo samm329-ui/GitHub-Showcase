@@ -1,6 +1,113 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { createCanvas } from "canvas";
+import type { CaptionPhrase } from "./types.js";
+
+/**
+ * Caption presentation.
+ *
+ * Captions are real DOM inside the stationary card, not one PNG per word.
+ * This module owns the visual tokens and the wrapping/highlight rules; the
+ * card renderer (`card.ts`) turns the result into elements.
+ *
+ * Design rules enforced here:
+ *  - no filled background box behind every word;
+ *  - at most `maxLines` lines, broken at a natural phrase boundary;
+ *  - only the words a segment marked as `emphasis` receive the highlight;
+ *  - highlights are matched whole-word, so partial matches never fire.
+ */
+
+export type CaptionStyle = {
+  fontFamily: string;
+  monoFamily: string;
+  fontSizePx: number;
+  fontWeight: number;
+  lineHeight: number;
+  letterSpacingPx: number;
+  color: string;
+  highlightColor: string;
+  textShadow: string;
+  maxWidthRatio: number;
+  bottomInsetPx: number;
+  maxLines: number;
+  maxCharsPerLine: number;
+  transform: string;
+  paddingPx: number;
+};
+
+export const CAPTION_STYLE: CaptionStyle = {
+  fontFamily:
+    "'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  monoFamily:
+    "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
+  fontSizePx: 34,
+  fontWeight: 800,
+  lineHeight: 1.12,
+  letterSpacingPx: -0.5,
+  color: "#FFFFFF",
+  highlightColor: "#FFD629",
+  textShadow: "0 2px 5px rgba(0,0,0,.8), 0 0 18px rgba(0,0,0,.45)",
+  maxWidthRatio: 0.92,
+  bottomInsetPx: 60,
+  maxLines: 2,
+  maxCharsPerLine: 30,
+  transform: "uppercase",
+  paddingPx: 8,
+};
+
+const CLAUSE_BREAK = /[,;:—–]$/;
+
+/**
+ * Break a caption phrase into at most `maxLines` lines at a natural boundary.
+ *
+ * The character budget is widened when necessary so the text is never dropped:
+ * losing the tail of a caption is worse than a slightly longer line.
+ */
+export function wrapCaptionText(
+  text: string,
+  maxLines = CAPTION_STYLE.maxLines,
+  maxCharsPerLine = CAPTION_STYLE.maxCharsPerLine
+): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+
+  const totalChars = words.join(" ").length;
+  const limit = Math.max(maxCharsPerLine, Math.ceil(totalChars / maxLines));
+
+  const lines: string[] = [];
+  let current: string[] = [];
+
+  for (const [index, word] of words.entries()) {
+    const candidate = [...current, word];
+    const remaining = words.length - index - 1;
+
+    if (current.length > 0 && candidate.join(" ").length > limit) {
+      lines.push(current.join(" "));
+      current = [word];
+      continue;
+    }
+    current = candidate;
+
+    // Prefer to break after a clause, as long as more text follows.
+    if (
+      current.length >= 3 &&
+      CLAUSE_BREAK.test(word) &&
+      remaining > 0 &&
+      lines.length < maxLines - 1
+    ) {
+      lines.push(current.join(" "));
+      current = [];
+    }
+  }
+  if (current.length) lines.push(current.join(" "));
+
+  return lines.slice(0, maxLines);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export type CaptionLayer = {
   start: number;
@@ -8,99 +115,50 @@ export type CaptionLayer = {
   file: string;
 };
 
-export async function generateCaptionLayers(
-  narration: string,
-  durationSeconds: number,
-  outputDir: string
-): Promise<CaptionLayer[]> {
-  await fs.mkdir(outputDir, { recursive: true });
-  const words = narration.trim().split(/\s+/).filter(Boolean);
-  const groups: string[] = [];
-  for (let i = 0; i < words.length; i += 4) groups.push(words.slice(i, i + 4).join(" "));
-  const duration = Math.max(1, Math.min(durationSeconds, 30));
-  const weights = groups.map(group => Math.max(8, group.replace(/\s/g, "").length));
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
-  let cursor = 0;
-  const layers: CaptionLayer[] = [];
-  let index = 0;
+/** Split a phrase into `{ text, highlighted }` runs for rendering. */
+export function captionRuns(
+  phrase: CaptionPhrase
+): { text: string; highlighted: boolean }[] {
+  const lines = wrapCaptionText(phrase.text);
+  const runs: { text: string; highlighted: boolean }[] = [];
+  const highlightSet = new Set(phrase.highlights.map(word => word.toLowerCase()));
 
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-    const line = groups[groupIndex];
-    const groupWords = line.split(/\s+/);
-    const segmentStart = cursor;
-    const segment = duration * (weights[groupIndex] / totalWeight);
-    cursor = Math.min(duration, segmentStart + segment);
-    const segmentEnd = groupIndex === groups.length - 1 ? duration : Math.min(duration, segmentStart + segment);
-    const step = (segmentEnd - segmentStart) / Math.max(1, groupWords.length);
-
-    const canvas = createCanvas(1080, 1920);
-    const ctx = canvas.getContext("2d");
-    const font = "bold 58px Arial";
-    ctx.font = font;
-    const space = ctx.measureText(" ").width;
-    const wordWidths = groupWords.map(word => ctx.measureText(word.toUpperCase()).width);
-    const totalWidth = wordWidths.reduce((sum, width) => sum + width, 0) + space * Math.max(0, groupWords.length - 1);
-    const startX = (1080 - totalWidth) / 2;
-    const baselineY = 1920 - 250;
-    const positions: number[] = [];
-    let x = startX;
-    for (let i = 0; i < groupWords.length; i += 1) {
-      positions.push(x);
-      x += wordWidths[i] + space;
+  lines.forEach((line, lineIndex) => {
+    if (lineIndex > 0) runs.push({ text: " ", highlighted: false });
+    for (const [wordIndex, word] of line.split(/\s+/).filter(Boolean).entries()) {
+      if (wordIndex > 0) runs.push({ text: " ", highlighted: false });
+      const clean = word.replace(/[^\w.+#-]/g, "");
+      runs.push({
+        text: word,
+        highlighted: highlightSet.has(clean.toLowerCase()),
+      });
     }
+  });
 
-    for (let wordIndex = 0; wordIndex < groupWords.length; wordIndex += 1) {
-      const activeStart = Math.min(segmentEnd, segmentStart + step * wordIndex);
-      const activeEnd = Math.min(segmentEnd, segmentStart + step * (wordIndex + 1));
-      const layerCanvas = createCanvas(1080, 1920);
-      const layerContext = layerCanvas.getContext("2d");
-      layerContext.font = font;
-      layerContext.textBaseline = "alphabetic";
-
-      // Base line: white caption text.
-      layerContext.fillStyle = "#FFFFFF";
-      for (let i = 0; i < groupWords.length; i += 1) {
-        layerContext.fillText(groupWords[i].toUpperCase(), positions[i], baselineY);
-      }
-
-      // Active word: lemon-yellow box with black text.
-      const activeWord = groupWords[wordIndex].toUpperCase();
-      const activeWidth = wordWidths[wordIndex];
-      const padX = 12;
-      const padY = 10;
-      const boxX = positions[wordIndex] - padX;
-      const boxY = baselineY - 58 - padY + 6;
-      const boxWidth = activeWidth + padX * 2;
-      const boxHeight = 58 + padY * 2;
-      layerContext.fillStyle = "#F5E94B";
-      roundRect(layerContext, boxX, boxY, boxWidth, boxHeight, 8);
-      layerContext.fill();
-      layerContext.fillStyle = "#000000";
-      layerContext.fillText(activeWord, positions[wordIndex], baselineY);
-
-      const filePath = path.join(outputDir, `caption-${index}.png`);
-      await fs.writeFile(filePath, layerCanvas.toBuffer("image/png"));
-      layers.push({ start: activeStart, end: activeEnd, file: filePath });
-      index += 1;
-    }
-  }
-
-  if (layers.length === 0) {
-    return [];
-  }
-  return layers;
+  return runs;
 }
 
-function roundRect(context: any, x: number, y: number, width: number, height: number, radius: number): void {
-  context.beginPath();
-  context.moveTo(x + radius, y);
-  context.lineTo(x + width - radius, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + radius);
-  context.lineTo(x + width, y + height - radius);
-  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  context.lineTo(x + radius, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - radius);
-  context.lineTo(x, y + radius);
-  context.quadraticCurveTo(x, y, x + radius, y);
-  context.closePath();
+/**
+ * HTML for one caption phrase. The card renderer injects this; the highlight
+ * is a colour change only — never a filled box.
+ */
+export function captionHtml(phrase: CaptionPhrase): string {
+  const text = CAPTION_STYLE.transform === "uppercase" ? phrase.text.toUpperCase() : phrase.text;
+  const runs = captionRuns(phrase).map(run =>
+    run.highlighted
+      ? `<span class="hl">${escapeHtml(run.text)}</span>`
+      : escapeHtml(run.text)
+  );
+  return `<div class="caption-line">${runs.join("")}</div>`;
+}
+
+/** The caption that should be on screen at a given time, or `null`. */
+export function captionAt(
+  captions: CaptionPhrase[],
+  timeMs: number
+): CaptionPhrase | null {
+  for (const caption of captions) {
+    if (timeMs >= caption.startMs && timeMs < caption.endMs) return caption;
+  }
+  return null;
 }
