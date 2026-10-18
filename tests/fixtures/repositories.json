@@ -1,0 +1,286 @@
+{
+  "repositories": {
+    "high-quality-popular": {
+      "node_id": "R_fixture_popular",
+      "full_name": "acme/rocket-cli",
+      "html_url": "https://github.com/acme/rocket-cli",
+      "description": "A command-line tool that scaffolds, lints and deploys TypeScript services in one step.",
+      "created_at": "2021-03-04T10:00:00Z",
+      "updated_at": "2026-09-30T10:00:00Z",
+      "pushed_at": "2026-10-10T10:00:00Z",
+      "stargazers_count": 18400,
+      "forks_count": 910,
+      "open_issues_count": 62,
+      "language": "TypeScript",
+      "default_branch": "main",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT"
+      },
+      "topics": [
+        "cli",
+        "developer-tools",
+        "typescript"
+      ],
+      "homepage": "https://rocket-cli.example.com",
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 4200,
+      "readme": "# Rocket CLI\n\n[![build](https://img.shields.io/badge/build-passing-green)](https://example.com)\n[![npm](https://img.shields.io/badge/npm-v3.2.0-blue)](https://example.com)\n\nRocket CLI is a command-line tool that scaffolds, lints and deploys TypeScript\nservices in one step. It exists because setting up a service by hand means\nediting six config files, wiring a linter, and reading deployment docs before\nyou write any code of your own.\n\n## Why\n\nStarting a new service in an existing organisation usually means copying a\ntemplate that is three versions out of date. The template drifts, the lint rules\ndrift, and nobody notices until CI fails on the first pull request.\n\n## Features\n\n- One command scaffolds a service with linting and tests already wired up\n- Deploys to any container host from the same terminal\n- Config lives in a single file you can review in a pull request\n- Works with an existing monorepo without restructuring it\n- Dry-run every step and print the exact commands before they execute\n\n## Install\n\n```bash\nnpm install -g rocket-cli\n```\n\nThe package ships prebuilt binaries for Linux, macOS and Windows on the current\nand previous major release.\n\n## Usage\n\n```bash\nrocket init my-service\nrocket deploy my-service --env staging\n```\n\n## Commands\n\n| Command | What it does |\n| --- | --- |\n| `rocket init` | Creates a new service from the house template |\n| `rocket check` | Runs the configured linter and type checker |\n| `rocket deploy` | Builds a container and pushes it to the configured host |\n\n## Configuration\n\n```json\n{\n  \"host\": \"container\",\n  \"region\": \"eu-west-1\",\n  \"lint\": \"strict\"\n}\n```\n\n## Contributing\n\nOpen a pull request with a test. Run `rocket check` before you push.\n\n## License\n\nMIT\n",
+      "root_files": [
+        {
+          "name": "src",
+          "path": "src",
+          "type": "dir"
+        },
+        {
+          "name": "docs",
+          "path": "docs",
+          "type": "dir"
+        },
+        {
+          "name": "package.json",
+          "path": "package.json",
+          "type": "file"
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "type": "file"
+        }
+      ],
+      "release": {
+        "tag_name": "v3.2.0",
+        "name": "3.2.0",
+        "published_at": "2026-09-01T00:00:00Z",
+        "html_url": ""
+      }
+    },
+    "useful-underdog": {
+      "node_id": "R_fixture_underdog",
+      "full_name": "tinyworks/logline",
+      "html_url": "https://github.com/tinyworks/logline",
+      "description": "A small log formatter that collapses noisy stack traces into one readable line.",
+      "created_at": "2025-11-02T10:00:00Z",
+      "updated_at": "2026-10-12T10:00:00Z",
+      "pushed_at": "2026-10-14T10:00:00Z",
+      "stargazers_count": 210,
+      "forks_count": 12,
+      "open_issues_count": 4,
+      "language": "Rust",
+      "default_branch": "main",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0"
+      },
+      "topics": [
+        "logging",
+        "cli",
+        "rust"
+      ],
+      "homepage": null,
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 180,
+      "readme": "# Logline\n\n[![crates](https://img.shields.io/badge/crates-0.9.1-orange)](https://example.com)\n\nLogline is a small log formatter that collapses noisy stack traces into one\nreadable line. It is built for people who read logs in a terminal and do not\nwant a GUI, a daemon, or a configuration file.\n\n## Why\n\nWhen a service fails, the interesting information is the frame that threw. Most\ntools bury it under thirty lines of framework internals, so you end up scrolling\na terminal instead of reading the error.\n\n## Features\n\n- Collapses multi-line stack traces into a single line\n- Keeps the file and line number you actually need\n- Runs as a filter in an existing pipeline\n- No configuration, no daemon, no network calls\n- Works on any stream, including from a container\n\n## Install\n\n```bash\ncargo install logline\n```\n\n## Usage\n\n```bash\nmy-service 2>&1 | logline\n```\n\nOutput looks like this:\n\n```\nerror  handler.rs:88  unhandled variant\n```\n\n## License\n\nApache-2.0\n",
+      "root_files": [
+        {
+          "name": "src",
+          "path": "src",
+          "type": "dir"
+        },
+        {
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "file"
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "type": "file"
+        }
+      ],
+      "release": {
+        "tag_name": "v0.9.1",
+        "name": "0.9.1",
+        "published_at": "2026-08-20T00:00:00Z",
+        "html_url": ""
+      }
+    },
+    "abandoned": {
+      "node_id": "R_fixture_abandoned",
+      "full_name": "oldco/legacy-sync",
+      "html_url": "https://github.com/oldco/legacy-sync",
+      "description": "Synchronises a local folder with a legacy storage bucket.",
+      "created_at": "2016-02-01T00:00:00Z",
+      "updated_at": "2019-01-05T00:00:00Z",
+      "pushed_at": "2019-01-05T00:00:00Z",
+      "stargazers_count": 43,
+      "forks_count": 9,
+      "open_issues_count": 21,
+      "language": "Python",
+      "default_branch": "master",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT"
+      },
+      "topics": [
+        "sync",
+        "storage"
+      ],
+      "archived": true,
+      "disabled": false,
+      "fork": false,
+      "size": 90,
+      "readme": "# legacy-sync\n\nSynchronises a local folder with a legacy storage bucket.",
+      "root_files": [
+        {
+          "name": "sync.py",
+          "path": "sync.py",
+          "type": "file"
+        }
+      ],
+      "release": null
+    },
+    "fork": {
+      "node_id": "R_fixture_fork",
+      "full_name": "someone/rocket-cli",
+      "html_url": "https://github.com/someone/rocket-cli",
+      "description": "A command-line tool that scaffolds TypeScript services.",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2026-10-01T00:00:00Z",
+      "pushed_at": "2026-10-01T00:00:00Z",
+      "stargazers_count": 12,
+      "forks_count": 1,
+      "open_issues_count": 0,
+      "language": "TypeScript",
+      "default_branch": "main",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT"
+      },
+      "topics": [
+        "cli"
+      ],
+      "archived": false,
+      "disabled": false,
+      "fork": true,
+      "size": 120,
+      "readme": "# rocket-cli fork\n\nA fork of a command-line tool.",
+      "root_files": [],
+      "release": null
+    },
+    "no-license": {
+      "node_id": "R_fixture_nolicense",
+      "full_name": "graybox/tinyfmt",
+      "html_url": "https://github.com/graybox/tinyfmt",
+      "description": "A tiny formatter for tabular text files with no dependencies.",
+      "created_at": "2025-06-01T00:00:00Z",
+      "updated_at": "2026-10-05T00:00:00Z",
+      "pushed_at": "2026-10-08T00:00:00Z",
+      "stargazers_count": 340,
+      "forks_count": 18,
+      "open_issues_count": 5,
+      "language": "Go",
+      "default_branch": "main",
+      "license": null,
+      "topics": [
+        "cli",
+        "formatting"
+      ],
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 140,
+      "readme": "# tinyfmt\n\n[![build](https://img.shields.io/badge/build-passing-green)](https://example.com)\n\ntinyfmt is a tiny formatter for tabular text files with no dependencies. It reads\na file of pipe-separated columns and rewrites it with consistent spacing, which\nmatters when the file is going to be diffed in review.\n\n## Why\n\nColumn alignment done by hand rots the moment somebody adds a field. A formatter\nis cheaper than a review comment.\n\n## Features\n\n- Normalises column width across a whole file\n- Has no runtime dependencies\n- Handles quoted fields that contain the separator\n- Leaves an existing file untouched when the parse fails\n\n## Install\n\n```bash\ngo install github.com/graybox/tinyfmt@latest\n```\n\n## Usage\n\n```bash\ntinyfmt table.csv\n```\n\n## Notes\n\nThe author has not stated a license. Check with them before you redistribute it.\n",
+      "root_files": [
+        {
+          "name": "main.go",
+          "path": "main.go",
+          "type": "file"
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "type": "file"
+        }
+      ],
+      "release": null
+    },
+    "empty-readme": {
+      "node_id": "R_fixture_empty",
+      "full_name": "anon/placeholder",
+      "html_url": "https://github.com/anon/placeholder",
+      "description": "A placeholder repository that has nothing to explain yet.",
+      "created_at": "2026-10-01T00:00:00Z",
+      "updated_at": "2026-10-02T00:00:00Z",
+      "pushed_at": "2026-10-02T00:00:00Z",
+      "stargazers_count": 9000,
+      "forks_count": 400,
+      "open_issues_count": 0,
+      "language": null,
+      "default_branch": "main",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT"
+      },
+      "topics": [
+        "placeholder"
+      ],
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 5,
+      "readme": "# placeholder",
+      "root_files": [],
+      "release": null
+    },
+    "badge-only": {
+      "node_id": "R_fixture_badges",
+      "full_name": "shiny/badges-only",
+      "html_url": "https://github.com/shiny/badges-only",
+      "description": "A project with an unusually large number of stars and no documentation.",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2026-10-01T00:00:00Z",
+      "pushed_at": "2026-09-20T00:00:00Z",
+      "stargazers_count": 88000,
+      "forks_count": 9000,
+      "open_issues_count": 300,
+      "language": "JavaScript",
+      "default_branch": "main",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0"
+      },
+      "topics": [
+        "javascript"
+      ],
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 900,
+      "readme": "![build](https://img.shields.io/badge/build-passing-green)\n![npm](https://img.shields.io/badge/npm-v1-blue)\n![stars](https://img.shields.io/badge/stars-many-yellow)\n![license](https://img.shields.io/badge/license-Apache--2.0-blue)\n",
+      "root_files": [
+        {
+          "name": "index.js",
+          "path": "index.js",
+          "type": "file"
+        }
+      ],
+      "release": {
+        "tag_name": "v9.0.0",
+        "name": "9.0.0",
+        "published_at": "2026-09-01T00:00:00Z",
+        "html_url": ""
+      }
+    }
+  }
+}
