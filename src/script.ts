@@ -1,4 +1,14 @@
-import type { Repo } from "./github.js";
+import type { EnrichedRepo, FactLedger } from "./types.js";
+import { buildFactLedger, narratableFacts } from "./facts.js";
+import { buildNarrationPlan, type PhraseHistory } from "./narration.js";
+
+/**
+ * Backwards-compatible façade over `facts.ts` + `narration.ts`.
+ *
+ * The public shapes (`RepoFacts`, `buildRepoFacts`, `makeScript`) are preserved
+ * so existing callers keep working, but the guessing is gone: every value now
+ * comes from the fact ledger and is omitted rather than invented.
+ */
 
 export type RepoFacts = {
   purpose: string;
@@ -8,10 +18,12 @@ export type RepoFacts = {
   license: string;
   stars: string;
   language: string;
+  /** Facts that were dropped because no evidence existed. */
+  unverified: string[];
 };
 
-export function buildRepoFacts(repo: Repo, readme: string): RepoFacts {
-  const plain = readme
+function plainReadmeText(readme: string | null): string {
+  return (readme ?? "")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
@@ -20,105 +32,112 @@ export function buildRepoFacts(repo: Repo, readme: string): RepoFacts {
     .replace(/[*_`>#~-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
 
-  const desc = repo.description?.trim();
-  const sentences = plain.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(s => s.length > 24) ?? [];
-  const purpose = cleanSentence(desc || sentences[0] || `${repo.full_name} is an open-source developer project`);
-  const install = inferInstall(readme);
-  const hosting = inferHosting(readme, plain);
-  const cost = inferCost(readme, plain);
-  const license = repo.license?.spdx_id || repo.license?.name || "No license detected";
+/**
+ * Build the legacy flat fact record from an enriched repository.
+ * Unlike the previous implementation this never invents values: a field that
+ * has no supporting fact comes back as an empty string and is listed in
+ * `unverified`.
+ */
+export function buildRepoFactsFromEnriched(repo: EnrichedRepo): RepoFacts {
+  const ledger = buildFactLedger(repo);
+  return factsFromLedger(repo, ledger);
+}
+
+export function factsFromLedger(repo: EnrichedRepo, ledger: FactLedger): RepoFacts {
+  const usable = narratableFacts(ledger);
+  const ofKind = (kind: string) => usable.filter(item => item.kind === kind);
+
+  const purpose = ofKind("purpose")[0]?.spoken ?? "";
+  const installFact = ofKind("install")[0];
+  const hostingFact = ofKind("requirement").find(item =>
+    /self-hosted|runs? locally|your own machine/i.test(item.claim)
+  );
+  const costFact = ofKind("requirement").find(item =>
+    /pricing|subscription|api key|free/i.test(item.claim)
+  );
+  const licenseFact = ofKind("license")[0];
+  const adoption = ofKind("adoption")[0];
+  const language = ofKind("language")[0];
+
+  const unverified: string[] = [];
+  if (!purpose) unverified.push("purpose");
+  if (!installFact) unverified.push("install");
+  if (!hostingFact) unverified.push("hosting");
+  if (!costFact) unverified.push("cost");
+  if (!licenseFact) unverified.push("license");
+
   return {
     purpose,
-    install,
-    hosting,
-    cost,
-    license,
-    stars: repo.stargazers_count.toLocaleString("en-US"),
-    language: repo.language || "Not specified"
+    install: installFact?.spoken ?? "",
+    hosting: hostingFact?.spoken ?? "",
+    cost: costFact?.spoken ?? "",
+    license: licenseFact?.spoken ?? (repo.licenseSpdxId ?? ""),
+    stars: adoption?.spoken ?? "",
+    language: language?.spoken ?? "",
+    unverified,
   };
 }
 
-export function makeScript(repo: Repo, readme: string): string {
-  const f = buildRepoFacts(repo, readme);
-  const hook = makeHook(repo, f.purpose);
-  const purpose = trimWords(f.purpose, 16);
-  const installLine = f.install;
-  const accessLine = `${f.hosting}. ${f.cost}.`;
-  const useCase = inferUseCase(repo, readme, f);
-  const licenseLine = licenseVoiceLine(f.license);
-  const parts = [
-    hook,
-    `${(repo.full_name.split("/").pop() ?? repo.full_name)} is ${purpose}.`,
-    useCase ? `It is useful for ${useCase}.` : "",
-    `To get started, ${installLine.charAt(0).toLowerCase() + installLine.slice(1)} ${accessLine}`,
-    `${licenseLine} It has ${f.stars} GitHub stars, so it is worth a closer look.`
-  ];
-  return trimWords(parts.join(" ").replace(/\s+/g, " ").trim(), 45);
+/**
+ * Legacy helper: accepts the same `(repo, readme)` arguments as before.
+ * The repository is enriched locally (no extra network calls) so historical
+ * callers keep compiling and producing the same field names.
+ */
+export function buildRepoFacts(
+  repo: Parameters<typeof toLocalEnriched>[0],
+  readme: string
+): RepoFacts {
+  return buildRepoFactsFromEnriched(toLocalEnriched(repo, readme));
 }
 
-function makeHook(repo: Repo, purpose: string): string {
-  const name = (repo.full_name.split("/").pop() ?? repo.full_name).replace(/[-_]/g, " ");
-  const hooks = [
-    `Found a tool worth knowing: ${name}.`,
-    `This project could save you some serious time: ${name}.`,
-    `Before you build this yourself, meet ${name}.`,
-    `Here's an open-source project you might have missed: ${name}.`
-  ];
-  // Stable per-repository hook so repeated runs don't randomly change tone.
-  const index = [...repo.full_name].reduce((n, c) => n + c.charCodeAt(0), 0) % hooks.length;
-  return hooks[index];
+function toLocalEnriched(
+  repo: import("./types.js").Repo,
+  readme: string
+): EnrichedRepo {
+  const [owner, name] = repo.full_name.split("/");
+  const spdx = repo.license?.spdx_id ?? null;
+  return {
+    ...repo,
+    nodeId: repo.node_id ?? `local:${repo.full_name.toLowerCase()}`,
+    owner: owner ?? "",
+    name: repo.name ?? name ?? "",
+    updatedAt: repo.updated_at,
+    createdAt: repo.created_at ?? repo.updated_at,
+    pushedAt: repo.pushed_at ?? null,
+    archived: Boolean(repo.archived),
+    disabled: Boolean(repo.disabled),
+    fork: Boolean(repo.fork),
+    topics: repo.topics ?? [],
+    homepage: repo.homepage ?? null,
+    languages: {},
+    primaryLanguage: repo.language ?? null,
+    licenseSpdxId: spdx,
+    licenseName: repo.license?.name ?? null,
+    openSourceLicense: null,
+    readmeText: readme,
+    readmeUrl: repo.html_url ? `${repo.html_url}#readme` : null,
+    latestRelease: null,
+    rootFiles: [],
+    latestCommit: null,
+    sizeKb: repo.size ?? 0,
+    capturedAt: new Date().toISOString(),
+  };
 }
 
-function inferInstall(readme: string): string {
-  const text = readme.toLowerCase();
-  if (/docker compose|docker-compose/.test(text)) return "Run it with Docker Compose.";
-  if (/pip install|pip3 install/.test(text)) return "Install it with pip.";
-  if (/npm install|pnpm install|yarn install|bun install/.test(text)) return "Install it with the package manager shown in its README.";
-  if (/cargo install|cargo build/.test(text)) return "Build or install it with Cargo.";
-  if (/go install|go build/.test(text)) return "Build or install it with Go.";
-  if (/git clone/.test(text)) return "Clone the repository and follow its setup steps.";
-  if (/installation|getting started|quick start|setup/.test(text)) return "Follow the setup instructions in its README.";
-  return "Check the README for installation steps.";
+/** Legacy entry point: returns the narration text as a single string. */
+export function makeScript(
+  repo: import("./types.js").Repo,
+  readme: string,
+  recentUsage?: PhraseHistory
+): string {
+  const enriched = toLocalEnriched(repo, readme);
+  const ledger = buildFactLedger(enriched);
+  const plan = buildNarrationPlan(ledger, enriched, { recentUsage });
+  return plan.segments.map(segment => segment.spokenText).join(" ");
 }
 
-function inferHosting(readme: string, plain: string): string {
-  const t = `${readme}\n${plain}`.toLowerCase();
-  if (/self.hosted|self-host|run locally|local install|localhost|on your machine/.test(t)) return "It appears designed for local or self-hosted use";
-  if (/hosted api|cloud service|sign up|dashboard|api key|access token/.test(t)) return "It may require a hosted service or credentials";
-  return "The hosting model needs checking in the project documentation";
-}
-
-function inferCost(readme: string, plain: string): string {
-  const t = `${readme}\n${plain}`.toLowerCase();
-  if (/pricing|subscription|paid plan|billing|per month|per request/.test(t)) return "Check for paid tiers or usage fees";
-  if (/free tier|free plan|open source/.test(t)) return "The code is presented as open source, but external service costs may apply";
-  return "Pricing is not clearly established by the README";
-}
-
-function licenseVoiceLine(license: string): string {
-  if (/^(MIT|Apache-2\.0|BSD-2-Clause|BSD-3-Clause|ISC)$/i.test(license)) return `It lists the ${license} license.`;
-  if (/no license detected/i.test(license)) return "No repository license was detected, so check the usage terms before using it.";
-  return `Its listed license is ${license}. Check its terms before using it.`;
-}
-
-function inferUseCase(repo: Repo, readme: string, f: RepoFacts): string {
-  const text = `${repo.description ?? ""}\n${readme}\n${f.purpose}`.toLowerCase();
-  if (/self.hosted|run locally|docker/.test(text)) return "running your own instance where you control the data";
-  if (/automat/.test(text)) return "automating repetitive developer or business workflows";
-  if (/monito|metrics|observ/.test(text)) return "monitoring services and understanding system behavior";
-  if (/cli|command line|terminal/.test(text)) return "command-line workflows and developer tooling";
-  if (/web|dashboard|ui/.test(text)) return "building web-based tools and operational dashboards";
-  if (/api|sdk|library/.test(text)) return "integrating the project into other applications";
-  return "";
-}
-
-function cleanSentence(s: string): string {
-  return s.replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim();
-}
-
-function trimWords(value: string, max: number): string {
-  const words = value.split(/\s+/);
-  if (words.length <= max) return value;
-  return words.slice(0, max).join(" ").replace(/[,:;]$/, "") + ".";
-}
+/** Re-exported so the ledger can be produced without importing `facts.ts`. */
+export { buildFactLedger };
+export { plainReadmeText };
