@@ -41,7 +41,9 @@ export function writeAssFromCaptions(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Caption,Inter,${CAPTION_STYLE.fontSizePx},${primary},${secondary},&H00000000,&H64000000,-1,0,0,0,100,100,${CAPTION_STYLE.letterSpacingPx},0,1,0,0,2,90,90,${CAPTION_STYLE.bottomInsetPx + CAPTION_STYLE.paddingPx},1`,
+    // MarginV seats the ASS caption on the same lower-middle band as the DOM
+    // overlay (card top + chrome + 66% of the 1584px viewport).
+    `Style: Caption,Inter,${CAPTION_STYLE.fontSizePx},${primary},${secondary},&H00000000,&H64000000,-1,0,0,0,100,100,${CAPTION_STYLE.letterSpacingPx},0,1,0,0,2,90,90,${640 + CAPTION_STYLE.paddingPx},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
