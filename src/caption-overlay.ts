@@ -1,15 +1,16 @@
 import type { CaptionPhrase } from "./types.js";
+import { CAPTION_OVERLAY } from "./config.js";
 
 /**
  * Caption presentation.
  *
- * Captions are real DOM inside the stationary card, not one PNG per word.
- * This module owns the visual tokens and the wrapping/highlight rules; the
- * card renderer (`card.ts`) turns the result into elements.
+ * Captions are real DOM inside the stationary card, floating over the page. This
+ * module owns the visual tokens and the wrapping/highlight rules; `card.ts`
+ * turns the result into elements.
  *
  * Design rules enforced here:
  *  - no filled background box behind every word;
- *  - at most `maxLines` lines, broken at a natural phrase boundary;
+ *  - at most two lines and never a dropped word;
  *  - only the words a segment marked as `emphasis` receive the highlight;
  *  - highlights are matched whole-word, so partial matches never fire.
  */
@@ -24,11 +25,12 @@ export type CaptionStyle = {
   color: string;
   highlightColor: string;
   textShadow: string;
+  textStroke: string;
   maxWidthRatio: number;
-  bottomInsetPx: number;
+  topRatio: number;
   maxLines: number;
   maxCharsPerLine: number;
-  transform: string;
+  transform: "none" | "uppercase";
   paddingPx: number;
 };
 
@@ -37,28 +39,30 @@ export const CAPTION_STYLE: CaptionStyle = {
     "'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   monoFamily:
     "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
-  fontSizePx: 34,
+  fontSizePx: 42,
   fontWeight: 800,
   lineHeight: 1.12,
-  letterSpacingPx: -0.5,
+  letterSpacingPx: -0.6,
   color: "#FFFFFF",
   highlightColor: "#FFD629",
-  textShadow: "0 2px 5px rgba(0,0,0,.8), 0 0 18px rgba(0,0,0,.45)",
-  maxWidthRatio: 0.92,
-  bottomInsetPx: 60,
+  textShadow: "0 2px 2px #000, 0 4px 12px rgba(0,0,0,0.95)",
+  textStroke: "0.5px rgba(0,0,0,0.65)",
+  maxWidthRatio: CAPTION_OVERLAY.maxWidthRatio,
+  topRatio: CAPTION_OVERLAY.topRatio,
   maxLines: 2,
-  maxCharsPerLine: 30,
-  transform: "uppercase",
+  maxCharsPerLine: 27,
+  transform: "none",
   paddingPx: 8,
 };
 
 const CLAUSE_BREAK = /[,;:—–]$/;
 
 /**
- * Break a caption phrase into at most `maxLines` lines at a natural boundary.
+ * Break a caption phrase into at most two lines at a natural boundary.
  *
- * The character budget is widened when necessary so the text is never dropped:
- * losing the tail of a caption is worse than a slightly longer line.
+ * No word is ever dropped: if the phrase genuinely needs more room, the last
+ * line is allowed to run slightly long rather than losing information. The
+ * phrase splitter keeps phrases short enough that this is rare.
  */
 export function wrapCaptionText(
   text: string,
@@ -68,37 +72,37 @@ export function wrapCaptionText(
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
 
-  const totalChars = words.join(" ").length;
-  const limit = Math.max(maxCharsPerLine, Math.ceil(totalChars / maxLines));
+  if (maxLines <= 1 || words.join(" ").length <= maxCharsPerLine) {
+    return [words.join(" ")];
+  }
 
-  const lines: string[] = [];
-  let current: string[] = [];
-
-  for (const [index, word] of words.entries()) {
-    const candidate = [...current, word];
-    const remaining = words.length - index - 1;
-
-    if (current.length > 0 && candidate.join(" ").length > limit) {
-      lines.push(current.join(" "));
-      current = [word];
-      continue;
-    }
-    current = candidate;
-
-    // Prefer to break after a clause, as long as more text follows.
-    if (
-      current.length >= 3 &&
-      CLAUSE_BREAK.test(word) &&
-      remaining > 0 &&
-      lines.length < maxLines - 1
-    ) {
-      lines.push(current.join(" "));
-      current = [];
+  // Choose the break point that balances the two lines while preferring a
+  // clause boundary. This is a tiny exhaustive search, not a heuristic that
+  // silently truncates.
+  let bestIndex = -1;
+  let bestCost = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < words.length; index += 1) {
+    const left = words.slice(0, index).join(" ");
+    const right = words.slice(index).join(" ");
+    const overflow = Math.max(0, left.length - maxCharsPerLine) +
+      Math.max(0, right.length - maxCharsPerLine);
+    const balance = Math.abs(left.length - right.length);
+    const clauseBonus = CLAUSE_BREAK.test(words[index - 1]) ? 18 : 0;
+    const cost = overflow * 100 + balance - clauseBonus;
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestIndex = index;
     }
   }
-  if (current.length) lines.push(current.join(" "));
 
-  return lines.slice(0, maxLines);
+  if (bestIndex < 0) return [words.join(" ")];
+  const lines = [
+    words.slice(0, bestIndex).join(" "),
+    words.slice(bestIndex).join(" "),
+  ];
+
+  // More than two lines requested is not supported by the design.
+  return lines.slice(0, Math.max(1, maxLines));
 }
 
 function escapeHtml(value: string): string {
@@ -124,7 +128,7 @@ export function captionRuns(
   const highlightSet = new Set(phrase.highlights.map(word => word.toLowerCase()));
 
   lines.forEach((line, lineIndex) => {
-    if (lineIndex > 0) runs.push({ text: " ", highlighted: false });
+    if (lineIndex > 0) runs.push({ text: "\n", highlighted: false });
     for (const [wordIndex, word] of line.split(/\s+/).filter(Boolean).entries()) {
       if (wordIndex > 0) runs.push({ text: " ", highlighted: false });
       const clean = word.replace(/[^\w.+#-]/g, "");
@@ -143,13 +147,27 @@ export function captionRuns(
  * is a colour change only — never a filled box.
  */
 export function captionHtml(phrase: CaptionPhrase): string {
-  const text = CAPTION_STYLE.transform === "uppercase" ? phrase.text.toUpperCase() : phrase.text;
-  const runs = captionRuns(phrase).map(run =>
-    run.highlighted
-      ? `<span class="hl">${escapeHtml(run.text)}</span>`
-      : escapeHtml(run.text)
-  );
-  return `<div class="caption-line">${runs.join("")}</div>`;
+  const text =
+    CAPTION_STYLE.transform === "uppercase" ? phrase.text.toUpperCase() : phrase.text;
+  const highlightSet = new Set(phrase.highlights.map(word => word.toLowerCase()));
+  const lines = wrapCaptionText(text);
+
+  return lines
+    .map(line => {
+      const runs = line
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(word => {
+          const clean = word.replace(/[^\w.+#-]/g, "");
+          const highlighted = highlightSet.has(clean.toLowerCase());
+          return highlighted
+            ? `<span class="hl">${escapeHtml(word)}</span>`
+            : escapeHtml(word);
+        })
+        .join(" ");
+      return `<div class="caption-line">${runs}</div>`;
+    })
+    .join("");
 }
 
 /** The caption that should be on screen at a given time, or `null`. */
