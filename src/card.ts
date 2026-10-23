@@ -1,10 +1,12 @@
-import type { EnrichedRepo } from "./types.js";
+import type { CharacterPoseName, EnrichedRepo } from "./types.js";
 import {
+  CAPTION_OVERLAY,
   CARD,
   CARD_BG,
-  CARD_CAPTION_ZONE,
   CARD_CHROME_HEIGHT,
-  CARD_PROGRESS_ZONE,
+  CARD_VIEWPORT_HEIGHT,
+  CHARACTER,
+  MASCOT_LAYOUT,
   STAGE_BG,
   VIEWPORT,
 } from "./config.js";
@@ -20,15 +22,30 @@ import { formatCount } from "./facts.js";
  *   .stage              1080x1920, solid #F2EFE9
  *     .card             810x1668, upright, radius 28, stationary shadow
  *       .chrome         browser bar, static
- *       .viewport       overflow hidden, static box
- *         .document     the ONLY scrolling layer
- *       .caption-zone   static
- *       .progress       static
+ *       .viewport       overflow hidden, static box, 1584px tall
+ *         .document     the ONLY scrolling layer: one tall page screenshot
+ *         .caption-overlay  fixed over the page, lower-middle
+ *     .character        optional transparent PNG, stage-level, independent
  *
- * The card, its border, its shadow, the browser bar, the captions and the
- * progress bar never move. Only `.document` is translated, and only inside
- * `.viewport`, so content can never escape the rounded corners.
+ * The card, border, shadow, browser bar, captions and character never move.
+ * Only `.document` is translated, and only inside `.viewport`, so page content
+ * can never escape the rounded corners. There is no progress scrubber.
  */
+
+export type CharacterPoseAsset = {
+  pose: CharacterPoseName;
+  url: string;
+};
+
+export type CardComposition = {
+  repo: EnrichedRepo;
+  /** Local asset URL for the tall mobile screenshot. Primary visual mode. */
+  pageImageUrl?: string | null;
+  /** Local asset URL for the transparent character cut-out. */
+  characterUrl?: string | null;
+  /** Optional named poses; layer order should put `present` first. */
+  characterPoses?: CharacterPoseAsset[] | null;
+};
 
 export const CARD_SHADOW = [
   "0 3px 8px rgba(25,23,20,0.06)",
@@ -378,9 +395,48 @@ export function buildDocument(repo: EnrichedRepo): string {
 /* Full page                                                           */
 /* ------------------------------------------------------------------ */
 
-export function buildCardHtml(repo: EnrichedRepo): string {
-  const viewportHeight =
-    CARD.height - CARD_CHROME_HEIGHT - CARD_CAPTION_ZONE - CARD_PROGRESS_ZONE;
+export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
+  const composition: CardComposition =
+    "repo" in input ? input : { repo: input };
+  const { repo, pageImageUrl, characterUrl } = composition;
+
+  const documentMarkup = pageImageUrl
+    ? `<img id="mobile-page" src="${escapeHtml(pageImageUrl)}" alt="" draggable="false">`
+    : buildDocument(repo);
+
+  const poseAssets: CharacterPoseAsset[] =
+    composition.characterPoses?.length
+      ? composition.characterPoses
+      : characterUrl
+        ? [{ pose: "present", url: characterUrl }]
+        : [];
+  const uniquePoseAssets = poseAssets.filter(
+    (asset, index) =>
+      asset.url &&
+      poseAssets.findIndex(candidate => candidate.pose === asset.pose) === index
+  );
+
+  const characterMarkup = uniquePoseAssets
+    .map((asset, index) => {
+      const id = index === 0 ? "character" : `character-${asset.pose}`;
+      return `<img id="${id}" class="character" data-pose="${asset.pose}" src="${escapeHtml(
+        asset.url
+      )}" alt="" draggable="false" style="opacity:${
+        asset.pose === "present" || index === 0 ? 1 : 0
+      }">`;
+    })
+    .join("\n  ");
+
+  /* Mascot placement comes from the dedicated layout config: anchored to the
+     lower-right corner of the canvas (not the card), sized by canvas width.
+     The viewport's own overflow:hidden provides the canvas-boundary clip. */
+  const mascotWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
+  const mascotRight = MASCOT_LAYOUT.allowOffscreen
+    ? MASCOT_LAYOUT.offsetX
+    : Math.max(0, MASCOT_LAYOUT.offsetX);
+  const mascotBottom = MASCOT_LAYOUT.allowOffscreen
+    ? MASCOT_LAYOUT.offsetY
+    : Math.max(0, MASCOT_LAYOUT.offsetY);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -423,6 +479,7 @@ export function buildCardHtml(repo: EnrichedRepo): string {
     overflow: hidden;
     display: flex; flex-direction: column;
     color: var(--text-primary);
+    z-index: 1;
   }
 
   /* ---- browser chrome: static ---- */
@@ -444,9 +501,58 @@ export function buildCardHtml(repo: EnrichedRepo): string {
   .urlbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ---- viewport clips the only moving layer ---- */
-  .viewport { position: relative; flex: 1 1 auto; height: ${viewportHeight}px; overflow: hidden; background: var(--card-bg); }
-  .document { position: absolute; inset: 0 0 auto 0; width: 100%; will-change: transform; }
+  .viewport {
+    position: relative; flex: 1 1 auto; min-height: 0;
+    height: ${CARD_VIEWPORT_HEIGHT}px;
+    overflow: hidden; background: var(--card-bg);
+  }
+  .document {
+    position: absolute; inset: 0 auto auto 0; width: 100%;
+    will-change: transform;
+  }
+  #mobile-page {
+    display: block; width: 100%; height: auto; max-width: none;
+    user-select: none; pointer-events: none;
+  }
 
+  /* ---- captions: fixed over the page, no filled word boxes ---- */
+  .caption-overlay {
+    position: absolute; z-index: 5;
+    left: ${Math.round(CAPTION_OVERLAY.leftRatio * 100)}%;
+    right: ${Math.round(CAPTION_OVERLAY.rightRatio * 100)}%;
+    top: ${Math.round(CAPTION_OVERLAY.topRatio * 100)}%;
+    transform: translateY(-50%);
+    text-align: center; pointer-events: none;
+    color: ${CAPTION_STYLE.color};
+    font-size: ${CAPTION_STYLE.fontSizePx}px;
+    font-weight: ${CAPTION_STYLE.fontWeight};
+    line-height: ${CAPTION_STYLE.lineHeight};
+    letter-spacing: ${CAPTION_STYLE.letterSpacingPx}px;
+    text-shadow: ${CAPTION_STYLE.textShadow};
+    -webkit-text-stroke: ${CAPTION_STYLE.textStroke};
+    paint-order: stroke fill;
+    text-wrap: balance; overflow-wrap: break-word;
+  }
+  .caption-line { display: block; }
+  .caption-overlay .hl { color: ${CAPTION_STYLE.highlightColor}; }
+
+  /* ---- optional character: independent stage layer ---- */
+  .character {
+    position: absolute; z-index: 2;
+    right: ${mascotRight}px;
+    bottom: ${mascotBottom}px;
+    width: ${mascotWidthPx}px;
+    height: auto; max-width: none;
+    /* keepFaceVisible guard: bottom-anchored, so the head can only ever leave
+       the canvas if the artwork is taller than the canvas itself. */
+    max-height: ${MASCOT_LAYOUT.keepFaceVisible ? `${VIEWPORT.height}px` : "none"};
+    transform-origin: 50% 100%;
+    filter: ${CHARACTER.shadow};
+    user-select: none; pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  /* ---- fallback document (used only when no screenshot exists) ---- */
   .pad { padding: 20px 24px; border-bottom: 1px solid var(--border); }
 
   .crumbs { display: flex; align-items: center; gap: 7px; font-size: 17px; flex-wrap: wrap; }
@@ -520,36 +626,6 @@ export function buildCardHtml(repo: EnrichedRepo): string {
   .fact { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
   .fact .k { color: var(--text-secondary); }
   .fact .v { color: var(--text-primary); font-weight: 600; text-align: right; }
-
-  /* ---- captions: static box inside the card, no filled word boxes ---- */
-  .caption-zone {
-    flex: 0 0 ${CARD_CAPTION_ZONE}px; height: ${CARD_CAPTION_ZONE}px;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0 24px; pointer-events: none; background: var(--card-bg);
-  }
-  .caption {
-    width: 100%; max-width: ${Math.round(CARD.width * CAPTION_STYLE.maxWidthRatio)}px;
-    text-align: center; color: ${CAPTION_STYLE.color};
-    font-size: ${CAPTION_STYLE.fontSizePx}px; font-weight: ${CAPTION_STYLE.fontWeight};
-    line-height: ${CAPTION_STYLE.lineHeight}; letter-spacing: ${CAPTION_STYLE.letterSpacingPx}px;
-    text-transform: uppercase; text-shadow: ${CAPTION_STYLE.textShadow};
-    text-wrap: balance; overflow-wrap: break-word;
-  }
-  .caption .hl { color: ${CAPTION_STYLE.highlightColor}; }
-
-  /* ---- progress: static ---- */
-  .progress {
-    flex: 0 0 ${CARD_PROGRESS_ZONE}px; height: ${CARD_PROGRESS_ZONE}px;
-    display: flex; align-items: center; gap: 14px; padding: 0 24px 6px;
-    background: var(--card-bg);
-  }
-  .track { position: relative; flex: 1; height: 5px; border-radius: 999px; background: #484B50; }
-  .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: inherit; background: var(--caption-yellow); width: 0; }
-  .thumb {
-    position: absolute; top: 50%; left: 0; width: 14px; height: 14px; margin-left: -7px;
-    border-radius: 50%; background: #fff; transform: translateY(-50%); left: 0;
-  }
-  .time { font-size: 12px; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: .3px; }
 </style>
 </head>
 <body>
@@ -566,42 +642,71 @@ export function buildCardHtml(repo: EnrichedRepo): string {
     </header>
 
     <div class="viewport" id="viewport">
-      <div class="document" id="document">${buildDocument(repo)}</div>
-    </div>
-
-    <div class="caption-zone"><div class="caption" id="caption"></div></div>
-
-    <div class="progress">
-      <div class="track"><div class="fill" id="fill"></div><div class="thumb" id="thumb"></div></div>
-      <span class="time" id="time">0:00 / 0:00</span>
+      <div class="document" id="document">${documentMarkup}</div>
+      <div class="caption-overlay" id="caption"></div>
     </div>
   </article>
+  ${characterMarkup}
 </div>
 <script>
-  // Rendering hooks used by browser-capture.ts. No network access, no eval of
-  // repository content: everything below operates on the sanitized DOM.
+  // Rendering hooks used by browser-capture.ts. Only the page image scrolls;
+  // captions and the character are independent stationary layers.
   window.__showcase = {
     setScroll(y) {
-      document.getElementById('document').style.transform =
-        'translate3d(0,' + (-y) + 'px,0)';
+      const documentLayer = document.getElementById('document');
+      const viewport = document.getElementById('viewport');
+      const page = document.getElementById('mobile-page');
+      const contentHeight = page ? page.offsetHeight : documentLayer.offsetHeight;
+      const maxScroll = Math.max(0, contentHeight - viewport.clientHeight);
+      const clamped = Math.max(0, Math.min(maxScroll, Number(y) || 0));
+      documentLayer.style.transform = 'translate3d(0,' + (-clamped) + 'px,0)';
     },
     setCaption(html) {
       document.getElementById('caption').innerHTML = html || '';
     },
-    setProgress(fraction, currentMs, totalMs) {
-      const pct = Math.max(0, Math.min(1, fraction)) * 100;
-      document.getElementById('fill').style.width = pct + '%';
-      document.getElementById('thumb').style.left = pct + '%';
-      const fmt = ms => {
-        const total = Math.max(0, Math.round(ms / 1000));
-        return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
-      };
-      document.getElementById('time').textContent =
-        fmt(currentMs) + ' / ' + fmt(totalMs);
+    setCharacterPose(pose, poseName) {
+      if (!pose) return;
+      const requested = poseName || 'present';
+      const layers = Array.from(document.querySelectorAll('.character'));
+      if (layers.length === 0) return;
+      let character = null;
+      for (const layer of layers) {
+        const active = layer.getAttribute('data-pose') === requested;
+        layer.style.opacity = active ? String(pose.opacity) : '0';
+        if (active && !character) character = layer;
+      }
+      if (!character) {
+        // A missing optional pose falls back to the first supplied asset.
+        character = layers[0];
+        character.style.opacity = String(pose.opacity);
+      }
+      character.style.transform =
+        'translate3d(' + pose.x + 'px,' + pose.y + 'px,0) ' +
+        'rotate(' + pose.rotationDeg + 'deg) ' +
+        'scale(' + pose.scale + ')';
+    },
+    async ready(timeoutMs) {
+      const limit = Number(timeoutMs) || 8000;
+      const pending = Array.from(document.images)
+        .filter(image => !image.complete)
+        .map(image => new Promise(resolve => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+          setTimeout(resolve, limit);
+        }));
+      await Promise.race([
+        Promise.all(pending),
+        new Promise(resolve => setTimeout(resolve, limit))
+      ]);
+      if (document.fonts && document.fonts.ready) {
+        await Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, limit))]);
+      }
+      return true;
     },
     measure() {
       const doc = document.getElementById('document');
       const viewport = document.getElementById('viewport');
+      const page = document.getElementById('mobile-page');
       const anchors = Array.from(document.querySelectorAll('[data-anchor]')).map(node => ({
         anchor: node.getAttribute('data-anchor'),
         offsetTop: node.offsetTop,
@@ -609,8 +714,15 @@ export function buildCardHtml(repo: EnrichedRepo): string {
       }));
       return {
         anchors,
-        documentHeight: doc.offsetHeight,
+        documentHeight: page ? page.offsetHeight : doc.offsetHeight,
         viewportHeight: viewport.clientHeight,
+        page: page ? {
+          naturalWidth: page.naturalWidth,
+          naturalHeight: page.naturalHeight,
+          renderedWidth: page.getBoundingClientRect().width,
+          renderedHeight: page.getBoundingClientRect().height,
+          complete: page.complete,
+        } : null,
         card: {
           left: document.getElementById('card').getBoundingClientRect().left,
           top: document.getElementById('card').getBoundingClientRect().top,
@@ -622,13 +734,26 @@ export function buildCardHtml(repo: EnrichedRepo): string {
     geometry() {
       const stage = document.querySelector('.stage').getBoundingClientRect();
       const card = document.getElementById('card').getBoundingClientRect();
+      const caption = document.getElementById('caption').getBoundingClientRect();
+      const layers = Array.from(document.querySelectorAll('.character'));
+      const character =
+        layers.find(layer => layer.style.opacity !== '0') || layers[0] || null;
+      const characterRect = character ? character.getBoundingClientRect() : null;
       return {
         stage: { width: stage.width, height: stage.height },
         card: {
           left: card.left - stage.left, top: card.top - stage.top,
           width: card.width, height: card.height,
         },
-        progress: document.querySelector('.track').getBoundingClientRect().width,
+        caption: {
+          left: caption.left - stage.left, top: caption.top - stage.top,
+          width: caption.width, height: caption.height,
+        },
+        character: characterRect ? {
+          left: characterRect.left - stage.left, top: characterRect.top - stage.top,
+          width: characterRect.width, height: characterRect.height,
+        } : null,
+        hasProgress: Boolean(document.querySelector('.progress, .track, #thumb, #fill, #time')),
       };
     }
   };
@@ -637,5 +762,4 @@ export function buildCardHtml(repo: EnrichedRepo): string {
 </html>`;
 }
 
-export const CARD_VIEWPORT_HEIGHT =
-  CARD.height - CARD_CHROME_HEIGHT - CARD_CAPTION_ZONE - CARD_PROGRESS_ZONE;
+export { CARD_VIEWPORT_HEIGHT };
