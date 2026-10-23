@@ -9,10 +9,9 @@ import {
 import { clampScroll, isScrollable, scrollBounds, targetForAnchor } from "../src/scroll.js";
 import {
   CARD,
-  CARD_CAPTION_ZONE,
   CARD_CHROME_HEIGHT,
-  CARD_PROGRESS_ZONE,
   CARD_BG,
+  CARD_VIEWPORT_HEIGHT,
   STAGE_BG,
   VIEWPORT,
 } from "../src/config.js";
@@ -46,11 +45,9 @@ describe("composition geometry", () => {
     assert.ok(!/255|255,255/.test(CARD_SHADOW), "no bright or coloured glow");
   });
 
-  test("the vertical zones exactly fill the card", () => {
-    assert.equal(
-      CARD_CHROME_HEIGHT + (CARD.height - CARD_CHROME_HEIGHT - CARD_CAPTION_ZONE - CARD_PROGRESS_ZONE) + CARD_CAPTION_ZONE + CARD_PROGRESS_ZONE,
-      CARD.height
-    );
+  test("the page viewport fills the card below the browser chrome", () => {
+    assert.equal(CARD_VIEWPORT_HEIGHT, CARD.height - CARD_CHROME_HEIGHT);
+    assert.equal(CARD_CHROME_HEIGHT + CARD_VIEWPORT_HEIGHT, CARD.height);
   });
 });
 
@@ -63,9 +60,9 @@ describe("stationary card markup", () => {
   });
 
   test("the card is upright with no perspective or rotation", () => {
-    assert.ok(!/perspective/.test(html));
+    const cardRule = html.match(/\.card\s*\{([^}]*)\}/)?.[1] ?? "";
+    assert.ok(!/perspective|rotate|skew|transform/i.test(cardRule));
     assert.ok(!/rotate3d|rotateX|rotateY|skew/.test(html));
-    assert.ok(!/rotate\(/.test(html));
   });
 
   test("there is no phone frame or device mock", () => {
@@ -77,37 +74,96 @@ describe("stationary card markup", () => {
     assert.match(html, /\.viewport\s*\{[\s\S]*?overflow:\s*hidden/);
   });
 
-  test("only the document layer is animated", () => {
-    // The only place a runtime transform is written is the scroll hook.
+  test("only the scrolling document layer is translated", () => {
     const hooks = html.slice(html.indexOf("<script>"), html.indexOf("</script>"));
-    const transforms = [
-      ...hooks.matchAll(/getElementById\('([^']+)'\)\.style\.transform/g),
-    ].map(match => match[1]);
-    assert.deepEqual(transforms, ["document"]);
+    // The scroll hook is the only place a layer's transform is written from JS.
+    assert.match(hooks, /documentLayer\.style\.transform\s*=\s*'translate3d/);
+    // The character may also be posed, but it is an independent stage layer.
+    assert.match(hooks, /character\.style\.transform\s*=/);
+    assert.ok(!/setProgress/.test(hooks));
 
-    // Static CSS transforms are limited to centring a small decorative dot.
+    // Static CSS transforms are limited to centring the caption overlay. The
+    // card itself is upright and never rotated or skewed.
     const css = html.slice(0, html.indexOf("<script>"));
     const cssTransforms = [
       ...css.matchAll(/([.#][\w-]+)\s*\{[^}]*?(?<![-\w])transform:\s*[^;]+;/g),
     ].map(match => match[1]);
-    assert.deepEqual([...new Set(cssTransforms)], [".thumb"]);
+    assert.deepEqual([...new Set(cssTransforms)], [".caption-overlay"]);
   });
 
-  test("captions and progress live inside the card", () => {
-    assert.match(html, /<div class="caption-zone">[\s\S]*?<div class="caption" id="caption">/);
-    assert.match(html, /<div class="progress">[\s\S]*?id="time"/);
+  test("captions float over the page and there is no progress UI", () => {
+    assert.match(html, /<div class="viewport" id="viewport">[\s\S]*?<div class="caption-overlay" id="caption">/);
+    assert.ok(!/class="progress|id="time"|class="track|class="thumb|class="fill/i.test(html));
+    assert.ok(
+      !/setProgress|progress-zone|caption-zone/i.test(html),
+      "the removed preview controls must not survive anywhere in the composition"
+    );
   });
 
   test("the caption style matches the specification", () => {
-    assert.match(html, /font-size:\s*34px/);
+    assert.match(html, /font-size:\s*42px/);
     assert.match(html, /color:\s*#FFFFFF/);
     assert.match(html, /--caption-yellow:\s*#FFD629/);
-    assert.match(html, /text-shadow:\s*0 2px 5px/);
+    assert.match(html, /text-shadow:\s*0 2px 2px/);
+    assert.match(html, /-webkit-text-stroke:/);
     assert.ok(
-      !/\.caption\s*\{[^}]*background:/s.test(html),
+      !/\.caption-overlay\s*\{[^}]*background:/s.test(html),
       "captions must not draw a filled background box"
     );
     assert.ok(!/\.hl\s*\{[^}]*background:/s.test(html), "highlights are colour only");
+  });
+
+  test("the character layer is optional and independent of the card", () => {
+    assert.ok(!/id="character"/.test(html), "no character image without an asset URL");
+    const withCharacter = buildCardHtml({
+      repo: enriched("high-quality-popular"),
+      pageImageUrl: "http://127.0.0.1/page.jpg",
+      characterUrl: "http://127.0.0.1/character.png",
+    });
+    assert.match(withCharacter, /<img id="character" class="character"/);
+    assert.match(withCharacter, /id="mobile-page"/);
+    assert.match(withCharacter, /setCharacterPose/);
+  });
+
+  test("named presenter poses are stacked layers, not a swapped src", () => {
+    const withPoses = buildCardHtml({
+      repo: enriched("high-quality-popular"),
+      pageImageUrl: "http://127.0.0.1/page.jpg",
+      characterPoses: [
+        { pose: "present", url: "http://127.0.0.1/present.png" },
+        { pose: "point", url: "http://127.0.0.1/point.png" },
+        { pose: "close", url: "http://127.0.0.1/close.png" },
+      ],
+    });
+    assert.match(withPoses, /data-pose="present"/);
+    assert.match(withPoses, /data-pose="point"/);
+    assert.match(withPoses, /data-pose="close"/);
+    const hooks = withPoses.slice(withPoses.indexOf("<script>"), withPoses.indexOf("</script>"));
+    assert.match(hooks, /layer\.getAttribute\('data-pose'\) === requested/);
+    assert.match(hooks, /layer\.style\.opacity/);
+  });
+
+  test("the mascot is anchored to the canvas corner, sized by canvas width", () => {
+    const withPoses = buildCardHtml({
+      repo: enriched("high-quality-popular"),
+      pageImageUrl: "http://127.0.0.1/page.jpg",
+      characterPoses: [
+        { pose: "present", url: "http://127.0.0.1/present.png" },
+        { pose: "close", url: "http://127.0.0.1/close.png" },
+      ],
+    });
+    // 0.46 * 1080 canvas width = 497px.
+    assert.match(withPoses, /\.character\s*\{[^}]*width:\s*497px/s);
+    // -12px pushes the layer past the right edge; 0px sits flush on the
+    // bottom edge. The viewport clip handles the overflow.
+    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-12px/s);
+    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*0px/s);
+    // keepFaceVisible guard.
+    assert.match(withPoses, /\.character\s*\{[^}]*max-height:\s*1920px/s);
+    // The mascot is a stage-level layer: never inside the clipped card.
+    const articleEnd = withPoses.indexOf("</article>");
+    const characterTag = withPoses.indexOf('id="character"');
+    assert.ok(characterTag > articleEnd, "the mascot must not be clipped by the card");
   });
 
   test("the browser bar shows the real repository URL", () => {
