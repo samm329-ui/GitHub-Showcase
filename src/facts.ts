@@ -40,7 +40,9 @@ function sentence(value: string): string {
 export type ReadmeSection = {
   heading: string;
   level: number;
+  /** Prose only. Fenced code is kept separate so it is never narrated. */
   body: string;
+  /** Raw fenced-code contents, without the fence markers. */
   codeBlocks: string[];
 };
 
@@ -59,26 +61,33 @@ export function parseReadme(readme: string | null): ParsedReadme {
   const codeBlocks: string[] = [];
   let current: ReadmeSection = { heading: "", level: 0, body: "", codeBlocks: [] };
   let inFence = false;
+  let fenceLines: string[] = [];
 
   for (const line of lines) {
     const fenceMatch = line.match(/^\s*```(\w*)\s*$/);
     if (fenceMatch) {
       if (!inFence) {
         inFence = true;
+        fenceLines = [];
         continue;
       }
       inFence = false;
-      current.codeBlocks.push(fenceMatch[1] ?? "");
-      codeBlocks.push(fenceMatch[1] ?? "");
+      const block = fenceLines.join("\n").trim();
+      if (block) {
+        current.codeBlocks.push(block);
+        codeBlocks.push(block);
+      }
       continue;
     }
     if (inFence) {
-      current.body += `${line}\n`;
+      fenceLines.push(line);
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.+?)\s*$/);
     if (heading) {
-      if (current.heading || current.body.trim()) sections.push(current);
+      if (current.heading || current.body.trim() || current.codeBlocks.length) {
+        sections.push(current);
+      }
       current = {
         heading: heading[2].trim(),
         level: heading[1].length,
@@ -89,7 +98,12 @@ export function parseReadme(readme: string | null): ParsedReadme {
     }
     current.body += `${line}\n`;
   }
-  if (current.heading || current.body.trim()) sections.push(current);
+  if (inFence && fenceLines.length) {
+    // An unclosed fence is still real code; keep it out of the prose.
+    current.codeBlocks.push(fenceLines.join("\n").trim());
+    codeBlocks.push(fenceLines.join("\n").trim());
+  }
+  if (current.heading || current.body.trim() || current.codeBlocks.length) sections.push(current);
 
   const plainText = text
     .replace(/```[\s\S]*?```/g, " ")
@@ -125,7 +139,35 @@ function sectionMatching(
 }
 
 const NON_FEATURE_HEADINGS =
-  /^(install|installation|setup|usage|examples?|how to use|contributing|contribution|license|licence|credits?|acknowledg|table of contents|sponsors?|changelog|roadmap|faq|troubleshooting|testing|development)/;
+  /^(install|installation|setup|usage|examples?|how to use|api|commands?|configuration|options?|contributing|contribution|license|licence|credits?|acknowledg|table of contents|sponsors?|backers?|changelog|roadmap|faq|troubleshooting|testing|development|related|see also|similar|alternatives|ecosystem|packages?|siblings?|companions?|other projects?|more projects?)/;
+
+/**
+ * Code, command lines, URLs and raw markup are evidence, but they are not
+ * sentences. Keeping them out of spoken clauses is what stops a README from
+ * turning into "import foo from 'bar'; const ..." narration.
+ */
+export function looksLikeCode(value: string): boolean {
+  const text = value.trim();
+  if (!text) return true;
+  if (/=>|https?:\/\/|[;{}]|\/\/|<\/?[a-z][^>]*>/i.test(text)) return true;
+  if (/\b(?:const|let|var|function|return|import|export|class|interface|await|async|console\.log)\b/.test(text)) {
+    return true;
+  }
+  if (/\w+\([^)]*\)/.test(text)) return true;
+  if (/^[a-z0-9._/-]+\s+[a-z0-9._/-]+$/i.test(text) && /[./\\]/.test(text)) return true;
+  return false;
+}
+
+/** True when a README line can be read aloud as natural prose. */
+export function isNarratableProse(value: string): boolean {
+  const text = value.trim();
+  if (text.length < 12 || text.length > 220) return false;
+  if (looksLikeCode(text)) return false;
+  // Require a sentence-like word count; fragments such as "Fast. Small." are
+  // still allowed, but not symbol soup or table fragments.
+  const words = text.split(/\s+/).filter(word => /[A-Za-z]{2,}/.test(word));
+  return words.length >= 3;
+}
 
 export function sectionWithBullets(
   parsed: ParsedReadme,
@@ -181,6 +223,7 @@ export function bulletsOf(section: ReadmeSection | null): string[] {
     .filter((match): match is RegExpMatchArray => Boolean(match))
     .map(match => stripMarkdown(sentence(match[1])))
     .filter(line => line.length >= 12 && line.length <= 160)
+    .filter(line => isNarratableProse(line))
     .filter(
       line =>
         !/\b(visit|see|read|docs|documentation|course|tutorial|guide|learn more|getting started)\b/i.test(
@@ -204,17 +247,17 @@ const PACKAGE_MANAGERS: {
   spoken: string;
   display: string;
 }[] = [
-  { command: /\bpnpm\s+(?:add|install)(?:\s+\S+){0,10}/i, spoken: "install it with pnpm", display: "pnpm add" },
-  { command: /\byarn\s+add(?:\s+\S+){0,10}/i, spoken: "install it with yarn", display: "yarn add" },
-  { command: /\bbun\s+add(?:\s+\S+){0,10}/i, spoken: "install it with bun", display: "bun add" },
-  { command: /\bnpm\s+(?:install|i)(?:\s+\S+){0,10}/i, spoken: "install it with npm", display: "npm install" },
-  { command: /\bnpx\s+create-[\w.-]+(?:\s+\S+){0,10}/i, spoken: "run its project creator with npx", display: "npx create-*" },
-  { command: /\bpip3?\s+install(?:\s+\S+){0,10}/i, spoken: "install it with pip", display: "pip install" },
-  { command: /\b(?:uv|pipx)\s+(?:tool\s+)?install(?:\s+\S+){0,10}/i, spoken: "install it with that Python tool", display: "uv tool install" },
-  { command: /\bcargo\s+install(?:\s+\S+){0,10}/i, spoken: "install it with cargo", display: "cargo install" },
-  { command: /\bgo\s+install(?:\s+\S+){0,10}/i, spoken: "install it from source with go", display: "go install" },
-  { command: /\bbrew\s+install(?:\s+\S+){0,10}/i, spoken: "install it with homebrew", display: "brew install" },
-  { command: /\bapt(?:-get)?\s+install(?:\s+\S+){0,10}/i, spoken: "install it with apt", display: "apt install" },
+  { command: /\bpnpm[ \t]+(?:add|install)(?:[ \t]+\S+){0,10}/i, spoken: "install it with pnpm", display: "pnpm add" },
+  { command: /\byarn[ \t]+add(?:[ \t]+\S+){0,10}/i, spoken: "install it with yarn", display: "yarn add" },
+  { command: /\bbun[ \t]+add(?:[ \t]+\S+){0,10}/i, spoken: "install it with bun", display: "bun add" },
+  { command: /\bnpm[ \t]+(?:install|i)(?:[ \t]+\S+){0,10}/i, spoken: "install it with npm", display: "npm install" },
+  { command: /\bnpx[ \t]+create-[\w.-]+(?:[ \t]+\S+){0,10}/i, spoken: "run its project creator with npx", display: "npx create-*" },
+  { command: /\bpip3?[ \t]+install(?:[ \t]+\S+){0,10}/i, spoken: "install it with pip", display: "pip install" },
+  { command: /\b(?:uv|pipx)[ \t]+(?:tool[ \t]+)?install(?:[ \t]+\S+){0,10}/i, spoken: "install it with that Python tool", display: "uv tool install" },
+  { command: /\bcargo[ \t]+install(?:[ \t]+\S+){0,10}/i, spoken: "install it with cargo", display: "cargo install" },
+  { command: /\bgo[ \t]+install(?:[ \t]+\S+){0,10}/i, spoken: "install it from source with go", display: "go install" },
+  { command: /\bbrew[ \t]+install(?:[ \t]+\S+){0,10}/i, spoken: "install it with homebrew", display: "brew install" },
+  { command: /\bapt(?:-get)?[ \t]+install(?:[ \t]+\S+){0,10}/i, spoken: "install it with apt", display: "apt install" },
 ];
 
 export function extractInstall(
@@ -224,12 +267,13 @@ export function extractInstall(
   const section = sectionMatching(parsed, [
     /^(install|installation|setup|getting started|quick ?start)/,
   ]);
-  const haystack = `${section?.body ?? ""}\n${parsed.plainText}`;
+  const sectionCode = section?.codeBlocks.join("\n") ?? "";
+  const haystack = `${section?.body ?? ""}\n${sectionCode}\n${parsed.plainText}`;
 
   for (const manager of PACKAGE_MANAGERS) {
     const match = haystack.match(manager.command);
     if (match) {
-      const command = match[0].trim().replace(/[.]$/, "");
+      const command = match[0].split(/\r?\n/)[0].trim().replace(/[.)]+$/, "");
       return {
         command,
         spoken: `You can ${manager.spoken}`,
@@ -316,11 +360,8 @@ export function extractInstall(
 }
 
 function firstCommandIn(section: ReadmeSection): string | null {
-  const fences = section.body.match(/```[\s\S]*?```/g) ?? [];
-  for (const block of fences) {
+  for (const block of section.codeBlocks) {
     const lines = block
-      .replace(/^\s*```[a-z]*\s*$/i, "")
-      .replace(/```\s*$/, "")
       .split(/\r?\n/)
       .map(line => line.trim())
       .filter(Boolean);
@@ -329,6 +370,7 @@ function firstCommandIn(section: ReadmeSection): string | null {
       if (/^[#$>{*+\-\d]/.test(line)) continue;
       if (/\b(output|result|response|logs?):?\s*$/i.test(line)) continue;
       if (!/^[a-z0-9._/\\-]+\s+\S/i.test(line) && !/^\.\//.test(line)) continue;
+      if (looksLikeCode(line)) continue;
       const cleaned = line.replace(/\s{2,}.*$/, "").trim();
       if (cleaned.length >= 4 && cleaned.length <= 90) return cleaned;
     }
