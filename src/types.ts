@@ -196,6 +196,18 @@ export type SegmentPurpose =
   | "caveat"
   | "cta";
 
+/** Role of a clause inside the constrained story grammar. */
+export type StorySlot =
+  | "hook"
+  | "identity"
+  | "value"
+  | "proof"
+  | "demo"
+  | "setup"
+  | "availability"
+  | "caveat"
+  | "cta";
+
 export type VisualAnchor =
   | "repo-header"
   | "file-list"
@@ -217,6 +229,10 @@ export type NarrationSegment = {
   pauseAfterMs?: number;
   /** Caption words/phrases to tint with the highlight color. */
   emphasis?: string[];
+  /** Grammar slot that produced this segment (for reproducibility/debugging). */
+  narrativeRole?: StorySlot;
+  /** Stable id of the clause template that produced this segment. */
+  clauseId?: string;
 };
 
 export type NarrationAngle =
@@ -240,6 +256,26 @@ export type NarrationPlan = {
   speed: number;
   estimatedWords: number;
   segments: NarrationSegment[];
+  /** Story-grammar structure chosen for this script. */
+  structure?: string;
+  /** Deterministic score of the selected story, for QA/debugging. */
+  scriptScore?: number;
+};
+
+/**
+ * Structured intermediate representation of a repository narration (Phase 2).
+ * The script compiler must cover purpose, mechanism and use case; popularity
+ * metadata is optional and may never replace those sections.
+ */
+export type RepoNarration = {
+  hook: string;
+  purpose: string;
+  mechanism: string;
+  useCase: string;
+  benefit: string;
+  limitation?: string;
+  installation?: string;
+  optionalPopularityFact?: string;
 };
 
 export type ScriptValidation = {
@@ -248,6 +284,22 @@ export type ScriptValidation = {
   warnings: string[];
   words: number;
   estimatedSeconds: number;
+  /** Structured narration the script compiles to (recorded as an artifact). */
+  narrative?: RepoNarration;
+};
+
+/**
+ * Voice preset for the TTS narrator (see `VOICE_PRESET` in config.ts).
+ * Recorded with the render metadata so every video states exactly which
+ * Kokoro voice, speed and language produced its audio.
+ */
+export type VoicePreset = {
+  /** Kokoro voice id, e.g. "am_liam". */
+  id: string;
+  /** Speech rate multiplier (1.0 = natural). */
+  speed: number;
+  /** Kokoro language code, e.g. "en-us". */
+  language: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -288,6 +340,8 @@ export type MeasuredAnchor = {
   anchor: VisualAnchor;
   offsetTop: number;
   offsetHeight: number;
+  /** Where the offset came from. Captured anchors are never invented. */
+  source?: "captured" | "fallback";
 };
 
 export type ScrollKeyframe = {
@@ -306,6 +360,54 @@ export type Timeline = {
   anchors: MeasuredAnchor[];
   documentHeight: number;
   viewportHeight: number;
+  /** Where the story was cropped, in displayed screenshot pixels. */
+  story?: {
+    startPx: number;
+    endPx: number;
+    fullHeightPx: number;
+    source: "live" | "fallback";
+  };
+};
+
+/* ------------------------------------------------------------------ */
+/* Mobile page capture & character                                     */
+/* ------------------------------------------------------------------ */
+
+export type PageCaptureSource = "live" | "fallback";
+
+export type MobilePageCapture = {
+  imagePath: string;
+  sourceUrl: string;
+  source: PageCaptureSource;
+  cssViewport: { width: number; height: number };
+  /** Dimensions after normalization to the card content width. */
+  raster: { width: number; height: number };
+  /** Raw dimensions returned by Chromium before normalization. */
+  rawRaster: { width: number; height: number };
+  pixelsPerCssPx: number;
+  documentHeightCssPx: number;
+  /** Anchor offsets are already in displayed raster pixels. */
+  anchors: MeasuredAnchor[];
+  title: string;
+  capturedAt: string;
+  warnings: string[];
+};
+
+export type SpeechEnvelope = {
+  /** Samples per second (deliberately low, e.g. 25). */
+  rateHz: number;
+  durationMs: number;
+  /** 0..1 amplitude per sample, already smoothed. */
+  levels: number[];
+};
+
+/** Presenter framing/action chosen for a narration slot. */
+export type CharacterPoseName = "present" | "point" | "close";
+
+export type CharacterCue = {
+  startMs: number;
+  endMs: number;
+  pose: CharacterPoseName;
 };
 
 /* ------------------------------------------------------------------ */
