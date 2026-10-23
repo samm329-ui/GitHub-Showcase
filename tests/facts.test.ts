@@ -102,6 +102,32 @@ describe("unsupported claims are prevented", () => {
     assert.equal(factsOfKind(ledger, "use_case").length, 0);
   });
 
+  test("fenced code is never narrated as a use case", () => {
+    const repo = enriched("high-quality-popular", {
+      description: "Maps over promises concurrently",
+      readmeText:
+        "# p-map\n\nMaps over promises concurrently.\n\n" +
+        "## Usage\n\n```js\nimport pMap from 'p-map';\n" +
+        "const result = await pMap(items, mapper); //=> array\n```\n",
+    });
+    const ledger = buildFactLedger(repo);
+    const spoken = ledger.facts.map(item => item.spoken).join(" ");
+    assert.ok(!/\bimport\b|=>|https?:\/\//.test(spoken), spoken);
+    assert.equal(factsOfKind(ledger, "use_case").length, 0);
+  });
+
+  test("a related-packages list is not treated as features", () => {
+    const repo = enriched("high-quality-popular", {
+      description: "Maps over promises concurrently",
+      readmeText:
+        "# p-map\n\nMaps over promises concurrently.\n\n" +
+        "## Related\n\n- p-all - Run async functions concurrently\n" +
+        "- p-filter - Filter promises concurrently\n",
+    });
+    const ledger = buildFactLedger(repo);
+    assert.equal(factsOfKind(ledger, "feature").length, 0);
+  });
+
   test("hosting and cost are only claimed with explicit evidence", () => {
     const bare = enriched("high-quality-popular");
     const bareFacts = buildFactLedger(bare);
@@ -147,6 +173,21 @@ describe("install extraction requires a real command", () => {
     const repo = enriched("useful-underdog");
     const info = extractInstall(repo, parseReadme(repo.readmeText));
     assert.match(info.command ?? "", /cargo install logline/);
+  });
+
+  test("the install claim contains only the command, not following prose", () => {
+    const repo = enriched("high-quality-popular", {
+      description: "Maps over promises concurrently",
+      readmeText:
+        "# p-map\n\nMaps over promises concurrently.\n\n" +
+        "## Install\n\n```bash\nnpm install p-map\n```\n\n" +
+        "The package ships prebuilt binaries for every platform.\n",
+    });
+    const info = extractInstall(repo, parseReadme(repo.readmeText));
+    assert.equal(info.command, "npm install p-map");
+    assert.ok(info.fact);
+    assert.match(info.fact.claim, /npm install p-map\.$/);
+    assert.ok(!/prebuilt binaries/.test(info.fact.claim));
   });
 
   test("a README with no install section produces no install fact", () => {
