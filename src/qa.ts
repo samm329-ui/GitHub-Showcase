@@ -1,8 +1,11 @@
 import type { MediaInfo, QaCheck, QaReport } from "./types.js";
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { stat as statFile } from "node:fs/promises";
+import { createCanvas, loadImage } from "canvas";
 import { promisify } from "node:util";
-import { FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
+import { CARD, CARD_CHROME_HEIGHT, FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,6 +74,10 @@ export type QaOptions = {
   maxDurationSeconds?: number;
   /** Saved frames sampled from the finished file, used to detect black output. */
   frameSampleCount?: number;
+  /** The scroll schedule moves enough that the page must visibly change. */
+  expectMotion?: boolean;
+  /** Planned scroll positions at 25/50/75% of the clip, for diagnostics. */
+  motionStops?: number[];
 };
 
 export async function validateOutput(
@@ -154,6 +161,13 @@ export async function validateOutput(
   );
   push("audio-reaches-end", reach.ok, reach.detail);
 
+  if (options.expectMotion) {
+    const motion = await checkVisualMotion(file, media.durationSeconds);
+    push("scroll-motion", motion.ok, motion.detail);
+    const fixed = await checkFixedComposition(file, media.durationSeconds);
+    push("fixed-composition", fixed.ok, fixed.detail);
+  }
+
   return { ok: checks.every(check => check.ok), checks, media };
 }
 
@@ -221,6 +235,166 @@ export function checkAudioReachesEnd(
     ok: gap >= -toleranceSeconds && gap <= 2.5,
     detail: `video ${videoSeconds.toFixed(2)}s vs audio ${audioSeconds.toFixed(2)}s (gap ${gap.toFixed(2)}s)`,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Composition checks                                                  */
+/* ------------------------------------------------------------------ */
+
+/** Decode one frame to raw RGB24 at the native 1080x1920 size. */
+async function extractFrameRgb(
+  file: string,
+  atSeconds: number
+): Promise<Buffer | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "ffmpeg",
+      [
+        "-hide_banner", "-loglevel", "error",
+        "-ss", atSeconds.toFixed(3),
+        "-i", file,
+        "-frames:v", "1",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgb24",
+        "-",
+      ],
+      { encoding: "buffer", maxBuffer: VIEWPORT.width * VIEWPORT.height * 3 + 1024 }
+    );
+    const buffer = stdout as unknown as Buffer;
+    return buffer.length >= VIEWPORT.width * VIEWPORT.height * 3 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareRegion(
+  a: Buffer,
+  b: Buffer,
+  region: { x: number; y: number; width: number; height: number },
+  threshold = 10
+): { ratio: number; pixels: number } {
+  let differing = 0;
+  let pixels = 0;
+  for (let y = region.y; y < region.y + region.height; y += 1) {
+    for (let x = region.x; x < region.x + region.width; x += 1) {
+      const offset = (y * VIEWPORT.width + x) * 3;
+      pixels += 1;
+      if (
+        Math.abs(a[offset] - b[offset]) > threshold ||
+        Math.abs(a[offset + 1] - b[offset + 1]) > threshold ||
+        Math.abs(a[offset + 2] - b[offset + 2]) > threshold
+      ) {
+        differing += 1;
+      }
+    }
+  }
+  return { ratio: pixels ? differing / pixels : 0, pixels };
+}
+
+/**
+ * A scrollable clip must actually reveal different page content. The sample
+ * region is the upper part of the clipped page viewport, deliberately avoiding
+ * the caption band and the character so a caption swap cannot masquerade as
+ * scroll motion.
+ */
+export async function checkVisualMotion(
+  file: string,
+  durationSeconds: number
+): Promise<CheckResult> {
+  const first = await extractFrameRgb(file, Math.min(0.2, durationSeconds * 0.03));
+  const later = await extractFrameRgb(file, durationSeconds * 0.75);
+  if (!first || !later) {
+    return { ok: false, detail: "could not extract frames for the motion check" };
+  }
+  const region = {
+    x: CARD.left + 25,
+    y: CARD.top + CARD_CHROME_HEIGHT + 30,
+    width: CARD.width - 50,
+    height: Math.round((CARD.height - CARD_CHROME_HEIGHT) * 0.6),
+  };
+  const result = compareRegion(first, later, region, 12);
+  return {
+    ok: result.ratio > 0.01,
+    detail: `${(result.ratio * 100).toFixed(1)}% of the page viewport changed between 0s and 75%`,
+  };
+}
+
+/**
+ * The stage, card border and browser chrome must be pixel-identical across the
+ * clip. Only `.document`, the caption text and the character pose may change.
+ */
+export async function checkFixedComposition(
+  file: string,
+  durationSeconds: number
+): Promise<CheckResult> {
+  const first = await extractFrameRgb(file, Math.min(0.2, durationSeconds * 0.03));
+  const later = await extractFrameRgb(file, durationSeconds * 0.75);
+  if (!first || !later) {
+    return { ok: false, detail: "could not extract frames for the composition check" };
+  }
+  const stageTop = compareRegion(
+    first,
+    later,
+    { x: 40, y: 30, width: VIEWPORT.width - 80, height: 60 },
+    8
+  );
+  const chrome = compareRegion(
+    first,
+    later,
+    {
+      x: CARD.left + 15,
+      y: CARD.top + 10,
+      width: CARD.width - 30,
+      height: 60,
+    },
+    8
+  );
+  const ratio = Math.max(stageTop.ratio, chrome.ratio);
+  return {
+    ok: ratio < 0.01,
+    detail: `static stage/chrome changed ${(ratio * 100).toFixed(2)}% (${stageTop.pixels + chrome.pixels} pixels sampled)`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Contact sheet                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build a single horizontal strip of the reference frames so a run can be
+ * inspected at a glance without opening five files.
+ */
+export async function buildContactSheet(
+  frames: string[],
+  outputPath: string
+): Promise<string | null> {
+  if (frames.length === 0) return null;
+  const thumbWidth = 216;
+  const thumbHeight = 384;
+  const gap = 10;
+  const padding = 16;
+  const labelSpace = 28;
+  const width = frames.length * thumbWidth + (frames.length - 1) * gap + padding * 2;
+  const height = thumbHeight + labelSpace + padding * 2;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#15181c";
+  ctx.fillRect(0, 0, width, height);
+
+  for (const [index, file] of frames.entries()) {
+    const image = await loadImage(file);
+    const x = padding + index * (thumbWidth + gap);
+    const y = padding + labelSpace;
+    ctx.drawImage(image, x, y, thumbWidth, thumbHeight);
+    ctx.fillStyle = "#f2efe9";
+    ctx.font = "600 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`${Math.round((index / Math.max(1, frames.length - 1)) * 100)}%`, x + thumbWidth / 2, padding + 18);
+  }
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, canvas.toBuffer("image/jpeg", { quality: 92 }));
+  return outputPath;
 }
 
 /** Loudness of the exported narration, for the run report. */
