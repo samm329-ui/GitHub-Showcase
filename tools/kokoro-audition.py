@@ -6,6 +6,12 @@ than by guessing. Nothing is uploaded; everything is written next to this file.
 
     python tools/kokoro-audition.py
     npm run voice:audition
+
+Phase 3 audition round: am_liam (candidate), am_puck and am_michael read the
+identical script so the comparison is apples to apples. A faster harness
+invocation:
+
+    python tools/kokoro-audition.py --script-file audition-script.txt
 """
 
 import argparse
@@ -17,12 +23,21 @@ import soundfile as sf
 from kokoro_onnx import Kokoro
 
 SAMPLE = (
-    "This is Next dot J S, a React framework from Vercel. "
-    "It handles routing, server rendering and build tooling, so you can ship a web app faster. "
-    "About twelve thousand people have starred it on GitHub. "
-    "Here is what you get. "
-    "You can create a new project with the app creator, then deploy it with one command."
+    "Ever found a GitHub project that solves a problem you didn't know you had? "
+    "This one helps you run multiple promises concurrently, without writing all that extra code yourself. "
+    "You can install it locally, explore the source, and start experimenting in minutes. "
+    "If you build with JavaScript, this project is worth a closer look."
 )
+
+
+def load_script(args) -> str:
+    """Prefer an explicit script file; keep the generic sample as fallback."""
+    if args.script_file:
+        text = Path(args.script_file).read_text(encoding="utf-8")
+        if text.strip():
+            return " ".join(text.split())
+        raise SystemExit(f"--script-file {args.script_file} is empty.")
+    return SAMPLE
 
 
 def main() -> int:
@@ -31,12 +46,19 @@ def main() -> int:
     parser.add_argument("--voices", default="tools/kokoro/voices-v1.0.bin")
     parser.add_argument(
         "--voices-list",
-        default="af_heart,af_bella,af_nicole,am_adam,am_michael,bm_george",
+        default="am_liam,am_puck,am_michael",
         help="Comma-separated voice ids to test.",
     )
-    parser.add_argument("--speeds", default="0.95,1.0,1.05")
+    parser.add_argument("--speeds", default="1.0")
     parser.add_argument("--out", default="tools/audition")
+    parser.add_argument(
+        "--script-file",
+        default=None,
+        help="Path to a text file whose content is read by every voice.",
+    )
     args = parser.parse_args()
+
+    script = load_script(args)
 
     model = Path(args.model)
     voices = Path(args.voices)
@@ -59,7 +81,7 @@ def main() -> int:
         for speed in speeds:
             try:
                 samples, sample_rate = kokoro.create(
-                    SAMPLE, voice=voice, speed=speed, lang="en-us"
+                    script, voice=voice, speed=speed, lang="en-us"
                 )
             except Exception as error:  # noqa: BLE001 - report and continue
                 print(f"  {voice} @ {speed}: FAILED ({error})")
