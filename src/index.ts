@@ -10,8 +10,14 @@ import {
   OUTPUT_DIR,
   TARGET_DURATION_SECONDS,
   TEMP_DIR,
+  FPS,
+  VIEWPORT,
+  MASCOT_LAYOUT,
+  VOICE_PRESET,
   TTS_SPEED,
   TTS_VOICE,
+  CARD_VIEWPORT_HEIGHT,
+  CHARACTER_POSE_PNGS,
 } from "./config.js";
 import { TOPIC_ROTATION as TOPICS } from "./github.js";
 import {
@@ -28,19 +34,38 @@ import {
 import { HistoryStore, canonicalFullName } from "./history.js";
 import { buildFactLedger } from "./facts.js";
 import { buildNarrationPlan, type PhraseHistory, validateScript } from "./narration.js";
-import { concatChunks, synthesizeSegments, toTimedChunks } from "./voice.js";
-import { buildCaptions, buildScrollKeyframes } from "./timeline.js";
+import {
+  kokoroPaths,
+  concatChunks,
+  synthesizeSegments,
+  toTimedChunks,
+} from "./voice.js";
+import { buildCaptions, buildScrollKeyframes, scrollCoverage } from "./timeline.js";
 import { measureCard } from "./browser-capture.js";
 import { renderVideo } from "./render.js";
-import { validateOutput, measureLoudness } from "./qa.js";
+import { buildContactSheet, validateOutput, measureLoudness } from "./qa.js";
+import { startAssetServer } from "./asset-server.js";
+import {
+  buildSpeechEnvelope,
+  characterPoseForSlot,
+  resolveCharacterAsset,
+} from "./character-motion.js";
+import type { CharacterPoseAsset } from "./card.js";
+import {
+  captureMobileRepositoryPage,
+  chooseStoryEnd,
+  cropMobileCapture,
+} from "./mobile-capture.js";
 import { writeAssFromCaptions } from "./captions.js";
 import type {
   CandidateEvaluation,
+  CharacterCue,
   DiscoveryMode,
   EnrichedRepo,
   NarrationPlan,
   StageName,
   Timeline,
+  VisualAnchor,
 } from "./types.js";
 import { scrollBounds } from "./scroll.js";
 
@@ -336,6 +361,11 @@ async function main(): Promise<void> {
     });
     const validation = validateScript(plan, ledger);
     await writeJson(path.join(runDir, "narration.json"), plan);
+    if (validation.narrative) {
+      await writeJson(path.join(runDir, "narration-structure.json"), {
+        script: validation.narrative,
+      });
+    }
     for (const warning of validation.warnings) log(`  script warning: ${warning}`);
     if (!validation.ok) {
       throw new Error(`Script validation failed:\n  - ${validation.errors.join("\n  - ")}`);
@@ -345,6 +375,9 @@ async function main(): Promise<void> {
         `${plan.segments.length} segments, ${validation.words} words, ` +
         `~${validation.estimatedSeconds.toFixed(1)}s estimated.`
     );
+    if (validation.narrative?.useCase) {
+      log(`  use case covered via ${plan.angle} walkthrough; metadata is secondary.`);
+    }
     console.log("\nNarration:");
     plan.segments.forEach(segment => console.log(`  [${segment.purpose}] ${segment.spokenText}`));
     console.log("");
@@ -385,80 +418,222 @@ async function main(): Promise<void> {
         `Narration is ${audioSeconds.toFixed(1)}s which exceeds the 58s maximum. Shorten the script instead of speeding it up.`
       );
     }
+    // Phase 3: record exactly which voice, speed and model produced this audio.
+    const kokoro = kokoroPaths();
+    await writeJson(path.join(runDir, "render-metadata.json"), {
+      voice: { ...VOICE_PRESET },
+      kokoro: { model: kokoro.model, voices: kokoro.voices },
+      video: {
+        width: VIEWPORT.width,
+        height: VIEWPORT.height,
+        fps: FPS,
+        codec: "h264/yuv420p",
+        audio: "aac 48000Hz stereo",
+      },
+      mascot: { ...MASCOT_LAYOUT },
+    });
 
-    /* ---------------- Stage 5: timeline ---------------------- */
+    /* ---------------- Stage 5: mobile capture + timeline ----- */
     currentStage = "timeline";
     history.setRunStage(runId, "timeline");
-    const measured = await measureCard(repo);
+
+    const speechEnvelope = await buildSpeechEnvelope(narrationWav);
+    await writeJson(path.join(runDir, "speech-envelope.json"), speechEnvelope);
+
+    const captureDir = path.join(workDir, "capture");
+    log("Stage 5/9: Capturing the public repository at a real mobile viewport...");
+    const capture = await captureMobileRepositoryPage(repo, captureDir);
+    for (const warning of capture.warnings) log(`  capture warning: ${warning}`);
     log(
-      `Stage 5/9: Rendered card measured — document ${measured.documentHeight}px, ` +
-        `viewport ${measured.viewportHeight}px, anchors ${measured.anchors.map(a => a.anchor).join(", ")}.`
-    );
-    const bounds = scrollBounds(measured.documentHeight, measured.viewportHeight);
-    const captions = buildCaptions(plan.segments, timedChunks, { phonemeTimings: null });
-    const scrollKeyframes = buildScrollKeyframes({
-      segments: plan.segments,
-      chunks: timedChunks,
-      anchors: measured.anchors,
-      documentHeight: measured.documentHeight,
-      viewportHeight: measured.viewportHeight,
-    });
-    const timeline: Timeline = {
-      durationMs: merged.durationMs,
-      sampleRate: merged.sampleRate,
-      chunks: timedChunks,
-      captions,
-      scroll: scrollKeyframes,
-      anchors: measured.anchors,
-      documentHeight: measured.documentHeight,
-      viewportHeight: measured.viewportHeight,
-    };
-    await writeJson(path.join(runDir, "timeline.json"), timeline);
-    await writeAssFromCaptions(captions, path.join(workDir, "captions.ass"));
-    log(
-      `  ${captions.length} caption phrases, ${scrollKeyframes.length} scroll keyframes, ` +
-        `max scroll ${bounds.maxScroll}px.`
+      `  ${capture.source} capture: ${capture.raster.width}x${capture.raster.height}px ` +
+        `from ${capture.cssViewport.width}x${capture.cssViewport.height} CSS viewports.`
     );
 
-    /* ---------------- Stage 6-7: render + encode ------------- */
-    currentStage = "render";
-    history.setRunStage(runId, "render");
+    const referencedAnchors = [
+      ...new Set(
+        plan.segments
+          .map(segment => segment.visualAnchor)
+          .filter((anchor): anchor is VisualAnchor => Boolean(anchor))
+      ),
+    ];
+    const storySpan = chooseStoryEnd({
+      anchors: capture.anchors,
+      fullHeightPx: capture.raster.height,
+      viewportHeightPx: CARD_VIEWPORT_HEIGHT,
+      durationMs: merged.durationMs,
+      referencedAnchors,
+    });
+    for (const warning of storySpan.warnings) log(`  story warning: ${warning}`);
+
+    const storyImage = path.join(captureDir, "story-page.jpg");
+    const storyCapture = await cropMobileCapture(
+      capture,
+      storySpan.endPx,
+      storyImage
+    );
+    await writeJson(path.join(runDir, "story.json"), {
+      startPx: storySpan.startPx,
+      endPx: storyCapture.raster.height,
+      fullHeightPx: capture.raster.height,
+      source: capture.source,
+      referencedAnchors,
+      warnings: [...storySpan.warnings, ...capture.warnings],
+    });
+
+    const poseFiles = (
+      Object.entries(CHARACTER_POSE_PNGS) as Array<
+        [CharacterPoseAsset["pose"], string | null]
+      >
+    )
+      .map(([pose, configured]) => ({ pose, file: resolveCharacterAsset(configured) }))
+      .filter(
+        (entry): entry is { pose: CharacterPoseAsset["pose"]; file: string } =>
+          Boolean(entry.file)
+      );
+    const segmentById = new Map(plan.segments.map(segment => [segment.id, segment]));
+    const characterCues: CharacterCue[] = timedChunks.map(chunk => ({
+      startMs: chunk.startMs,
+      endMs: chunk.endMs,
+      pose: characterPoseForSlot(segmentById.get(chunk.segmentId)?.narrativeRole),
+    }));
+
     const output = path.join(OUTPUT_DIR, `${slug}-${runId}.mp4`);
     outputPath = output;
-    log(`Stage 6/9: Rendering ${audioSeconds.toFixed(2)}s of stationary-card frames...`);
-    let lastReported = -1;
-    const rendered = await renderVideo({
-      repo,
-      captions,
-      scrollKeyframes,
-      audioPath: narrationWav,
-      audioDurationMs: merged.durationMs,
-      outputPath: output,
-      workDir: workDir,
-      onProgress: (frame, total) => {
-        const percent = Math.floor((frame / total) * 100);
-        if (percent !== lastReported && percent % 20 === 0) {
-          lastReported = percent;
-          log(`  ${percent}% (${frame}/${total} frames)`);
-        }
-      },
-    });
-    log(`Stage 7/9: Encoded ${rendered.totalFrames} frames to ${path.basename(output)}.`);
+    const assetFiles: Record<string, string> = { "/page.jpg": storyImage };
+    for (const { pose, file } of poseFiles) {
+      assetFiles[`/character-${pose}.png`] = file;
+    }
+    const assets = await startAssetServer(assetFiles);
+    const pageImageUrl = `${assets.origin}/page.jpg`;
+    const characterPoses: CharacterPoseAsset[] = poseFiles.map(({ pose }) => ({
+      pose,
+      url: `${assets.origin}/character-${pose}.png`,
+    }));
+    const characterUrl = characterPoses[0]?.url ?? null;
+    log(
+      `  assets served on loopback` +
+        (characterPoses.length
+          ? ` (presenter ${Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width)}px wide, ${
+              characterPoses.length
+            } pose${characterPoses.length === 1 ? "" : "s"}).`
+          : " (no character asset).")
+    );
 
-    /* ---------------- Stage 8: QA --------------------------- */
-    currentStage = "qa";
-    history.setRunStage(runId, "qa");
-    const report = await validateOutput(output, { expectedAudioSeconds: audioSeconds });
-    const loudness = await measureLoudness(output);
-    await writeJson(path.join(runDir, "qa.json"), { ...report, loudness });
-    for (const check of report.checks) {
-      log(`  ${check.ok ? "PASS" : "FAIL"}  ${check.name}: ${check.detail}`);
-    }
-    if (loudness) {
-      log(`  loudness: ${loudness.integrated.toFixed(1)} LUFS, true peak ${loudness.truePeak.toFixed(1)} dBTP.`);
-    }
-    if (!report.ok) {
-      throw new Error("The rendered video failed QA; the repository was NOT marked complete.");
+    try {
+      const measured = await measureCard({
+        repo,
+        pageImageUrl,
+        characterUrl,
+        characterPoses,
+      });
+      log(
+        `  rendered card measured: document ${measured.documentHeight}px, ` +
+          `viewport ${measured.viewportHeight}px, caption at y=${Math.round(
+            measured.geometry.caption?.top ?? 0
+          )}px.`
+      );
+
+      const bounds = scrollBounds(measured.documentHeight, measured.viewportHeight);
+      const captions = buildCaptions(plan.segments, timedChunks, {
+        phonemeTimings: null,
+      });
+      const scrollKeyframes = buildScrollKeyframes({
+        segments: plan.segments,
+        chunks: timedChunks,
+        anchors: storyCapture.anchors,
+        documentHeight: measured.documentHeight,
+        viewportHeight: measured.viewportHeight,
+        durationMs: merged.durationMs,
+      });
+      const timeline: Timeline = {
+        durationMs: merged.durationMs,
+        sampleRate: merged.sampleRate,
+        chunks: timedChunks,
+        captions,
+        scroll: scrollKeyframes,
+        anchors: storyCapture.anchors,
+        documentHeight: measured.documentHeight,
+        viewportHeight: measured.viewportHeight,
+        story: {
+          startPx: storySpan.startPx,
+          endPx: storyCapture.raster.height,
+          fullHeightPx: capture.raster.height,
+          source: capture.source,
+        },
+      };
+      await writeJson(path.join(runDir, "timeline.json"), timeline);
+      await writeAssFromCaptions(captions, path.join(workDir, "captions.ass"));
+      log(
+        `  ${captions.length} caption phrases, ${scrollKeyframes.length} scroll keyframes, ` +
+          `max scroll ${bounds.maxScroll}px.`
+      );
+
+      /* ---------------- Stage 6-7: render + encode ------------- */
+      currentStage = "render";
+      history.setRunStage(runId, "render");
+      log(`Stage 6/9: Rendering ${audioSeconds.toFixed(2)}s of stationary-card frames...`);
+      let lastReported = -1;
+      const rendered = await renderVideo({
+        repo,
+        pageImageUrl,
+        characterUrl,
+        characterPoses,
+        characterCues,
+        speechEnvelope,
+        captions,
+        scrollKeyframes,
+        audioPath: narrationWav,
+        audioDurationMs: merged.durationMs,
+        outputPath: output,
+        workDir,
+        onProgress: (frame, total) => {
+          const percent = Math.floor((frame / total) * 100);
+          if (percent !== lastReported && percent % 20 === 0) {
+            lastReported = percent;
+            log(`  ${percent}% (${frame}/${total} frames)`);
+          }
+        },
+      });
+      log(
+        `Stage 7/9: Encoded ${rendered.totalFrames} frames to ${path.basename(output)}.`
+      );
+
+      const contactSheet = await buildContactSheet(
+        rendered.referenceFrames,
+        path.join(runDir, "contact-sheet.jpg")
+      ).catch(() => null);
+
+      /* ---------------- Stage 8: QA --------------------------- */
+      currentStage = "qa";
+      history.setRunStage(runId, "qa");
+      const coverage = scrollCoverage(scrollKeyframes, merged.durationMs);
+      const report = await validateOutput(output, {
+        expectedAudioSeconds: audioSeconds,
+        expectMotion: Math.max(...coverage) - Math.min(...coverage) > 120,
+        motionStops: coverage,
+      });
+      const loudness = await measureLoudness(output);
+      await writeJson(path.join(runDir, "qa.json"), {
+        ...report,
+        loudness,
+        contactSheet,
+      });
+      for (const check of report.checks) {
+        log(`  ${check.ok ? "PASS" : "FAIL"}  ${check.name}: ${check.detail}`);
+      }
+      if (loudness) {
+        log(
+          `  loudness: ${loudness.integrated.toFixed(1)} LUFS, true peak ${loudness.truePeak.toFixed(1)} dBTP.`
+        );
+      }
+      if (contactSheet) log(`  contact sheet: ${contactSheet}`);
+      if (!report.ok) {
+        throw new Error(
+          "The rendered video failed QA; the repository was NOT marked complete."
+        );
+      }
+    } finally {
+      await assets.close();
     }
 
     /* ---------------- Stage 9: completion -------------------- */
