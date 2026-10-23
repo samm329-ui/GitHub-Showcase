@@ -5,7 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import { FPS, MAX_DURATION_SECONDS } from "./config.js";
 import { renderCardVideo } from "./browser-capture.js";
-import type { CaptionPhrase, EnrichedRepo, ScrollKeyframe } from "./types.js";
+import type { CharacterPoseAsset } from "./card.js";
+import type {
+  CaptionPhrase,
+  CharacterCue,
+  EnrichedRepo,
+  ScrollKeyframe,
+  SpeechEnvelope,
+} from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,12 +26,21 @@ const execFileAsync = promisify(execFile);
 
 export type RenderVideoOptions = {
   repo: EnrichedRepo;
+  /** Loopback URL of the real mobile screenshot (primary mode). */
+  pageImageUrl?: string | null;
+  /** Loopback URL of the transparent character cut-out. */
+  characterUrl?: string | null;
+  /** Optional named presenter poses (present/point/close). */
+  characterPoses?: CharacterPoseAsset[] | null;
+  /** Presenter action/framing changes, aligned to narration segments. */
+  characterCues?: CharacterCue[] | null;
   captions: CaptionPhrase[];
   scrollKeyframes: ScrollKeyframe[];
   audioPath: string;
   audioDurationMs: number;
   outputPath: string;
   workDir: string;
+  speechEnvelope?: SpeechEnvelope | null;
   fps?: number;
   crf?: number;
   preset?: string;
@@ -40,6 +56,11 @@ export async function renderVideo(
 
   const result = await renderCardVideo({
     repo: options.repo,
+    pageImageUrl: options.pageImageUrl,
+    characterUrl: options.characterUrl,
+    characterPoses: options.characterPoses,
+    characterCues: options.characterCues,
+    speechEnvelope: options.speechEnvelope,
     captions: options.captions,
     scrollKeyframes: options.scrollKeyframes,
     durationMs: options.audioDurationMs,
