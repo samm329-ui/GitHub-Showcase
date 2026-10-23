@@ -1,53 +1,87 @@
-import CDP from "chrome-remote-interface";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { CHROME_DEBUG_URL, FPS, MAX_DURATION_SECONDS } from "./config.js";
+import { FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
 import type {
   CaptionPhrase,
+  CharacterCue,
   EnrichedRepo,
   MeasuredAnchor,
   ScrollKeyframe,
+  SpeechEnvelope,
 } from "./types.js";
-import { buildCardHtml, CARD_VIEWPORT_HEIGHT } from "./card.js";
+import {
+  buildCardHtml,
+  CARD_VIEWPORT_HEIGHT,
+  type CardComposition,
+  type CharacterPoseAsset,
+} from "./card.js";
 import { captionHtml } from "./caption-overlay.js";
+import {
+  characterCueAt,
+  characterPoseAt,
+  speechLevelAt,
+} from "./character-motion.js";
 import { scrollAt } from "./timeline.js";
-import { measuredAnchors, scrollBounds } from "./scroll.js";
+import {
+  closeTarget,
+  evaluate,
+  frameId,
+  openTarget,
+  setViewport,
+  sleep,
+  type CdpClient,
+} from "./cdp.js";
 
 /**
  * Chromium capture + FFmpeg encode.
  *
- * The card is rendered as real DOM (stage, card, repository view, captions,
- * progress). For each output frame we only change two things: the transform of
- * the inner `.document` (the scroll) and the caption text. The stage, card,
- * border, shadow, browser bar, caption box and progress bar are static, which
- * is exactly the required composition.
+ * The card is rendered as real DOM: stage, card, one tall page screenshot,
+ * caption overlay and an optional character layer. For each output frame only
+ * three things change: the transform of `.document`, the caption HTML and the
+ * character transform. The stage, card, border, shadow and browser bar are
+ * static, which is exactly the required composition. There is no progress UI.
  *
  * Frames are piped straight into FFmpeg, so no intermediate frame files are
  * written to disk.
  */
 
+export type CaptureGeometry = {
+  stage: { width: number; height: number };
+  card: { left: number; top: number; width: number; height: number };
+  caption?: { left: number; top: number; width: number; height: number };
+  character?: { left: number; top: number; width: number; height: number } | null;
+  hasProgress?: boolean;
+};
+
 export type CaptureResult = {
   anchors: MeasuredAnchor[];
   documentHeight: number;
   viewportHeight: number;
-  geometry: {
-    stage: { width: number; height: number };
-    card: { left: number; top: number; width: number; height: number };
-  };
+  geometry: CaptureGeometry;
   /** Debug frames written for visual inspection. */
   referenceFrames: string[];
 };
 
 export type RenderCardOptions = {
   repo: EnrichedRepo;
+  /** Loopback URL of the tall mobile screenshot. Primary visual mode. */
+  pageImageUrl?: string | null;
+  /** Loopback URL of the transparent character cut-out. */
+  characterUrl?: string | null;
+  /** Optional named presenter poses (present/point/close). */
+  characterPoses?: CharacterPoseAsset[] | null;
+  /** Presenter action/framing changes, aligned to narration segments. */
+  characterCues?: CharacterCue[] | null;
   captions: CaptionPhrase[];
   scrollKeyframes: ScrollKeyframe[];
   durationMs: number;
   outputPath: string;
   audioPath: string;
   workDir: string;
+  /** 0..1 speech amplitude per low-rate sample; drives the character pose. */
+  speechEnvelope?: SpeechEnvelope | null;
   fps?: number;
   crf?: number;
   preset?: string;
@@ -56,44 +90,34 @@ export type RenderCardOptions = {
   onProgress?: (frame: number, totalFrames: number) => void;
 };
 
-type Client = {
-  Page: any;
-  Runtime: any;
-  Emulation: any;
-  close(): Promise<void>;
-};
+/* ------------------------------------------------------------------ */
+/* Page setup                                                          */
+/* ------------------------------------------------------------------ */
 
-async function openClient(): Promise<{ client: Client; targetId: string }> {
-  const endpoint = new URL(CHROME_DEBUG_URL);
-  const host = endpoint.hostname;
-  const port = Number(endpoint.port || 9222);
-  const target = await CDP.New({ host, port });
-  const client = (await CDP({ target: target.id, host, port })) as Client;
-  return { client, targetId: target.id };
+function asComposition(input: EnrichedRepo | CardComposition): CardComposition {
+  return "repo" in input ? input : { repo: input };
 }
 
-async function closeClient(targetId: string): Promise<void> {
-  try {
-    await CDP.Close({ id: targetId, host: new URL(CHROME_DEBUG_URL).hostname, port: Number(new URL(CHROME_DEBUG_URL).port || 9222) });
-  } catch {
-    /* the target may already be gone */
-  }
-}
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function evaluate(client: Client, expression: string): Promise<any> {
-  const result = await client.Runtime.evaluate({
-    expression,
-    returnByValue: true,
-    awaitPromise: true,
+async function loadCardPage(
+  client: CdpClient,
+  composition: CardComposition
+): Promise<void> {
+  await client.Page.enable();
+  await client.Runtime.enable();
+  await setViewport(client, {
+    width: VIEWPORT.width,
+    height: VIEWPORT.height,
+    deviceScaleFactor: 1,
+    mobile: false,
   });
-  if (result?.exceptionDetails) {
-    throw new Error(
-      `Browser evaluation failed: ${result.exceptionDetails.text ?? "unknown error"}`
-    );
-  }
-  return result?.result?.value;
+  await client.Page.setDocumentContent({
+    frameId: await frameId(client),
+    html: buildCardHtml(composition),
+  });
+  // Wait for fonts and the tall screenshot. The in-page hook resolves on
+  // load/error and always times out, so a broken asset cannot hang the render.
+  await evaluate(client, "window.__showcase.ready(8000)");
+  await sleep(120);
 }
 
 /* ------------------------------------------------------------------ */
@@ -101,31 +125,21 @@ async function evaluate(client: Client, expression: string): Promise<any> {
 /* ------------------------------------------------------------------ */
 
 /**
- * Render the card once, measure the real section offsets and card geometry,
- * then close the page. Called before the timeline is built so scroll targets
- * come from the rendered document.
+ * Render the card once, measure the real content height and card geometry,
+ * then close the page. In primary mode the story anchors come from the mobile
+ * capture; this pass verifies what Chromium actually laid out.
  */
-export async function measureCard(repo: EnrichedRepo): Promise<CaptureResult> {
-  const html = buildCardHtml(repo);
-  const { client, targetId } = await openClient();
+export async function measureCard(
+  input: EnrichedRepo | CardComposition
+): Promise<CaptureResult> {
+  const composition = asComposition(input);
+  const { client, targetId } = await openTarget();
   try {
-    await client.Page.enable();
-    await client.Runtime.enable();
-    await client.Emulation.setDeviceMetricsOverride({
-      width: 1080,
-      height: 1920,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    await client.Page.setDocumentContent({
-      frameId: (await client.Page.getFrameTree()).frameTree.frame.id,
-      html,
-    });
-    await sleep(350);
+    await loadCardPage(client, composition);
     const measured = await evaluate(client, "window.__showcase.measure()");
-    const geometry = await evaluate(client, "window.__showcase.geometry()");
+    const geometry = (await evaluate(client, "window.__showcase.geometry()")) as CaptureGeometry;
     return {
-      anchors: measuredAnchors(measured.anchors),
+      anchors: [],
       documentHeight: measured.documentHeight,
       viewportHeight: measured.viewportHeight,
       geometry,
@@ -133,7 +147,7 @@ export async function measureCard(repo: EnrichedRepo): Promise<CaptureResult> {
     };
   } finally {
     await client.close().catch(() => undefined);
-    await closeClient(targetId);
+    await closeTarget(targetId);
   }
 }
 
@@ -191,8 +205,13 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
   await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
   await fs.mkdir(options.workDir, { recursive: true });
 
-  const html = buildCardHtml(options.repo);
-  const { client, targetId } = await openClient();
+  const composition: CardComposition = {
+    repo: options.repo,
+    pageImageUrl: options.pageImageUrl ?? null,
+    characterUrl: options.characterUrl ?? null,
+    characterPoses: options.characterPoses ?? null,
+  };
+  const { client, targetId } = await openTarget();
 
   const ffmpeg: ChildProcessWithoutNullStreams = spawn(
     "ffmpeg",
@@ -218,43 +237,40 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
 
   const referenceFrames: string[] = [];
   const referenceDir = path.join(options.workDir, "visual");
-  if (options.writeReferenceFrames !== false) {
-    await fs.mkdir(referenceDir, { recursive: true });
+  const writeReferences = options.writeReferenceFrames !== false;
+  if (writeReferences) await fs.mkdir(referenceDir, { recursive: true });
+
+  // Precompute which frame belongs to each 0/25/50/75/100% stop. Computing the
+  // set up front avoids the old float-comparison bug that skipped the 100%
+  // frame on odd frame counts.
+  const referenceIndices = new Map<number, number>();
+  for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+    const frame = Math.min(totalFrames - 1, Math.round(fraction * (totalFrames - 1)));
+    if (!referenceIndices.has(frame)) referenceIndices.set(frame, Math.round(fraction * 100));
   }
 
   try {
-    await client.Page.enable();
-    await client.Runtime.enable();
-    await client.Emulation.setDeviceMetricsOverride({
-      width: 1080,
-      height: 1920,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    await client.Page.setDocumentContent({
-      frameId: (await client.Page.getFrameTree()).frameTree.frame.id,
-      html,
-    });
-    // Let the fonts and layout settle before measuring or capturing.
-    await sleep(400);
-
+    await loadCardPage(client, composition);
     const measured = await evaluate(client, "window.__showcase.measure()");
-    const geometry = await evaluate(client, "window.__showcase.geometry()");
-    const bounds = scrollBounds(measured.documentHeight, measured.viewportHeight);
-
-    const referenceStops = [0, 0.25, 0.5, 0.75, 1];
+    const geometry = (await evaluate(client, "window.__showcase.geometry()")) as CaptureGeometry;
 
     for (let frame = 0; frame < totalFrames; frame += 1) {
-      const timeMs = (frame / fps) * 1000;
+      const timeMs = Math.min(options.durationMs, (frame / fps) * 1000);
       const scrollY = scrollAt(options.scrollKeyframes, timeMs);
       const caption = captionFor(options.captions, timeMs);
+      const poseName = characterCueAt(options.characterCues ?? [], timeMs);
+      const pose = characterPoseAt(
+        timeMs,
+        speechLevelAt(options.speechEnvelope ?? null, timeMs),
+        poseName
+      );
 
       await evaluate(
         client,
         `(() => {
           window.__showcase.setScroll(${scrollY.toFixed(2)});
           window.__showcase.setCaption(${JSON.stringify(caption ? captionHtml(caption) : "")});
-          window.__showcase.setProgress(${(timeMs / Math.max(1, options.durationMs)).toFixed(5)}, ${timeMs.toFixed(1)}, ${options.durationMs.toFixed(1)});
+          window.__showcase.setCharacterPose(${JSON.stringify(pose)}, ${JSON.stringify(poseName)});
           return 1;
         })()`
       );
@@ -268,15 +284,11 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
       });
       const buffer = Buffer.from(shot.data, "base64");
 
-      if (options.writeReferenceFrames !== false) {
-        const stopIndex = referenceStops.findIndex(
-          stop => Math.abs(timeMs / options.durationMs - stop) < 1 / (fps * 2)
-        );
-        if (stopIndex >= 0) {
-          const file = path.join(referenceDir, `reference-${Math.round(stopIndex * 25)}pct.jpg`);
-          await fs.writeFile(file, buffer);
-          referenceFrames.push(file);
-        }
+      const percent = referenceIndices.get(frame);
+      if (writeReferences && percent !== undefined) {
+        const file = path.join(referenceDir, `reference-${percent}pct.jpg`);
+        await fs.writeFile(file, buffer);
+        referenceFrames.push(file);
       }
 
       if (!ffmpeg.stdin.write(buffer)) {
@@ -293,7 +305,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
     }
 
     return {
-      anchors: measuredAnchors(measured.anchors),
+      anchors: [],
       documentHeight: measured.documentHeight,
       viewportHeight: measured.viewportHeight,
       geometry,
@@ -302,16 +314,15 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
   } catch (error) {
     ffmpeg.stdin.destroy();
     ffmpeg.kill();
-    const detail = await fs
+    await fs
       .writeFile(path.join(options.workDir, "ffmpeg-stderr.log"), ffmpegStderr, "utf8")
       .catch(() => undefined);
-    void detail;
     throw new Error(
       `Card render failed: ${error instanceof Error ? error.message : String(error)}`
     );
   } finally {
     await client.close().catch(() => undefined);
-    await closeClient(targetId);
+    await closeTarget(targetId);
   }
 }
 
@@ -326,10 +337,7 @@ function captionFor(
 }
 
 /* ------------------------------------------------------------------ */
-/* Legacy capture of the live GitHub page                              */
-/*                                                                     */
-/* Kept for `--live-page` debugging only. The showcase card is built from */
-/* repository data, not from a screenshot of github.com.                */
+/* Legacy capture of the live GitHub page (debugging only)             */
 /* ------------------------------------------------------------------ */
 
 export async function captureLivePage(
@@ -337,13 +345,13 @@ export async function captureLivePage(
   outputDir: string
 ): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true });
-  const { client, targetId } = await openClient();
+  const { client, targetId } = await openTarget();
   try {
     await client.Page.enable();
     await client.Runtime.enable();
-    await client.Emulation.setDeviceMetricsOverride({
-      width: 1080,
-      height: 1920,
+    await setViewport(client, {
+      width: VIEWPORT.width,
+      height: VIEWPORT.height,
       deviceScaleFactor: 1,
       mobile: false,
     });
@@ -360,7 +368,7 @@ export async function captureLivePage(
     return file;
   } finally {
     await client.close().catch(() => undefined);
-    await closeClient(targetId);
+    await closeTarget(targetId);
   }
 }
 
