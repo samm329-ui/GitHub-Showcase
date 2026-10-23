@@ -4,12 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  TTS_LANG,
   TTS_MAX_RETRIES,
   TTS_PAUSE_BETWEEN_SEGMENTS_MS,
   TTS_SPEED,
   TTS_VOICE,
 } from "./config.js";
 import type { AudioChunk, AudioMeasurement, NarrationSegment } from "./types.js";
+import { prepareTtsText } from "./tts-text.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -183,6 +185,14 @@ export async function synthesizeChunk(
   const metadataPath = `${outputWav}.json`;
   const voice = options.voice ?? TTS_VOICE;
   const speed = options.speed ?? TTS_SPEED;
+  const lang = options.lang ?? TTS_LANG;
+
+  // Speech-only normalisation. Captions are built from `captionText` elsewhere
+  // and never pass through this path.
+  const speechText = prepareTtsText(text);
+  if (!speechText.trim()) {
+    throw new TtsError("Narration segment was empty after speech normalisation.");
+  }
 
   await fs.mkdir(path.dirname(outputWav), { recursive: true });
 
@@ -197,11 +207,11 @@ export async function synthesizeChunk(
           "--voices", paths.voices,
           "--voice", voice,
           "--speed", String(speed),
-          "--lang", options.lang ?? "en-us",
+          "--lang", lang,
           "--output", outputWav,
           "--metadata", metadataPath,
         ],
-        { input: `${text}\n`, timeout: 300000 }
+        { input: `${speechText}\n`, timeout: 300000 }
       );
       const measured = await probeAudio(outputWav);
       let phonemeTimings = 0;
@@ -217,7 +227,7 @@ export async function synthesizeChunk(
         index: -1,
         segmentId: "",
         file: outputWav,
-        text,
+        text: speechText,
         durationMs: measured.durationMs,
         sampleRate: measured.sampleRate,
         channels: measured.channels,
