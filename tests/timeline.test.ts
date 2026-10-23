@@ -177,6 +177,32 @@ describe("caption presentation", () => {
     }
   });
 
+  test("strong clause marks split before a caption can become three lines", () => {
+    const phrases = splitPhrases(
+      "And: Synchronous CPU-bound work: concurrency does not help."
+    );
+    assert.deepEqual(phrases, [
+      "And: Synchronous CPU-bound work:",
+      "concurrency does not help.",
+    ]);
+    for (const phrase of phrases) {
+      assert.ok(
+        wrapCaptionText(phrase).length <= 2,
+        `phrase needs three rendered lines: ${phrase}`
+      );
+    }
+  });
+
+  test("a short trailing fragment folds into a two-line phrase", () => {
+    const phrases = splitPhrases(
+      "First: Network or database: the pool size or rate limit of the other side."
+    );
+    assert.deepEqual(phrases, [
+      "First: Network or database:",
+      "the pool size or rate limit of the other side.",
+    ]);
+  });
+
   test("long captions wrap into at most two lines", () => {
     const lines = wrapCaptionText(
       "Scaffolds a service with linting tests and a deploy target"
@@ -287,6 +313,68 @@ describe("scroll keyframes", () => {
     assert.equal(keys[0].scrollY, 0);
   });
 
+  test("a missing features anchor falls back to the README intro", () => {
+    const keys = buildScrollKeyframes({
+      segments: [
+        { ...segments()[0], visualAnchor: "features" as const },
+      ],
+      chunks,
+      anchors,
+      documentHeight: 2060,
+      viewportHeight: 1310,
+      durationMs: 60_000,
+    });
+    const furthest = Math.max(...keys.map(key => key.scrollY));
+    assert.ok(furthest >= 750, `features did not reach the README: ${furthest}`);
+  });
+
+  test("a landmark hinted earlier than the scroll budget allows arrives late, not halfway", () => {
+    // A distant README section (2868px away) whose chunk starts so early that
+    // the 190px/s ceiling cannot cover the distance in the scheduled gap. The
+    // keyframe must be delayed until the move is achievable and arrive fully,
+    // instead of being clipped mid-air by the speed repair.
+    const tallAnchors = [
+      { anchor: "repo-header" as const, offsetTop: 300, offsetHeight: 400 },
+      { anchor: "file-list" as const, offsetTop: 700, offsetHeight: 900 },
+      { anchor: "readme-intro" as const, offsetTop: 2900, offsetHeight: 900 },
+    ];
+    const earlyChunk: AudioChunk = {
+      ...(syntheticChunks()[0] as AudioChunk),
+      durationMs: 3000,
+      startMs: 2000,
+      endMs: 5000,
+    };
+    const keys = buildScrollKeyframes({
+      segments: [
+        { ...segments()[0], visualAnchor: "features" as const },
+      ],
+      chunks: [earlyChunk],
+      anchors: tallAnchors,
+      documentHeight: 4500,
+      viewportHeight: 1310,
+      durationMs: 65_000,
+    });
+    // 2900 - 32 padding.
+    const target = 2868;
+    const last = keys[keys.length - 1];
+    assert.equal(last.scrollY, target, "the narrated section must be reached fully");
+    // The key time must cover the whole travel from the previous key.
+    const previous = keys[keys.length - 2];
+    const travel = ((target - previous.scrollY) / 190) * 1000;
+    assert.ok(
+      last.timeMs >= previous.timeMs + travel - 2,
+      `arrival at ${last.timeMs}ms happened earlier than the ${travel.toFixed(0)}ms of travel allows`
+    );
+    // No key was ever stopped short of its planned landmark.
+    for (const key of keys) {
+      assert.ok(
+        key.scrollY === 0 || key.scrollY === 268 || key.scrollY === 668 ||
+          key.scrollY === 1768 || key.scrollY === target,
+        `a keyframe sits mid-air at ${key.scrollY}`
+      );
+    }
+  });
+
   test("an anchor that is not present is never targeted", () => {
     const keys = buildScrollKeyframes({
       segments: [
@@ -297,7 +385,13 @@ describe("scroll keyframes", () => {
       documentHeight: 2060,
       viewportHeight: 1310,
     });
-    assert.equal(keys.length, 1);
+    assert.ok(
+      !keys.some(key => key.anchor === "release"),
+      "a missing anchor must never appear as a keyframe target"
+    );
+    for (const key of keys) {
+      assert.ok(key.scrollY >= 0 && key.scrollY <= 750);
+    }
   });
 
   test("interpolation is smooth and ends on the target", () => {
