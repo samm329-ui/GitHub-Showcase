@@ -1,14 +1,14 @@
 import type { MeasuredAnchor, VisualAnchor } from "./types.js";
-import { CARD_VIEWPORT_HEIGHT } from "./card.js";
-import { VIEWPORT_PADDING } from "./config.js";
+import { CARD_VIEWPORT_HEIGHT, VIEWPORT_PADDING } from "./config.js";
 
 /**
- * Scroll anchors derived from the *rendered* document, never from guessed
- * percentages.
+ * Scroll anchors derived from the *measured* page screenshot, never from
+ * guessed percentages.
  *
- * `captureRepository` returns the measured offsets of every section that the
- * current card actually contains. This module turns them into clamped scroll
- * targets and rejects anchors that are not present.
+ * `mobile-capture.ts` returns anchor offsets in displayed raster pixels.
+ * This module turns them into clamped scroll targets and rejects anchors that
+ * are not present. There is no DOM-document fallback here: an anchor either was
+ * measured or it is missing.
  */
 
 export type ScrollTarget = {
@@ -44,8 +44,7 @@ export function clampScroll(value: number, bounds: ScrollBounds): number {
 
 /**
  * Target scroll position that puts a section near the top of the viewport,
- * clamped to the valid range. Sections shorter than the viewport are aligned
- * to their start rather than centred, so their heading stays visible.
+ * clamped to the valid range.
  */
 export function targetForAnchor(
   anchor: MeasuredAnchor,
@@ -71,17 +70,45 @@ export function isScrollable(
 }
 
 export function measuredAnchors(
-  raw: { anchor: string | null; offsetTop: number; offsetHeight: number }[]
+  raw: {
+    anchor: string | null;
+    offsetTop: number;
+    offsetHeight: number;
+    source?: "captured" | "fallback";
+  }[]
 ): MeasuredAnchor[] {
+  const allowed = new Set<VisualAnchor>([
+    "repo-header",
+    "file-list",
+    "readme-intro",
+    "install-command",
+    "features",
+    "license",
+    "release",
+  ]);
   return raw
-    .filter((item): item is MeasuredAnchor =>
-      Boolean(item.anchor && item.offsetHeight > 0)
+    .filter(
+      (item): item is {
+        anchor: VisualAnchor;
+        offsetTop: number;
+        offsetHeight: number;
+        source?: "captured" | "fallback";
+      } =>
+        Boolean(
+          item.anchor &&
+            allowed.has(item.anchor as VisualAnchor) &&
+            Number.isFinite(item.offsetTop) &&
+            item.offsetTop >= 0 &&
+            item.offsetHeight > 0
+        )
     )
     .map(item => ({
-      anchor: item.anchor as VisualAnchor,
+      anchor: item.anchor,
       offsetTop: item.offsetTop,
       offsetHeight: item.offsetHeight,
-    }));
+      source: item.source ?? "captured",
+    }))
+    .sort((a, b) => a.offsetTop - b.offsetTop);
 }
 
 export { CARD_VIEWPORT_HEIGHT };
