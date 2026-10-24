@@ -112,7 +112,7 @@ export const CARD = {
   height: 1668,
   left: 135,
   top: 126,
-  radius: 28,
+  radius: 60,
   border: "1px solid rgba(255,255,255,0.14)",
 } as const;
 
@@ -128,13 +128,22 @@ export const CARD_CHROME_HEIGHT = 84;
 export const CARD_VIEWPORT_HEIGHT = CARD.height - CARD_CHROME_HEIGHT;
 export const VIEWPORT_PADDING = 32;
 
-/** Caption overlay: fixed relative to the viewport, lower-middle of the card. */
+/**
+ * Caption overlay: speech-callout placement near the mascot's head.
+ *
+ * The mascot owns the lower-right corner, so captions hang just *above* its
+ * head like a callout: the block's bottom edge sits `headGapPx` above the
+ * head-top line computed by `src/mascot-layout.ts`. Horizontal ratios are
+ * safe-area margins against the card viewport (platform UI overlays live in
+ * the far corners). There is deliberately no fixed top position: the block
+ * grows upward from the head.
+ */
 export const CAPTION_OVERLAY = {
-  /** Distance from the top of the clipped page viewport. */
-  topRatio: 0.66,
-  leftRatio: 0.05,
-  rightRatio: 0.05,
-  maxWidthRatio: 0.92,
+  /** Canvas-coordinate geometry of the stable caption group. */
+  leftPx: 165,
+  topPx: 876,
+  widthPx: 718,
+  maxHeightPx: 314,
 } as const;
 
 /**
@@ -168,11 +177,11 @@ export const MOBILE_PAGE = {
   maxStoryViewports: 5.5,
   /** A story is at least this many viewports tall so the reveal has substance. */
   minStoryViewports: 2.4,
-  settleMs: 1400,
-  navigationTimeoutMs: 45_000,
+  settleMs: 800,
+  navigationTimeoutMs: 20_000,
   jpegQuality: 94,
   /** Hard cap for very long READMEs; keeps canvas stitching tractable. */
-  maxCaptureCssHeight: 9_000,
+  maxCaptureCssHeight: 6_000,
   /** Chromium captures beyond this many raster pixels are tiled. */
   tileRasterHeight: 8_000,
 } as const;
@@ -216,32 +225,36 @@ export const CHARACTER_POSE_PNGS = {
 } as const;
 
 /**
- * Dedicated mascot placement config (Phase 1). The presenter is sized by
- * *width ratio of the output canvas* and anchored to the lower-right corner
- * of the stage — not the card — so it fills the marked presentation area.
+ * Dedicated mascot placement config (Visual Composition Pass). The presenter
+ * is sized by *width ratio of the output canvas* and anchored to the
+ * lower-right corner of the stage — not the card — so it fills the marked
+ * presentation area.
  *
- * CSS semantics: `right: offsetX` / `bottom: offsetY`. Negative offsets push
- * the layer beyond the canvas edge; the 1080x1920 viewport clips it, which is
- * exactly the "extends partially past the frame" behaviour.
+ * Anchoring is alpha-aware: `offsetX` / `offsetY` are the *deliberate clip* in
+ * canvas px of the visible artwork beyond the right/bottom canvas edge (the
+ * transparent PNG padding is subtracted first by `src/mascot-layout.ts`), so
+ * invisible PNG margins never push the character off the corner. The
+ * 1080x1920 viewport clips the overflow — "extends partially past the frame"
+ * by design, never by accident.
  */
 export type MascotLayout = {
   anchor: "bottom-right";
-  /** Fraction of the 1080 px canvas width. 0.46 is the tested initial value. */
+  /** Fraction of the 1080 px canvas width, applied to the PNG rectangle. */
   widthRatio: number;
+  /** CSS `right` offset in canvas px (negative = extends past edge). */
   offsetX: number;
+  /** CSS `bottom` offset in canvas px (negative = extends past edge). */
   offsetY: number;
-  /** Allow the artwork to overflow past the canvas edges (clipped, not clamped). */
-  allowOffscreen: boolean;
   /** Guarantee the head stays inside the canvas (guards against extreme sizes). */
   keepFaceVisible: boolean;
 };
 
 export const MASCOT_LAYOUT: MascotLayout = {
   anchor: "bottom-right",
-  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.46),
-  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -12),
-  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 0),
-  allowOffscreen: true,
+  // CSS right/bottom offsets (negative = extends past canvas edge).
+  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.8731),
+  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -25),
+  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, -44),
   keepFaceVisible: true,
 };
 
@@ -251,7 +264,10 @@ export const MASCOT_LAYOUT: MascotLayout = {
  * so every pose keeps the same apparent scale on the canvas.
  */
 export const CHARACTER = {
-  shadow: "drop-shadow(0 12px 20px rgba(0,0,0,0.38))",
+  /** Alpha-mask shadow: drop-shadow follows the cut-out silhouette, never a
+   * rectangle, and always renders *behind* the artwork. Soft, dark, offset
+   * downward; the blur scales with the rendered mascot size. */
+  shadow: "drop-shadow(0 26px 26px rgba(0,0,0,0.95))",
   idleBobPx: 2,
   speechBobPx: 6,
   tiltDeg: 1.1,
