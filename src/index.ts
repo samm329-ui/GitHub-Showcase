@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
@@ -18,6 +19,7 @@ import {
   TTS_PAUSE_BETWEEN_SEGMENTS_MS,
   CARD_VIEWPORT_HEIGHT,
   CHARACTER_POSE_PNGS,
+  CALLOUT_PNG,
 } from "./config.js";
 import { TOPIC_ROTATION as TOPICS } from "./github.js";
 import {
@@ -44,9 +46,17 @@ import {
   toTimedChunks,
 } from "./voice.js";
 import { buildCaptions, buildScrollKeyframes, scrollCoverage } from "./timeline.js";
+import { buildCalloutCues } from "./callout-overlay.js";
+import { captionFitsPanel } from "./caption-overlay.js";
 import { measureCard } from "./browser-capture.js";
 import { renderVideo } from "./render.js";
-import { buildContactSheet, validateOutput, measureLoudness } from "./qa.js";
+import {
+  buildContactSheet,
+  calloutChecks,
+  measureLoudness,
+  overlayLayoutChecks,
+  validateOutput,
+} from "./qa.js";
 import { startAssetServer } from "./asset-server.js";
 import {
   buildSpeechEnvelope,
@@ -549,8 +559,13 @@ async function main(): Promise<void> {
     for (const { pose, file } of poseFiles) {
       assetFiles[`/character-${pose}.png`] = file;
     }
+    const calloutAsset = CALLOUT_PNG;
+    if (calloutAsset && fsSync.existsSync(calloutAsset)) {
+      assetFiles["/bubble.png"] = calloutAsset;
+    }
     const assets = await startAssetServer(assetFiles);
     const pageImageUrl = `${assets.origin}/page.jpg`;
+    const calloutImageUrl = calloutAsset ? `${assets.origin}/bubble.png` : null;
     const characterPoses: CharacterPoseAsset[] = poseFiles.map(({ pose }) => ({
       pose,
       url: `${assets.origin}/character-${pose}.png`,
@@ -562,7 +577,8 @@ async function main(): Promise<void> {
           ? ` (presenter ${Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width)}px wide, ${
               characterPoses.length
             } pose${characterPoses.length === 1 ? "" : "s"}).`
-          : " (no character asset).")
+          : " (no character asset).") +
+        (calloutImageUrl ? " [comic speech bubble ready]" : "")
     );
 
     try {
@@ -571,6 +587,7 @@ async function main(): Promise<void> {
         pageImageUrl,
         characterUrl,
         characterPoses,
+        calloutImageUrl,
       });
       log(
         `  rendered card measured: document ${measured.documentHeight}px, ` +
@@ -583,6 +600,14 @@ async function main(): Promise<void> {
       const captions = buildCaptions(plan.segments, timedChunks, {
         phonemeTimings: null,
       });
+      // One evidence-backed callout for the purpose beat, timed from the final
+      // measured audio chunk — never from an estimate or a fixed timestamp.
+      const callouts = buildCalloutCues(plan.segments, timedChunks, merged.durationMs);
+      for (const phrase of captions) {
+        if (!captionFitsPanel(phrase.text)) {
+          log(`  caption warning: "${phrase.text}" needs more than two lines`);
+        }
+      }
       const scrollKeyframes = buildScrollKeyframes({
         segments: plan.segments,
         chunks: timedChunks,
@@ -596,6 +621,7 @@ async function main(): Promise<void> {
         sampleRate: merged.sampleRate,
         chunks: timedChunks,
         captions,
+        callouts,
         scroll: scrollKeyframes,
         anchors: storyCapture.anchors,
         documentHeight: measured.documentHeight,
@@ -613,6 +639,14 @@ async function main(): Promise<void> {
         `  ${captions.length} caption phrases, ${scrollKeyframes.length} scroll keyframes, ` +
           `max scroll ${bounds.maxScroll}px.`
       );
+      log(
+        callouts.length > 0
+          ? `  ${callouts.length} callout(s): ` +
+            callouts
+              .map(c => `"${c.text}" for ${c.segmentId} at ${c.startMs}-${c.endMs}ms`)
+              .join("; ")
+          : "  no callout: the purpose evidence had no faithful 3-7 word summary."
+      );
 
       /* ---------------- Stage 6-7: render + encode ------------- */
       currentStage = "render";
@@ -627,6 +661,8 @@ async function main(): Promise<void> {
         characterCues,
         speechEnvelope,
         captions,
+        callouts,
+        calloutImageUrl,
         scrollKeyframes,
         audioPath: narrationWav,
         audioDurationMs: merged.durationMs,
@@ -658,6 +694,14 @@ async function main(): Promise<void> {
         expectMotion: Math.max(...coverage) - Math.min(...coverage) > 120,
         motionStops: coverage,
       });
+      // The callout/caption overlays are part of the composition, so their
+      // timing, copy and geometry are QA gates too — not just render options.
+      const overlayChecks = [
+        ...calloutChecks(callouts, merged.durationMs),
+        ...overlayLayoutChecks(),
+      ];
+      report.checks.push(...overlayChecks);
+      report.ok = report.ok && overlayChecks.every(check => check.ok);
       const loudness = await measureLoudness(output);
       await writeJson(path.join(runDir, "qa.json"), {
         ...report,
