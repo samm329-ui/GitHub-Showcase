@@ -255,16 +255,19 @@ export class HistoryStore {
    */
   reserveRepository(
     nodeId: string,
-    runId: string
+    runId: string,
+    options: { force?: boolean } = {}
   ): RepositoryRow | null {
     this.reclaimStaleReservations();
     const existing = this.getRepository(nodeId);
     if (!existing) return null;
-    if (existing.status === "completed" && !this.revisitAllowed(existing.completed_at)) {
-      return null;
+    if (!options.force) {
+      if (existing.status === "completed" && !this.revisitAllowed(existing.completed_at)) {
+        return null;
+      }
+      if (existing.status === "processing") return null;
+      if (existing.attempt_count >= MAX_ATTEMPTS) return null;
     }
-    if (existing.status === "processing") return null;
-    if (existing.attempt_count >= MAX_ATTEMPTS) return null;
 
     const result = this.db
       .prepare(
@@ -272,10 +275,16 @@ export class HistoryStore {
             SET status = 'processing', run_id = ?, reserved_at = ?,
                 attempt_count = attempt_count + 1
           WHERE node_id = ?
-            AND status != 'processing'
+            AND (status != 'processing' OR ? = 1)
             AND (status != 'completed' OR ? = 1)`
       )
-      .run(runId, new Date().toISOString(), nodeId, this.revisitAllowed(existing.completed_at) ? 1 : 0);
+      .run(
+        runId,
+        new Date().toISOString(),
+        nodeId,
+        options.force ? 1 : 0,
+        options.force || this.revisitAllowed(existing.completed_at) ? 1 : 0
+      );
     if (result.changes !== 1) return null;
     return this.getRepository(nodeId);
   }
