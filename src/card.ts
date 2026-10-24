@@ -70,8 +70,8 @@ export type CardShadowTuning = {
 };
 
 export const CARD_SHADOW_TUNING: CardShadowTuning = {
-  intensity: 0.05,
-  blurScale: 0.5,
+  intensity: 0.85,
+  blurScale: 0.85,
 };
 
 /** Assemble the layered box-shadow from the tuned intensity/blur scale. */
