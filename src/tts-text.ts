@@ -135,6 +135,8 @@ function speakCommands(text: string): string {
  */
 export function prepareTtsText(input: string): string {
   let text = input;
+  // Emoji and pictographs are not speakable; drop them before any other work.
+  text = text.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, " ");
 
   text = text
     // Fenced code, front matter and HTML are not speech.
@@ -177,6 +179,9 @@ export function prepareTtsText(input: string): string {
   // Times such as 12:30 should not keep a colon that a regex might read as
   // punctuation or that a voice may pronounce oddly.
   text = text.replace(/\b(\d{1,2}):(\d{2})\b/g, "$1 $2");
+  // Colons are not spoken as a separate word; remove them so Kokoro does not
+  // pronounce "colon".
+  text = text.replace(/:/g, " ");
 
   text = speakCommands(text);
   text = speakDates(text);
