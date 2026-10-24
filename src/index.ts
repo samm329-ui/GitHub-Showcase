@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
@@ -16,6 +15,7 @@ import {
   VOICE_PRESET,
   TTS_SPEED,
   TTS_VOICE,
+  TTS_PAUSE_BETWEEN_SEGMENTS_MS,
   CARD_VIEWPORT_HEIGHT,
   CHARACTER_POSE_PNGS,
 } from "./config.js";
@@ -33,9 +33,10 @@ import {
 } from "./github.js";
 import { HistoryStore, canonicalFullName } from "./history.js";
 import { buildFactLedger } from "./facts.js";
-import { planEvidence } from "./explanation-planner.js";
+import { composeScript } from "./script-composer.js";
+import { evaluateScriptability } from "./scriptability.js";
 import { evaluateScriptQuality } from "./script-quality.js";
-import { buildNarrationPlan, type PhraseHistory, validateScript } from "./narration.js";
+import { validateScript } from "./narration.js";
 import {
   kokoroPaths,
   concatChunks,
@@ -164,6 +165,18 @@ async function selectCandidate(
     }
     if (hardReject(enriched, { excluded })) {
       log(`  rejected ${enriched.full_name}: failed a gate after hydration.`);
+      continue;
+    }
+    // Scriptability gate: a repository whose README cannot support an honest
+    // explanation (no purpose, no concrete mechanism) is skipped here, before
+    // any planner or TTS work happens. Manual --repo selections get the same
+    // verdict in Stage 3 with the missing-evidence report.
+    const scriptability = evaluateScriptability(enriched, buildFactLedger(enriched));
+    if (!scriptability.ok) {
+      log(
+        `  rejected ${enriched.full_name}: not scriptable ` +
+          `(${scriptability.missing.join("; ")}).`
+      );
       continue;
     }
 
@@ -350,49 +363,61 @@ async function main(): Promise<void> {
     await writeJson(path.join(runDir, "facts.json"), ledger);
     log(`Stage 2/9: Extracted ${ledger.facts.length} verifiable facts.`);
 
-    /* ---------------- Stage 3: explanation plan + narration ---- */
-    const explanationPlan = planEvidence(ledger, repo, TARGET_DURATION_SECONDS * 1000);
-    await writeJson(path.join(runDir, "explanation-plan.json"), explanationPlan);
-    const quality = evaluateScriptQuality(
-      buildNarrationPlan(ledger, repo, {
-        targetDurationSeconds: TARGET_DURATION_SECONDS,
-        voiceId: TTS_VOICE,
-        speed: TTS_SPEED,
-        recentUsage: new Map(),
-      }),
-      ledger
-    );
-    await writeJson(path.join(runDir, "script-quality.json"), quality);
-
-    /* ---------------- Stage 3: narration --------------------- */
+    /* ---------------- Stage 3: scriptability + composed narration - */
     currentStage = "narration";
     history.setRunStage(runId, "narration");
-    const recentUsage = loadPhraseHistory();
-    const plan: NarrationPlan = buildNarrationPlan(ledger, repo, {
+
+    // Scriptability gate, again on the *final* ledger (discovery checked a
+    // pre-snapshot one). Discovery skips these; a manual --repo selection
+    // gets the honest missing-evidence report instead of a fabricated script.
+    const scriptability = evaluateScriptability(repo, ledger);
+    await writeJson(path.join(runDir, "scriptability.json"), scriptability);
+    if (!scriptability.ok) {
+      throw new Error(
+        `Repository is not scriptable:\n  - ${scriptability.missing.join("\n  - ")}`
+      );
+    }
+
+    // One composition: the graph path becomes the narration plan exactly once.
+    const composed = composeScript(ledger, repo, {
       targetDurationSeconds: TARGET_DURATION_SECONDS,
       voiceId: TTS_VOICE,
       speed: TTS_SPEED,
-      recentUsage,
-      attemptCount: reserved?.attempt_count ?? 0,
     });
-    const validation = validateScript(plan, ledger);
+    const plan: NarrationPlan = composed.plan;
+    await writeJson(path.join(runDir, "explanation-plan.json"), composed.explanation);
     await writeJson(path.join(runDir, "narration.json"), plan);
+
+    // Both gates evaluate this same plan — the one TTS will speak below.
+    const validation = validateScript(plan, ledger);
+    const quality = evaluateScriptQuality(plan, ledger);
+    await writeJson(path.join(runDir, "script-quality.json"), quality);
     if (validation.narrative) {
       await writeJson(path.join(runDir, "narration-structure.json"), {
         script: validation.narrative,
       });
     }
-    for (const warning of validation.warnings) log(`  script warning: ${warning}`);
+    for (const warning of [...validation.warnings, ...quality.warnings]) {
+      log(`  script warning: ${warning}`);
+    }
     if (!validation.ok) {
       throw new Error(`Script validation failed:\n  - ${validation.errors.join("\n  - ")}`);
     }
+    if (!quality.ok) {
+      throw new Error(
+        `Script quality gate failed:\n  - ${quality.hardFailures.join("\n  - ")}`
+      );
+    }
+    for (const omission of composed.omissions) {
+      log(`  omitted ${omission.id}: ${omission.reason}`);
+    }
     log(
-      `Stage 3/9: "${plan.styleVariant}" (${plan.angle}) — ` +
+      `Stage 3/9: "${plan.styleVariant}" (${plan.angle}, attempt ${reserved?.attempt_count ?? 0}) — ` +
         `${plan.segments.length} segments, ${validation.words} words, ` +
-        `~${validation.estimatedSeconds.toFixed(1)}s estimated.`
+        `~${validation.estimatedSeconds.toFixed(1)}s estimated, quality ${quality.score}/100.`
     );
     if (validation.narrative?.useCase) {
-      log(`  use case covered via ${plan.angle} walkthrough; metadata is secondary.`);
+      log(`  use case covered via ${plan.angle}; metadata is secondary.`);
     }
     console.log("\nNarration:");
     plan.segments.forEach(segment => console.log(`  [${segment.purpose}] ${segment.spokenText}`));
@@ -422,7 +447,12 @@ async function main(): Promise<void> {
       );
     }
     const narrationWav = path.join(workDir, "narration.wav");
-    const merged = await concatChunks(synthesized, narrationWav);
+    const merged = await concatChunks(
+      synthesized,
+      narrationWav,
+      TTS_PAUSE_BETWEEN_SEGMENTS_MS,
+      plan.segments
+    );
     const timedChunks = toTimedChunks(synthesized, plan.segments);
     const audioSeconds = merged.durationMs / 1000;
     log(
@@ -660,7 +690,6 @@ async function main(): Promise<void> {
       repositoryNodeId: repo.nodeId,
       outputPath: output,
     });
-    savePhraseHistory(recentUsage, plan.styleVariant);
     await flushLog(runDir, runId);
 
     console.log(`\nFinished.`);
@@ -697,37 +726,6 @@ function describe(error: unknown): string {
 async function writeJson(file: string, value: unknown): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(value, null, 2), "utf8");
-}
-
-/* ------------------------------------------------------------------ */
-/* Style-variant memory                                                */
-/* ------------------------------------------------------------------ */
-
-function historyPath(): string {
-  return path.join(OUTPUT_DIR, "script-style-history.json");
-}
-
-function loadPhraseHistory(): PhraseHistory {
-  const usage: PhraseHistory = new Map();
-  try {
-    const raw = JSON.parse(
-      readFileSync(historyPath(), "utf8")
-    ) as Record<string, number>;
-    for (const [key, value] of Object.entries(raw)) usage.set(key, value);
-  } catch {
-    // A missing or malformed file just means "no memory yet".
-  }
-  return usage;
-}
-
-function savePhraseHistory(usage: PhraseHistory, styleVariant: string): void {
-  usage.set(styleVariant, (usage.get(styleVariant) ?? 0) + 1);
-  usage.set("__turn__", (usage.get("__turn__") ?? 0) + 1);
-  try {
-    writeFileSync(historyPath(), JSON.stringify(Object.fromEntries(usage), null, 2), "utf8");
-  } catch {
-    // Style memory is best-effort; losing it must not fail a run.
-  }
 }
 
 function hashScript(plan: NarrationPlan): string {
