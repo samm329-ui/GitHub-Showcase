@@ -4,6 +4,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
 import { FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
 import type {
+  CalloutCue,
   CaptionPhrase,
   CharacterCue,
   EnrichedRepo,
@@ -18,6 +19,7 @@ import {
   type CharacterPoseAsset,
 } from "./card.js";
 import { captionFrameHtml, wordTimings } from "./caption-overlay.js";
+import { calloutCueAt, calloutStateAt } from "./callout-overlay.js";
 import {
   characterCueAt,
   characterPoseAt,
@@ -51,6 +53,10 @@ export type CaptureGeometry = {
   stage: { width: number; height: number };
   card: { left: number; top: number; width: number; height: number };
   caption?: { left: number; top: number; width: number; height: number };
+  /** The dark caption panel, present only while a phrase is on screen. */
+  captionPanel?: { left: number; top: number; width: number; height: number } | null;
+  /** The callout bubble's authored box (present even while hidden). */
+  callout?: { left: number; top: number; width: number; height: number };
   character?: { left: number; top: number; width: number; height: number } | null;
   hasProgress?: boolean;
 };
@@ -75,6 +81,10 @@ export type RenderCardOptions = {
   /** Presenter action/framing changes, aligned to narration segments. */
   characterCues?: CharacterCue[] | null;
   captions: CaptionPhrase[];
+  /** Narration-driven callout bubble cues. */
+  callouts?: CalloutCue[] | null;
+  /** Loopback URL of the comic speech bubble sticker. */
+  calloutImageUrl?: string | null;
   scrollKeyframes: ScrollKeyframe[];
   durationMs: number;
   outputPath: string;
@@ -210,6 +220,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
     pageImageUrl: options.pageImageUrl ?? null,
     characterUrl: options.characterUrl ?? null,
     characterPoses: options.characterPoses ?? null,
+    calloutImageUrl: options.calloutImageUrl ?? null,
   };
   const { client, targetId } = await openTarget();
 
@@ -258,6 +269,8 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
       const timeMs = Math.min(options.durationMs, (frame / fps) * 1000);
       const scrollY = scrollAt(options.scrollKeyframes, timeMs);
       const caption = captionFor(options.captions, timeMs);
+      const calloutCue = calloutCueAt(options.callouts ?? [], timeMs);
+      const calloutState = calloutStateAt(calloutCue, timeMs);
       const poseName = characterCueAt(options.characterCues ?? [], timeMs);
       const pose = characterPoseAt(
         timeMs,
@@ -287,6 +300,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
           window.__showcase.setCaption(${JSON.stringify(captionFrameHtml(caption, timeMs))});
           window.__showcase.measureCaption();
           window.__showcase.setCaptionActive(${activeIndex}, ${highlightProgress.toFixed(4)});
+          window.__showcase.setCallout(${JSON.stringify(calloutState.cueId)}, ${JSON.stringify(calloutState.text)}, ${calloutState.opacity}, ${calloutState.translateY}, ${calloutState.scale}, ${calloutState.raysOpacity});
           window.__showcase.setCharacterPose(${JSON.stringify(pose)}, ${JSON.stringify(poseName)});
           return 1;
         })()`
