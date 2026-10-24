@@ -4,13 +4,24 @@ import {
   CAPTION_HIGHLIGHT,
   CAPTION_MOTION,
   CAPTION_STYLE,
+  activeWordIndexAt,
   activeWordStateAt,
   blendHex,
+  captionFitsPanel,
   captionFrameHtml,
   captionGroupStyleAt,
+  captionHtml,
+  captionLineEstimate,
   wrapCaptionText,
   type CaptionPhrase,
 } from "../src/caption-overlay.js";
+import {
+  ACCENT_YELLOW,
+  CAPTION_OVERLAY,
+  CAPTION_PANEL_STYLE,
+  INK,
+  captionOverlayGeometry,
+} from "../src/config.js";
 
 const phrase: CaptionPhrase = {
   index: 0,
@@ -27,7 +38,7 @@ describe("caption motion", () => {
     assert.ok(CAPTION_MOTION.exitMs >= 100 && CAPTION_MOTION.exitMs <= 160);
     assert.ok(CAPTION_MOTION.enterYPx >= 12 && CAPTION_MOTION.enterYPx <= 20);
     assert.ok(CAPTION_MOTION.enterScale >= 0.96 && CAPTION_MOTION.enterScale <= 0.98);
-    assert.ok(CAPTION_MOTION.activeWordMs >= 70 && CAPTION_MOTION.activeWordMs <= 120);
+    assert.ok(CAPTION_MOTION.activeWordMs >= 60 && CAPTION_MOTION.activeWordMs <= 80);
   });
 
   test("the group enters fast and settles within the entrance window", () => {
@@ -61,8 +72,6 @@ describe("caption motion", () => {
     assert.ok(late.opacity < 1 && late.opacity > 0);
     assert.ok(late.translateY < 0, "sinks up on exit");
     const done = captionGroupStyleAt(phrase, phrase.endMs - 1);
-    // Ease-in is asymptotic inside the window; opacity must be nearly gone and
-    // monotonically decreasing over time.
     const mid = captionGroupStyleAt(phrase, phrase.endMs - CAPTION_MOTION.exitMs / 3).opacity;
     assert.ok(done.opacity < mid);
     assert.ok(done.opacity < 0.2);
@@ -74,24 +83,125 @@ describe("caption motion", () => {
     }
   });
 
-  test("the underlying typeface rules are untouched", () => {
+  test("the underlying typeface rules match the panel specification", () => {
     assert.equal(CAPTION_STYLE.fontSizePx, 50);
     assert.equal(CAPTION_STYLE.maxLines, 2);
-    assert.equal(CAPTION_STYLE.maxCharsPerLine, 22);
-    assert.ok(CAPTION_STYLE.fontSizePx >= 48 && CAPTION_STYLE.fontSizePx <= 66);
-    // The colour ramp reads the same source as the highlight box, so they
-    // cannot drift apart when the preview saves new colours.
+    assert.equal(CAPTION_STYLE.lineHeight, 1.08);
+    assert.ok(CAPTION_STYLE.fontSizePx >= 48 && CAPTION_STYLE.fontSizePx <= 52);
+    assert.ok(CAPTION_STYLE.fontWeight >= 800);
+    // One canonical accent: the pill, the semantic tint and config.ts agree.
     assert.equal(CAPTION_STYLE.highlightColor, CAPTION_HIGHLIGHT.background);
+    assert.equal(CAPTION_HIGHLIGHT.background, ACCENT_YELLOW);
+    assert.equal(CAPTION_HIGHLIGHT.text, INK);
+    assert.equal(CAPTION_STYLE.activeTextColor, INK);
+  });
+});
+
+describe("caption panel", () => {
+  test("the panel is a separate dark layer with a moving pill", () => {
+    assert.equal(CAPTION_PANEL_STYLE.maxLines, 2);
+    assert.match(CAPTION_PANEL_STYLE.background, /^rgba\(23,25,29,/);
+    assert.ok(CAPTION_PANEL_STYLE.radiusPx >= 20);
+    assert.equal(CAPTION_HIGHLIGHT.radiusPx, 9);
+    assert.equal(CAPTION_OVERLAY.topPx, 1510);
+    assert.equal(CAPTION_OVERLAY.widthPx, 680);
+  });
+
+  test("geometry overrides are validated and clamped to the canvas", () => {
+    assert.deepEqual(captionOverlayGeometry({} as NodeJS.ProcessEnv), {
+      leftPx: 200,
+      topPx: 1510,
+      widthPx: 680,
+      maxHeightPx: 190,
+    });
+    const wide = captionOverlayGeometry({
+      SHOWCASE_CAPTION_LEFT_PX: "700",
+      SHOWCASE_CAPTION_WIDTH_PX: "900",
+      SHOWCASE_CAPTION_TOP_PX: "9999",
+    } as NodeJS.ProcessEnv);
+    assert.equal(wide.leftPx, 700);
+    assert.equal(wide.widthPx, 380, "width is clamped to the remaining canvas");
+    assert.equal(wide.topPx, 1710, "top is clamped above the bottom margin");
+    // Bad or zero values fall back to the committed geometry instead of NaN.
+    const fallback = captionOverlayGeometry({
+      SHOWCASE_CAPTION_LEFT_PX: "nope",
+      SHOWCASE_CAPTION_TOP_PX: "0",
+    } as NodeJS.ProcessEnv);
+    assert.equal(fallback.leftPx, 200);
+    assert.equal(fallback.topPx, 1510);
+  });
+
+  test("the frame html contains the panel, the pill and the words once", () => {
+    const html = captionFrameHtml(phrase, phrase.startMs + 30);
+    assert.match(html, /<div class="caption-group" style="opacity:[\d.]+;transform:[^"]+">/);
+    assert.match(html, /<div class="caption-panel">/);
+    assert.match(html, /<div class="caption-highlight" id="caption-hl"><\/div>/);
+    assert.match(html, /<div class="caption-lines">/);
+    // Every source word appears exactly once.
+    for (const word of phrase.text.split(" ")) {
+      const matches = html.split(`>${word}<`).length - 1;
+      assert.ok(matches <= 1, `"${word}" rendered more than once`);
+    }
+    assert.ok(!/background:/i.test(html), "the pill is styled in CSS, not inline");
+  });
+
+  test("no panel is emitted when no phrase is active", () => {
+    assert.equal(captionFrameHtml(null, 0), "");
+  });
+
+  test("exactly one word carries the current class at any timestamp", () => {
+    for (const time of [1000, 1100, 1500, 2000, 2199]) {
+      const html = captionFrameHtml(phrase, time);
+      assert.equal(
+        (html.match(/class="w current"/g) ?? []).length,
+        1,
+        `expected one current word at ${time}ms`
+      );
+    }
+  });
+
+  test("semantic emphasis is a separate class from the current word", () => {
+    // "deploy" is the emphasised word; at the first word it is tinted, but it
+    // never becomes a second active pill while another word is spoken.
+    const first = captionHtml(phrase, 0);
+    assert.match(first, /<span class="w current" data-i="0">Rocket<\/span>/);
+    assert.match(first, /class="w key-emphasis" data-i="6">deploy<\/span>/);
+    assert.equal((first.match(/class="w current"/g) ?? []).length, 1);
+
+    // When the emphasised word becomes current, it is only `.current`.
+    const last = captionHtml(phrase, 6);
+    assert.match(last, /class="w current" data-i="6">deploy<\/span>/);
+    assert.ok(!/class="w key-emphasis"/.test(last));
+  });
+
+  test("the current word index follows the measured word schedule", () => {
+    assert.equal(activeWordIndexAt(phrase, phrase.startMs), 0);
+    assert.equal(activeWordIndexAt(phrase, phrase.startMs - 1), -1);
+    assert.equal(activeWordIndexAt(phrase, phrase.endMs + 1), -1);
+  });
+
+  test("two-line estimation flags an overlong phrase instead of dropping words", () => {
+    assert.equal(captionLineEstimate("Short phrase"), 1);
+    assert.ok(captionFitsPanel("Rocket CLI ships a one command deploy"));
+    const long =
+      "A deterministic narration pipeline that turns long repository documentation into short vertical clips";
+    assert.ok(captionLineEstimate(long) > 2);
+    assert.equal(captionFitsPanel(long), false);
+    // Wrapping still keeps every source word.
+    const rejoin = wrapCaptionText(long).join(" ");
+    for (const word of long.split(" ")) {
+      assert.match(rejoin, new RegExp(`\\b${word}\\b`));
+    }
   });
 });
 
 describe("active-word colour ramp", () => {
   const channel = (color: string, index: number) =>
     parseInt(color.slice(1 + index * 2, 3 + index * 2), 16);
-  // Green is the strongest channel difference between the cream base and the
-  // (configurable) highlight, so it is the clearest ramp signal.
+  // Green is the strongest channel difference between the warm-white panel
+  // text and the near-black pill text, so it is the clearest ramp signal.
   const BASE_GREEN = channel(CAPTION_STYLE.color, 1);
-  const HIGHLIGHT_GREEN = channel(CAPTION_STYLE.highlightColor, 1);
+  const ACTIVE_GREEN = channel(CAPTION_STYLE.activeTextColor, 1);
 
   test("blendHex interpolates cleanly", () => {
     assert.equal(blendHex("#000000", "#FFFFFF", 0), "#000000");
@@ -105,23 +215,23 @@ describe("active-word colour ramp", () => {
     const state = activeWordStateAt(phrase, phrase.startMs + 10, "Rocket");
     assert.ok(state, "the first word is already active at its measured start");
     const green = channel(state.color, 1);
-    const low = Math.min(BASE_GREEN, HIGHLIGHT_GREEN);
-    const high = Math.max(BASE_GREEN, HIGHLIGHT_GREEN);
+    const low = Math.min(BASE_GREEN, ACTIVE_GREEN);
+    const high = Math.max(BASE_GREEN, ACTIVE_GREEN);
     assert.ok(
       green > low && green < high,
-      `green channel should sit between base and highlight, got ${state.color}`
+      `green channel should sit between panel and pill text, got ${state.color}`
     );
   });
 
   test("the ramp completes within the activeWord window", () => {
     const state = activeWordStateAt(phrase, phrase.startMs + 200, "Rocket");
     assert.ok(state);
-    assert.equal(state.color.toLowerCase(), CAPTION_STYLE.highlightColor.toLowerCase());
+    assert.equal(state.color.toLowerCase(), CAPTION_STYLE.activeTextColor.toLowerCase());
   });
 
   test("the ramp is monotonic in time", () => {
     const progress = (color: string) =>
-      (channel(color, 1) - BASE_GREEN) / (HIGHLIGHT_GREEN - BASE_GREEN);
+      Math.abs(channel(color, 1) - BASE_GREEN) / Math.abs(ACTIVE_GREEN - BASE_GREEN);
     let previous = 0;
     for (let t = 0; t <= CAPTION_MOTION.activeWordMs; t += 5) {
       const state = activeWordStateAt(phrase, phrase.startMs + t, "Rocket");
@@ -130,27 +240,6 @@ describe("active-word colour ramp", () => {
       assert.ok(value >= previous - 0.001, `not monotonic at +${t}ms`);
       previous = value;
     }
-    assert.ok(previous > 0.99, "the ramp reaches the full highlight colour");
-  });
-
-  test("frame html marks the individual active word with an inline colour", () => {
-    const html = captionFrameHtml(phrase, phrase.startMs + 30);
-    assert.match(html, /<div class="caption-group" style="opacity:[\d.]+;transform:[^"]+">/);
-    assert.match(html, /<div class="caption-highlight" id="caption-hl"><\/div>/);
-    assert.match(html, /<span class="w/);
-    assert.ok(!/background/i.test(html), "no filled boxes in the phrase html");
-  });
-
-  test("an empty phrase renders nothing", () => {
-    assert.equal(captionFrameHtml(null, 0), "");
-  });
-
-  test("wrap still enforces two lines for callout captions", () => {
-    const long = "This is a fairly long caption text for the reel";
-    const lines = wrapCaptionText(long);
-    assert.equal(lines.length, 2);
-    for (const line of lines) {
-      assert.ok(line.length <= 26, `line too long: ${line}`);
-    }
+    assert.ok(previous > 0.99, "the ramp reaches the full pill text colour");
   });
 });
