@@ -33,13 +33,13 @@ export type NarrationCoverage = {
   /** Share of narration words spent on stars/forks/license-style metadata. */
   metadataWordShare: number;
   /** Where the use-case text came from, or "none" when evidence is absent. */
-  useCaseSource: "use-case-facts" | "demo-walkthrough" | "none";
+  useCaseSource: "use-case-facts" | "none";
 };
 
 /** Slot a segment belongs to, via its grammar role or its purpose fallback. */
 const SLOT_FOR_PURPOSE: Record<SegmentPurpose, StorySlot> = {
   identify: "identity",
-  problem: "demo",
+  problem: "hook",
   explain: "value",
   benefit: "value",
   demo: "demo",
@@ -75,6 +75,20 @@ function factsCited(
 }
 
 /**
+ * Facts that can demonstrate a practical use case: explicit usage prose or a
+ * documented example / workflow command. A feature clause that merely *lands*
+ * in a demo slot does not qualify — treating demo-shaped placement as proof
+ * of a use case was the silent-omission defect this rule exists to prevent.
+ */
+function demonstratesUseCase(fact: Fact): boolean {
+  return (
+    fact.kind === "use_case" ||
+    fact.semantic === "example" ||
+    fact.semantic === "workflow"
+  );
+}
+
+/**
  * Compile a completed narration plan into the structured script and measure
  * how well the available evidence is covered. `ledger` grounds the looked-up
  * fact kinds; the plan itself supplies all spoken text.
@@ -106,18 +120,17 @@ export function compileRepoNarration(
   const mechanismSegments = [...slot("value"), ...slot("demo")];
   const mechanism = joinSegments(mechanismSegments);
 
-  /* Use case: explicit use_case facts first, demo walkthrough as fallback. */
+  /* Use case: segments citing use-case evidence — usage prose, a documented
+   * example, or a workflow. Placement in a demo slot proves nothing on its
+   * own; the cited fact must demonstrate the use. */
   const useCaseSegments = segments.filter(segment =>
-    factsCited(segment, factById).some(fact => fact.kind === "use_case")
+    factsCited(segment, factById).some(demonstratesUseCase)
   );
   let useCaseSource: NarrationCoverage["useCaseSource"] = "none";
   let useCase = "";
   if (useCaseSegments.length > 0) {
     useCase = joinSegments(useCaseSegments);
     useCaseSource = "use-case-facts";
-  } else if (slot("demo").length > 0) {
-    useCase = joinSegments(slot("demo"));
-    useCaseSource = "demo-walkthrough";
   }
 
   const benefitSegments = slot("value");
@@ -152,7 +165,7 @@ export function compileRepoNarration(
       hasFeatureEvidence:
         mechanismSegments.length > 0 ||
         ledger.facts.some(fact => fact.kind === "feature"),
-      hasUseCaseEvidence: ledger.facts.some(fact => fact.kind === "use_case"),
+      hasUseCaseEvidence: ledger.facts.some(demonstratesUseCase),
       metadataWordShare,
       useCaseSource,
     },
@@ -181,8 +194,9 @@ export function validateNarration(
   }
 
   if (!script.useCase.trim()) {
-    // Excused only when no use-case evidence exists AND no demo walkthrough
-    // was possible. If the ledger knows a use case, omitting it is a bug.
+    // Excused only when the ledger carries no use-case evidence at all. If a
+    // usage sentence, a documented example or a workflow exists, omitting it
+    // is a bug — the gate must fail rather than skip the section.
     const excused = coverage
       ? coverage.useCaseSource === "none" && !coverage.hasUseCaseEvidence
       : false;
