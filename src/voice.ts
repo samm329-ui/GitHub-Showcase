@@ -266,13 +266,35 @@ async function silenceWav(ms: number, sampleRate: number, target: string): Promi
 }
 
 /**
- * Concatenate measured chunks with an intentional short pause between them.
- * Returns the merged file plus its measured properties.
+ * The single inter-chunk pause schedule, shared by the audio concatenation
+ * (`concatChunks`) and the visual timeline (`toTimedChunks`) so the two can
+ * never diverge. `schedule[i]` is the silence inserted *before* chunk `i`:
+ * the previous segment's `pauseAfterMs` when it declared one, the configured
+ * fallback otherwise, and nothing before the first chunk.
+ */
+export function pauseSchedule(
+  chunkCount: number,
+  segments: NarrationSegment[] | undefined,
+  fallbackMs: number
+): number[] {
+  const schedule: number[] = [0];
+  for (let index = 1; index < chunkCount; index += 1) {
+    schedule.push(segments?.[index - 1]?.pauseAfterMs ?? fallbackMs);
+  }
+  return schedule;
+}
+
+/**
+ * Concatenate measured chunks with the intentional per-segment pauses.
+ * `segments` supplies the phrase-level schedule; without it the fallback
+ * pause applies between every pair. No silence is appended after the last
+ * chunk. Returns the merged file plus its measured properties.
  */
 export async function concatChunks(
   chunks: SynthesizedChunk[],
   outputWav: string,
-  pauseMs: number = TTS_PAUSE_BETWEEN_SEGMENTS_MS
+  pauseMs: number = TTS_PAUSE_BETWEEN_SEGMENTS_MS,
+  segments?: NarrationSegment[]
 ): Promise<AudioMeasurement> {
   if (chunks.length === 0) throw new TtsError("No audio chunks were produced.");
   if (chunks.length === 1) {
@@ -285,15 +307,17 @@ export async function concatChunks(
     throw new TtsError("Kokoro returned chunks with mismatched sample rates.");
   }
 
+  const schedule = pauseSchedule(chunks.length, segments, pauseMs);
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "showcase-join-"));
   const listFile = path.join(scratch, "concat.txt");
   try {
     const lines: string[] = [];
     for (const [index, chunk] of chunks.entries()) {
-      if (index > 0 && pauseMs > 0) {
-        const gap = path.join(scratch, `gap-${index}.wav`);
-        await silenceWav(pauseMs, sampleRate, gap);
-        lines.push(`file '${gap.replace(/\\/g, "/")}'`);
+      const gap = schedule[index];
+      if (index > 0 && gap > 0) {
+        const gapFile = path.join(scratch, `gap-${index}.wav`);
+        await silenceWav(gap, sampleRate, gapFile);
+        lines.push(`file '${gapFile.replace(/\\/g, "/")}'`);
       }
       lines.push(`file '${chunk.file.replace(/\\/g, "/")}'`);
     }
@@ -333,20 +357,22 @@ export async function synthesizeSegments(
 }
 
 /**
- * Turn measured chunks into absolute timeline intervals, inserting the
- * configured pause between segments.
+ * Turn measured chunks into absolute timeline intervals using the *same*
+ * pause schedule `concatChunks` writes into the audio: each segment's
+ * `pauseAfterMs`, the fallback between segments that declare none, and no
+ * trailing silence after the final chunk.
  */
 export function toTimedChunks(
   chunks: SynthesizedChunk[],
   segments: NarrationSegment[],
   pauseMs: number = TTS_PAUSE_BETWEEN_SEGMENTS_MS
 ): AudioChunk[] {
+  const schedule = pauseSchedule(chunks.length, segments, pauseMs);
   let cursor = 0;
   return chunks.map((chunk, index) => {
-    const pauseAfter = segments[index]?.pauseAfterMs ?? pauseMs;
-    const startMs = cursor;
+    const startMs = cursor + schedule[index];
     const endMs = startMs + chunk.durationMs;
-    cursor = endMs + pauseAfter;
+    cursor = endMs;
     return {
       index,
       segmentId: chunk.segmentId || segments[index]?.id || `seg-${index}`,
