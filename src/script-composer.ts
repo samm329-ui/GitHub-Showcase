@@ -27,6 +27,7 @@ import { evaluateScriptability, type ScriptabilityReport } from "./scriptability
 import { humaniseRepoName } from "./narration-grammar.js";
 import { selectAngle, wordCount } from "./narration.js";
 import { toSpoken } from "./pronunciation.js";
+import { calloutTextFor } from "./callout-overlay.js";
 
 /**
  * Script composer (Pass A): graph path -> sentences.
@@ -216,12 +217,19 @@ export function composeScript(
   const segments: NarrationSegment[] = selected.map((node, index) => {
     const next = selected[index + 1] ?? null;
     const text = phraseFor(node, name);
+    // Callout copy is derived from selected evidence after composition (purpose,
+    // key tradeoff/limitation, or key outcome), never from raw text at render time.
+    // `null` means no faithful short form exists, and no bubble is rendered.
+    const calloutEligible =
+      node.role === "purpose" || node.role === "tradeoff" || node.role === "benefit";
+    const calloutText = calloutEligible ? calloutTextFor(node.proposition) : null;
     return {
       id: `seg-${String(index + 1).padStart(2, "0")}`,
       purpose: PURPOSE_FOR_ROLE[node.role],
       spokenText: toSpoken(text),
       captionText: text,
       factIds: node.evidence.map(reference => reference.factId),
+      ...(calloutText ? { calloutText } : {}),
       visualAnchor: anchorFor(node),
       // One schedule for audio and timeline: the pause AFTER this segment.
       // The final segment carries an explicit zero — no trailing silence.
