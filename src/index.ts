@@ -330,7 +330,7 @@ async function main(): Promise<void> {
     const existing = history.getRepository(repo.nodeId);
     const reserved = dryRun
       ? existing
-      : history.reserveRepository(repo.nodeId, runId);
+      : history.reserveRepository(repo.nodeId, runId, { force: !discoverMode });
     if (!dryRun) {
       if (!reserved) {
         throw new Error(
