@@ -253,7 +253,7 @@ describe("caption presentation", () => {
     assert.equal(activeWordAt(phrase, 999), null);
     const html = captionHtml(phrase, activeWordAt(phrase, 1050));
     assert.match(html, /<span class="w/);
-    assert.match(html, /<span class="w active" data-i="0"[^>]*>Fast<\/span>/);
+    assert.match(html, /<span class="w current" data-i="0"[^>]*>Fast<\/span>/);
   });
 
   test("caption html escapes repository text", () => {
