@@ -4,3 +4,5 @@ temp/*
 output/*
 !output/.gitkeep
 tools/
+.env
+.env.local
