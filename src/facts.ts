@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   EnrichedRepo,
   Fact,
   FactKind,
@@ -422,8 +422,32 @@ export function stripMarkdown(value: string): string {
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
     .replace(/[*_~]{1,3}/g, "")
     .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, "")
+    .replace(/["'“”‘’]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * For repositories whose GitHub description is a multi-sentence paragraph,
+ * extract the primary purpose sentence for narration so it doesn't crowd out
+ * mechanism and use-case explanation from the duration budget.
+ */
+export function primaryPurposeSentence(text: string): string {
+  const cleaned = text.trim();
+  const sentences = cleaned.match(/[^.!?\n]+[.!?]?/g) ?? [];
+  if (sentences.length <= 1) return sentence(cleaned);
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length <= 24) return sentence(cleaned);
+
+  const substantial = sentences
+    .map(s => s.trim().replace(/[.!?]+$/, ""))
+    .filter(s => s.length >= 20);
+
+  if (substantial.length > 0) {
+    return sentence(substantial[0]);
+  }
+  return sentence(cleaned);
 }
 
 export function bulletEntriesOf(
@@ -1048,7 +1072,7 @@ export function buildFactLedger(
         repo,
         "purpose",
         `The repository describes itself as: ${sentence(description)}.`,
-        sentence(description),
+        primaryPurposeSentence(description),
         0.95,
         "api-field",
         "repo.description",
