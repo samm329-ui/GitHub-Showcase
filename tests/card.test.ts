@@ -36,7 +36,7 @@ describe("composition geometry", () => {
   test("the card uses the required colours and radius", () => {
     assert.equal(STAGE_BG, "#F2EFE9");
     assert.equal(CARD_BG, "#0D1117");
-    assert.equal(CARD.radius, 28);
+    assert.equal(CARD.radius, 60);
   });
 
   test("the shadow is neutral and diffuse", () => {
@@ -82,13 +82,13 @@ describe("stationary card markup", () => {
     assert.match(hooks, /character\.style\.transform\s*=/);
     assert.ok(!/setProgress/.test(hooks));
 
-    // Static CSS transforms are limited to centring the caption overlay. The
-    // card itself is upright and never rotated or skewed.
+    // Static CSS has no transforms left: the callout is bottom-anchored and
+    // the card itself is upright and never rotated or skewed.
     const css = html.slice(0, html.indexOf("<script>"));
     const cssTransforms = [
       ...css.matchAll(/([.#][\w-]+)\s*\{[^}]*?(?<![-\w])transform:\s*[^;]+;/g),
     ].map(match => match[1]);
-    assert.deepEqual([...new Set(cssTransforms)], [".caption-overlay"]);
+    assert.deepEqual([...new Set(cssTransforms)], []);
   });
 
   test("captions float over the page and there is no progress UI", () => {
@@ -101,16 +101,27 @@ describe("stationary card markup", () => {
   });
 
   test("the caption style matches the specification", () => {
-    assert.match(html, /font-size:\s*42px/);
-    assert.match(html, /color:\s*#FFFFFF/);
+    assert.match(html, /font-size:\s*64px/);
+    assert.match(html, /color:\s*#F8F6EF/);
     assert.match(html, /--caption-yellow:\s*#FFD629/);
-    assert.match(html, /text-shadow:\s*0 2px 2px/);
-    assert.match(html, /-webkit-text-stroke:/);
+    assert.match(html, /text-shadow:\s*0 3px 10px/);
     assert.ok(
       !/\.caption-overlay\s*\{[^}]*background:/s.test(html),
       "captions must not draw a filled background box"
     );
     assert.ok(!/\.hl\s*\{[^}]*background:/s.test(html), "highlights are colour only");
+  });
+
+  test("captions sit in a fixed block over the page", () => {
+    const rule = html.match(/\.caption-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
+    assert.match(rule, /left:\s*165px/);
+    assert.match(rule, /top:\s*876px/);
+    assert.match(rule, /width:\s*718px/);
+    assert.match(rule, /max-height:\s*314px/);
+    // The animated per-frame wrapper is part of the composition.
+    assert.match(html, /\.caption-group\s*\{[^}]*will-change:\s*transform,\s*opacity/s);
+    // The moving highlight element exists behind the glyphs.
+    assert.match(html, /\.caption-highlight\s*\{/);
   });
 
   test("the character layer is optional and independent of the card", () => {
@@ -152,18 +163,48 @@ describe("stationary card markup", () => {
         { pose: "close", url: "http://127.0.0.1/close.png" },
       ],
     });
-    // 0.46 * 1080 canvas width = 497px.
-    assert.match(withPoses, /\.character\s*\{[^}]*width:\s*497px/s);
-    // -12px pushes the layer past the right edge; 0px sits flush on the
-    // bottom edge. The viewport clip handles the overflow.
-    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-12px/s);
-    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*0px/s);
+    // 0.8731 * 1080 canvas width ≈ 943px rendered; visible artwork ≈ 935px.
+    assert.match(withPoses, /\.character\s*\{[^}]*width:\s*943px/s);
+    // Canvas-corner anchoring: the offsets are authored directly in the live
+    // preview (negative = the rectangle starts past the canvas edge).
+    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-25px/s);
+    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*-44px/s);
     // keepFaceVisible guard.
     assert.match(withPoses, /\.character\s*\{[^}]*max-height:\s*1920px/s);
+    // The shadow derives from the alpha mask: drop-shadow, never a rectangle,
+    // and the layer must carry no matte behind the transparent PNG.
+    assert.match(withPoses, /\.character\s*\{[^}]*filter:\s*drop-shadow\(/s);
+    assert.match(withPoses, /\.character\s*\{[^}]*background:\s*transparent/s);
     // The mascot is a stage-level layer: never inside the clipped card.
     const articleEnd = withPoses.indexOf("</article>");
     const characterTag = withPoses.indexOf('id="character"');
     assert.ok(characterTag > articleEnd, "the mascot must not be clipped by the card");
+    const zCard = withPoses.match(/\.card\s*\{[^}]*z-index:\s*(\d+)/s)?.[1];
+    const zCharacter = withPoses.match(/\.character\s*\{[^}]*z-index:\s*(\d+)/s)?.[1];
+    assert.ok(Number(zCharacter) > Number(zCard));
+  });
+
+  test("the card shadow is layered, soft and outside the clipping boundary", () => {
+    // Split on "), " so commas inside rgba() don't break the layers apart.
+    const layers = CARD_SHADOW.split("), ")
+      .map((chunk, index, all) => (index < all.length - 1 ? `${chunk})` : chunk).trim());
+    assert.ok(layers.length >= 3, "ambient depth needs stacked shadows");
+    const blurs: number[] = [];
+    for (const layer of layers) {
+      const parts = layer.split(/\s+/);
+      const blur = Number(parts[2]?.replace("px", ""));
+      const opacity = Number(layer.match(/rgba\(25,23,20,([\d.]+)\)/)?.[1]);
+      assert.ok(Number.isFinite(blur) && blur >= 2, `no harsh hairline shadow: ${layer}`);
+      assert.ok(opacity <= 0.2, `too dark for a soft shadow: ${layer}`);
+      assert.ok(opacity > 0.05, "shadow must be visible, not decorative");
+      blurs.push(blur);
+    }
+    // Broad ambient + near-edge contact: blur radii increase across layers.
+    for (let index = 1; index < blurs.length; index += 1) {
+      assert.ok(blurs[index] > blurs[index - 1], `blur radii must increase: ${layers[index]}`);
+    }
+    const cardRule = buildCardHtml(enriched("high-quality-popular")).match(/\.card\s*\{[^}]*\}/s)?.[0] ?? "";
+    assert.match(cardRule, /box-shadow:\s*0 2px 3px/);
   });
 
   test("the browser bar shows the real repository URL", () => {
