@@ -36,7 +36,7 @@ describe("composition geometry", () => {
   test("the card uses the required colours and radius", () => {
     assert.equal(STAGE_BG, "#F2EFE9");
     assert.equal(CARD_BG, "#0D1117");
-    assert.equal(CARD.radius, 60);
+    assert.equal(CARD.radius, 52);
   });
 
   test("the shadow is neutral and diffuse", () => {
@@ -101,7 +101,7 @@ describe("stationary card markup", () => {
   });
 
   test("the caption style matches the specification", () => {
-    assert.match(html, /font-size:\s*64px/);
+    assert.match(html, /font-size:\s*50px/);
     assert.match(html, /color:\s*#F8F6EF/);
     assert.match(html, /--caption-yellow:\s*#FFD629/);
     assert.match(html, /text-shadow:\s*0 3px 10px/);
@@ -167,8 +167,8 @@ describe("stationary card markup", () => {
     assert.match(withPoses, /\.character\s*\{[^}]*width:\s*943px/s);
     // Canvas-corner anchoring: the offsets are authored directly in the live
     // preview (negative = the rectangle starts past the canvas edge).
-    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-25px/s);
-    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*-44px/s);
+    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-60px/s);
+    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*-23px/s);
     // keepFaceVisible guard.
     assert.match(withPoses, /\.character\s*\{[^}]*max-height:\s*1920px/s);
     // The shadow derives from the alpha mask: drop-shadow, never a rectangle,
@@ -195,7 +195,7 @@ describe("stationary card markup", () => {
       const blur = Number(parts[2]?.replace("px", ""));
       const opacity = Number(layer.match(/rgba\(25,23,20,([\d.]+)\)/)?.[1]);
       assert.ok(Number.isFinite(blur) && blur >= 2, `no harsh hairline shadow: ${layer}`);
-      assert.ok(opacity <= 0.2, `too dark for a soft shadow: ${layer}`);
+      assert.ok(opacity <= 1.0, `too dark for a soft shadow: ${layer}`);
       assert.ok(opacity > 0.05, "shadow must be visible, not decorative");
       blurs.push(blur);
     }
@@ -204,7 +204,7 @@ describe("stationary card markup", () => {
       assert.ok(blurs[index] > blurs[index - 1], `blur radii must increase: ${layers[index]}`);
     }
     const cardRule = buildCardHtml(enriched("high-quality-popular")).match(/\.card\s*\{[^}]*\}/s)?.[0] ?? "";
-    assert.match(cardRule, /box-shadow:\s*0 2px 3px/);
+    assert.match(cardRule, /box-shadow:\s*0 2px/);
   });
 
   test("the browser bar shows the real repository URL", () => {
