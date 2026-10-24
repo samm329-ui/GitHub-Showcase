@@ -8,6 +8,7 @@ import {
   choosePath,
   scorePath,
   buildNarrativeGraph,
+  planPathWithOmissions,
 } from "../src/narrative-graph.js";
 
 describe("explanation planner", () => {
@@ -21,6 +22,54 @@ describe("explanation planner", () => {
     assert.ok(roles.includes("mechanism"), "mechanism is required");
     assert.ok(plan.estimatedDurationMs >= 0);
     assert.ok(plan.edges.length > 0);
+  });
+
+  test("the production plan selects a populated, connected path", () => {
+    const raw = planEvidence(ledger, repo, 30_000);
+    const { plan } = planPathWithOmissions(raw);
+    assert.ok(plan.selectedPath.length > 0, "a successful run emits a non-empty path");
+    const nodeIds = new Set(plan.nodes.map(node => node.id));
+    for (const id of plan.selectedPath) assert.ok(nodeIds.has(id), `${id} is a real node`);
+    for (let index = 1; index < plan.selectedPath.length; index += 1) {
+      const from = plan.selectedPath[index - 1];
+      const to = plan.selectedPath[index];
+      assert.ok(
+        plan.edges.some(edge => edge.from === from && edge.to === to),
+        `edge ${from} -> ${to} exists`
+      );
+    }
+    assert.ok(plan.estimatedDurationMs > 0, "the selected path carries its duration");
+  });
+
+  test("a mechanism node is backed by mechanism evidence, not the first bullet renamed", () => {
+    const plan = planEvidence(ledger, repo, 30_000);
+    const mechanism = plan.nodes.find(node => node.role === "mechanism");
+    assert.ok(mechanism, "mechanism node exists");
+    const fact = ledger.facts.find(f => f.id === mechanism!.evidence[0].factId);
+    assert.ok(fact, "mechanism node cites a real fact");
+    assert.ok(
+      fact!.semantic === "mechanism" || fact!.semantic === "outcome",
+      `mechanism evidence has a mechanism-ish semantic, got ${fact!.semantic}`
+    );
+  });
+
+  test("metadata facts never become planned nodes", () => {
+    const plan = planEvidence(ledger, repo, 30_000);
+    for (const node of plan.nodes) {
+      for (const reference of node.evidence) {
+        const fact = ledger.facts.find(f => f.id === reference.factId);
+        assert.ok(fact, `${node.id} cites a real fact`);
+        assert.notEqual(fact!.semantic, "metadata", `${node.id} is backed by metadata`);
+      }
+    }
+  });
+
+  test("omitted nodes record a reason", () => {
+    const plan = planEvidence(ledger, repo, 30_000);
+    const { omitted } = planPathWithOmissions(plan);
+    for (const entry of omitted) {
+      assert.ok(entry.reason.trim().length > 0, `${entry.id} has a reason`);
+    }
   });
 
   test("the selected path respects the duration budget", () => {
