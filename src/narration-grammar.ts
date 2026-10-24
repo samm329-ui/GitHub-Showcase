@@ -224,7 +224,7 @@ function featureClause(
   return {
     id,
     slot,
-    spoken: sentence(`${lead}: ${feature.spoken}`),
+    spoken: sentence(`${lead}. ${feature.spoken}`),
     factIds: [feature.id],
     anchor: "features",
     optional,
@@ -237,7 +237,7 @@ function useCaseClause(context: StoryContext, lead: string): ClauseDraft | null 
   return {
     id: "value.use-case",
     slot: "value",
-    spoken: sentence(`${lead}: ${fact.spoken}`),
+    spoken: sentence(`${lead}. ${fact.spoken}`),
     factIds: [fact.id],
     anchor: "readme-intro",
     optional: true,
@@ -291,7 +291,7 @@ function adoptionClause(context: StoryContext): ClauseDraft | null {
   return {
     id: context.growth ? "proof.growth" : "proof.adoption",
     slot: "proof",
-    spoken: sentence(`${lead}: ${fact.spoken}`),
+    spoken: sentence(`${lead}. ${fact.spoken}`),
     factIds: [fact.id],
     emphasis: [keyNumber(fact.spoken)].filter(Boolean),
     optional: true,
@@ -706,6 +706,20 @@ function fitBudget(
   const used = uniqueFacts(drafts);
   const spare = optionalPool(context, used).map(prepareClause);
   guard = 0;
+  // A practical use case is required whenever the evidence exists, so reserve
+  // room for it before any other optional detail, even past the soft target.
+  const useCaseAddition = spare.find(clause => clause.id === "value.use-case");
+  if (useCaseAddition && !used.has(useCaseAddition.factIds[0])) {
+    const grown = words(
+      [...drafts, useCaseAddition].map(clause => clause.spoken).join(" ")
+    );
+    if (grown <= maxWords) {
+      useCaseAddition.factIds.forEach(id => used.add(id));
+      drafts.push(useCaseAddition);
+      const index = spare.indexOf(useCaseAddition);
+      if (index >= 0) spare.splice(index, 1);
+    }
+  }
   while (
     words(drafts.map(clause => clause.spoken).join(" ")) < desired &&
     spare.length > 0 &&
