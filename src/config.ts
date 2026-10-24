@@ -180,7 +180,7 @@ export const CARD = {
   height: 1668,
   left: 135,
   top: 126,
-  radius: 60,
+  radius: 52,
   border: "1px solid rgba(255,255,255,0.14)",
 } as const;
 
@@ -321,8 +321,8 @@ export const MASCOT_LAYOUT: MascotLayout = {
   anchor: "bottom-right",
   // CSS right/bottom offsets (negative = extends past canvas edge).
   widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.8731),
-  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -25),
-  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, -44),
+  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -60),
+  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, -23),
   keepFaceVisible: true,
 };
 
@@ -335,7 +335,7 @@ export const CHARACTER = {
   /** Alpha-mask shadow: drop-shadow follows the cut-out silhouette, never a
    * rectangle, and always renders *behind* the artwork. Soft, dark, offset
    * downward; the blur scales with the rendered mascot size. */
-  shadow: "drop-shadow(0 26px 26px rgba(0,0,0,0.95))",
+  shadow: "drop-shadow(0 10px 54px rgba(0,0,0,1))",
   idleBobPx: 2,
   speechBobPx: 6,
   tiltDeg: 1.1,
