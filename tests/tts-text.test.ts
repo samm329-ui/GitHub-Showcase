@@ -25,7 +25,7 @@ describe("speech text normalisation", () => {
   test("command syntax is translated into a spoken sentence", () => {
     assert.equal(
       prepareTtsText("Install: npm install p-map"),
-      "Install: the n p m install command for p map"
+      "Install the n p m install command for p map"
     );
     assert.equal(
       prepareTtsText("Try npx create-next-app"),
