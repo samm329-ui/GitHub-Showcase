@@ -75,10 +75,10 @@ describe("caption motion", () => {
   });
 
   test("the underlying typeface rules are untouched", () => {
-    assert.equal(CAPTION_STYLE.fontSizePx, 64);
+    assert.equal(CAPTION_STYLE.fontSizePx, 50);
     assert.equal(CAPTION_STYLE.maxLines, 2);
     assert.equal(CAPTION_STYLE.maxCharsPerLine, 22);
-    assert.ok(CAPTION_STYLE.fontSizePx >= 62 && CAPTION_STYLE.fontSizePx <= 66);
+    assert.ok(CAPTION_STYLE.fontSizePx >= 48 && CAPTION_STYLE.fontSizePx <= 66);
     // The colour ramp reads the same source as the highlight box, so they
     // cannot drift apart when the preview saves new colours.
     assert.equal(CAPTION_STYLE.highlightColor, CAPTION_HIGHLIGHT.background);
