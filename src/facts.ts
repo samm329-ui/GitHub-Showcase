@@ -671,11 +671,16 @@ export function extractWorkflow(repo: EnrichedRepo, parsed: ParsedReadme): Fact[
  * Render a documented shell command for speech: drop redirections and flags,
  * keep the pipeline shape. `my-service 2>&1 | logline` becomes
  * "my-service piped into logline" — honest about what the README shows
- * without asking the voice to read `2>&1`.
+ * without asking the voice to read `2>&1`. A `--flag value` pair is dropped
+ * as a unit: keeping the orphaned value ("staging" without "--env") would
+ * say something the README never said.
  */
 export function speakCommand(command: string): string {
-  const tokens = command
+  const stripped = command
     .trim()
+    // --flag=value and "--flag value" pairs go together.
+    .replace(/\s--[\w-]+[=\s]\S+/g, " ");
+  const tokens = stripped
     .split(/\s+/)
     .filter(Boolean)
     .filter(
