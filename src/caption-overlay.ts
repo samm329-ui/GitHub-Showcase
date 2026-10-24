@@ -1,3 +1,7 @@
+import {
+  CAPTION_PANEL_STYLE,
+  captionOverlayGeometry,
+} from "./config.js";
 import type { CaptionPhrase } from "./types.js";
 
 /** Word-level timing estimate inside a measured phrase window. */
@@ -10,14 +14,19 @@ export type CaptionWordTiming = {
 /**
  * Caption presentation.
  *
- * Captions are real DOM inside the stationary card, floating over the page. This
- * module owns the visual tokens and the wrapping/highlight rules; `card.ts`
- * turns the result into elements.
+ * Captions are real DOM inside the stationary card, floating over the page.
+ * This module owns the visual tokens, the wrapping/highlight rules and the
+ * per-frame HTML; `card.ts` turns the result into elements.
+ *
+ * Two independent layers, never one rectangle:
+ *  - the dark `.caption-panel` holds the current phrase steady;
+ *  - the moving accent pill (`CAPTION_HIGHLIGHT`) sits behind exactly one word —
+ *    the word actually spoken at this instant.
  *
  * Design rules enforced here:
- *  - no filled background box behind every word;
+ *  - no filled background behind individual words;
  *  - at most two lines and never a dropped word;
- *  - only the words a segment marked as `emphasis` receive the highlight;
+ *  - one `.current` word, full stop; persistent `emphasis` is a separate class;
  *  - highlights are matched whole-word, so partial matches never fire.
  */
 
@@ -28,8 +37,14 @@ export type CaptionStyle = {
   fontWeight: number;
   lineHeight: number;
   letterSpacingPx: number;
+  /** Inactive (spoken phrase) text on the dark panel. */
   color: string;
+  /** Accent pill colour; the same value as `CAPTION_HIGHLIGHT.background`. */
   highlightColor: string;
+  /** Text colour while the word sits on the accent pill. */
+  activeTextColor: string;
+  /** Persistent semantic emphasis (marketing words, not the karaoke pill). */
+  emphasisColor: string;
   textShadow: string;
   textStroke: string;
   maxLines: number;
@@ -45,10 +60,6 @@ export type CaptionStyle = {
  * Values are applied per frame from the measured audio timeline, so the same
  * timestamp always renders the same visual state — there is no CSS
  * transition, no accumulated state and no dependence on frame order.
- *
- * The active-word colour ramp never *delays* the highlight: the word takes
- * over at its measured start time and only the colour blends during the
- * first ~90 ms.
  */
 export const CAPTION_MOTION = {
   /** Group entrance: 160 ms, opacity 0→1, translateY 12→0, scale 0.98→1.0. */
@@ -66,12 +77,16 @@ export const CAPTION_MOTION = {
 /**
  * Moving-highlight colours. Authored live in `tools/preview-live.html` and
  * saved back through `tools/config-writer.ts`. Both the highlight box and the
- * colour ramp on the active word read these, so the two can never drift apart.
+ * active-word text read these, so the two can never drift apart.
+ *
+ * The defaults are the canonical lemon-yellow / near-black pair from
+ * `config.ts` (`ACCENT_YELLOW` / `INK`); `tests/caption-motion.test.ts` asserts
+ * that they stay identical to the exported tokens.
  */
 const CAPTION_HIGHLIGHT_BG =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FF2600";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FFE66D";
 const CAPTION_HIGHLIGHT_TEXT =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? "#FFFFFF";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? "#151619";
 
 export const CAPTION_STYLE: CaptionStyle = {
   fontFamily:
@@ -80,13 +95,15 @@ export const CAPTION_STYLE: CaptionStyle = {
     "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
   fontSizePx: 50,
   fontWeight: 900,
-  lineHeight: 1.11,
+  lineHeight: 1.08,
   letterSpacingPx: -1.3,
   color: "#F8F6EF",
   highlightColor: CAPTION_HIGHLIGHT_BG,
+  activeTextColor: CAPTION_HIGHLIGHT_TEXT,
+  emphasisColor: CAPTION_HIGHLIGHT_BG,
   textShadow: "0 3px 10px rgba(0,0,0,0.95)",
   textStroke: "0",
-  maxLines: 2,
+  maxLines: CAPTION_PANEL_STYLE.maxLines,
   maxCharsPerLine: 22,
   transform: "none",
   paddingPx: 8,
@@ -106,9 +123,10 @@ const CLAUSE_BREAK = /[,;:—–]$/;
 /**
  * Break a caption phrase into at most two lines at a natural boundary.
  *
- * No word is ever dropped: if the phrase genuinely needs more room, the last
- * line is allowed to run slightly long rather than losing information. The
- * phrase splitter keeps phrases short enough that this is rare.
+ * No word is ever dropped: the splitter chooses one break point, so every word
+ * survives even when a phrase is long. The phrase splitter keeps phrases short
+ * enough that a third rendered line is rare; `captionLineEstimate()` reports
+ * when it still happens instead of silently clipping.
  */
 export function wrapCaptionText(
   text: string,
@@ -142,13 +160,62 @@ export function wrapCaptionText(
   }
 
   if (bestIndex < 0) return [words.join(" ")];
-  const lines = [
+  return [
     words.slice(0, bestIndex).join(" "),
     words.slice(bestIndex).join(" "),
-  ];
+  ].slice(0, Math.max(1, maxLines));
+}
 
-  // More than two lines requested is not supported by the design.
-  return lines.slice(0, Math.max(1, maxLines));
+/** Usable text width inside the dark panel, in canvas px. */
+function panelTextWidthPx(): number {
+  const geometry = captionOverlayGeometry();
+  // 1px border on each side, then the panel's horizontal padding.
+  return Math.max(
+    120,
+    geometry.widthPx - CAPTION_PANEL_STYLE.padXPx * 2 - 2
+  );
+}
+
+function estimateWordWidthPx(word: string): number {
+  // Bold Inter averages a little over half an em per glyph; letter spacing is
+  // negative in the approved style. This is only used to warn about overflow.
+  return (
+    word.length * CAPTION_STYLE.fontSizePx * 0.56 +
+    word.length * CAPTION_STYLE.letterSpacingPx
+  );
+}
+
+/**
+ * Greedy estimate of rendered line count inside the panel.
+ *
+ * The browser does the real wrapping; this exists so a phrase that would need
+ * a third line produces a structured warning in the run log instead of being
+ * silently clipped by the panel.
+ */
+export function captionLineEstimate(
+  text: string,
+  contentWidthPx = panelTextWidthPx()
+): number {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 0;
+  let lines = 1;
+  let current = 0;
+  for (const word of words) {
+    const width = estimateWordWidthPx(word);
+    const gap = current > 0 ? CAPTION_STYLE.fontSizePx * 0.26 : 0;
+    if (current > 0 && current + gap + width > contentWidthPx) {
+      lines += 1;
+      current = width;
+    } else {
+      current += gap + width;
+    }
+  }
+  return lines;
+}
+
+/** True when the phrase fits the two-line panel without clipping. */
+export function captionFitsPanel(text: string): boolean {
+  return captionLineEstimate(text) <= CAPTION_PANEL_STYLE.maxLines;
 }
 
 function estimateWordWeight(word: string): number {
@@ -162,10 +229,10 @@ function estimateWordWeight(word: string): number {
  * Word-level timing inside a measured phrase window.
  *
  * The renderer calls this on the fly so captions do not need to store per-word
- * timings. Reuse the same weighting family the caption engine already uses:
- * a longer/syllable-heavier word holds the screen longer and a terminal
- * punctuation word gets a small extra beat, so the highlight is proportional
- * rather than delegated to equal division.
+ * timings. A longer/syllable-heavier word holds the screen longer and a
+ * terminal punctuation word gets a small extra beat, so the pill is
+ * proportional rather than delegated to equal division. This is an estimate
+ * inside a measured phrase — not phoneme-level forced alignment.
  */
 export function wordTimings(phrase: CaptionPhrase): CaptionWordTiming[] {
   const words = phrase.text.trim().split(/\s+/).filter(Boolean);
@@ -186,12 +253,24 @@ export function wordTimings(phrase: CaptionPhrase): CaptionWordTiming[] {
   return timings;
 }
 
+/** Index of the word spoken at `timeMs`, or `-1`. */
+export function activeWordIndexAt(
+  phrase: CaptionPhrase,
+  timeMs: number
+): number {
+  const timings = wordTimings(phrase);
+  for (let index = 0; index < timings.length; index += 1) {
+    if (timeMs >= timings[index].startMs && timeMs < timings[index].endMs) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 /** The word that should be highlighted at a given time, or `null`. */
 export function activeWordAt(phrase: CaptionPhrase, timeMs: number): string | null {
-  const timing = wordTimings(phrase).find(
-    timing => timeMs >= timing.startMs && timeMs < timing.endMs
-  );
-  return timing ? timing.text : null;
+  const index = activeWordIndexAt(phrase, timeMs);
+  return index >= 0 ? phrase.text.trim().split(/\s+/).filter(Boolean)[index] : null;
 }
 
 /** HTML escape for text or attributes. */
@@ -221,7 +300,7 @@ export function captionRuns(
     if (lineIndex > 0) runs.push({ text: "\n", highlighted: false });
     for (const [wordIndex, word] of line.split(/\s+/).filter(Boolean).entries()) {
       if (wordIndex > 0) runs.push({ text: " ", highlighted: false });
-      const clean = word.replace(/[^\w.+#-]/g, "");
+      const clean = word.replace(/[^a-z0-9.+#-]/gi, "");
       runs.push({
         text: word,
         highlighted: highlightSet.has(clean.toLowerCase()),
@@ -232,51 +311,57 @@ export function captionRuns(
   return runs;
 }
 
+/** Resolve a legacy word-string argument to a word index. */
+function resolveActiveIndex(
+  phrase: CaptionPhrase,
+  active: number | string | null | undefined
+): number {
+  if (typeof active === "number") return active;
+  if (!active) return -1;
+  const words = phrase.text.trim().split(/\s+/).filter(Boolean);
+  return words.findIndex(
+    word => word.toLowerCase() === active.toLowerCase()
+  );
+}
+
 /**
- * HTML for one caption phrase. The card renderer injects this; the highlight
- * is a colour change only — never a filled box.
+ * HTML for one caption phrase.
  *
- * `activeWord` marks the word currently being spoken; `activeWordColor` lets
- * the caller supply a blended colour for that word's short ramp-in
- * (`activeWordStateAt`). A `null` colour falls back to the plain yellow.
+ * `.w.current` is the single word being spoken right now; `.w.key-emphasis` is
+ * the segment's persistent semantic emphasis. They are deliberately separate:
+ * only the current word sits on the accent pill, and emphasis never creates a
+ * second active box. Each word is rendered exactly once.
  */
 export function captionHtml(
   phrase: CaptionPhrase,
-  activeWord?: string | null,
-  activeWordColor?: string | null
+  active?: number | string | null
 ): string {
   const text =
     CAPTION_STYLE.transform === "uppercase" ? phrase.text.toUpperCase() : phrase.text;
   const highlightSet = new Set(phrase.highlights.map(word => word.toLowerCase()));
-  const active = activeWord
-    ? phrase.text
-        .split(/\s+/)
-        .filter(Boolean)
-        .some(word => word.toLowerCase() === activeWord.toLowerCase())
-      ? activeWord
-      : null
-    : null;
+  const currentIndex = resolveActiveIndex(phrase, active);
   const lines = wrapCaptionText(text);
 
   let wordIndex = 0;
   return lines
     .map(line => {
-      const runs = line
+      const spans = line
         .split(/\s+/)
         .filter(Boolean)
         .map(word => {
-          const clean = word.replace(/[^\w.+#-]/g, "");
-          const isActive = word && active?.toLowerCase() === word.toLowerCase();
-          const highlighted = highlightSet.has(clean.toLowerCase()) || isActive;
-          const cls = highlighted ? "w active" : "w";
-          const colorStyle = isActive
-            ? ` style="color:${CAPTION_HIGHLIGHT.text}"`
-            : "";
-          const idx = wordIndex++;
-          return `<span class="${cls}" data-i="${idx}"${colorStyle}>${escapeHtml(word)}</span>`;
+          const clean = word.replace(/[^a-z0-9.+#-]/gi, "");
+          const index = wordIndex++;
+          const isCurrent = index === currentIndex;
+          const emphasised = !isCurrent && highlightSet.has(clean.toLowerCase());
+          const cls = isCurrent
+            ? "w current"
+            : emphasised
+              ? "w key-emphasis"
+              : "w";
+          return `<span class="${cls}" data-i="${index}">${escapeHtml(word)}</span>`;
         })
         .join(" ");
-      return `<div class="caption-line">${runs}</div>`;
+      return `<div class="caption-line">${spans}</div>`;
     })
     .join("");
 }
@@ -331,8 +416,8 @@ export type CaptionGroupStyle = {
 /**
  * Deterministic group entrance/exit for one caption phrase at `timeMs`.
  *
- * In:   190 ms ease-out — rises 16 px, fades in, scales 0.97 → 1.
- * Out:  last 130 ms ease-in — sinks 8 px, fades out, scale eases back.
+ * In:  160 ms ease-out — rises 12 px, fades in, scales 0.98 → 1.
+ * Out: last 120 ms ease-in — sinks 6 px, fades out, scale eases back.
  * Between the two the group is perfectly stable while the same phrase stays
  * on screen (words do not re-trigger the entrance).
  */
@@ -376,12 +461,12 @@ export type ActiveWordState = {
 };
 
 /**
- * The active word plus its blended colour at `timeMs`.
+ * The active word plus its blended text colour at `timeMs`.
  *
- * The highlight takes over at the word's *measured* start time — the ramp
- * only blends from the inactive colour to the yellow within the first
- * `CAPTION_MOTION.activeWordMs` (which lands inside the 70–120 ms spec), so
- * the highlight never lags behind the audio.
+ * The highlight takes over at the word's *measured* start time — the ramp only
+ * blends from the panel's inactive text colour to the near-black pill text
+ * within the first `CAPTION_MOTION.activeWordMs`, so the glyphs are readable on
+ * the accent pill from the first frame without lagging behind the audio.
  */
 export function activeWordStateAt(
   phrase: CaptionPhrase,
@@ -392,22 +477,25 @@ export function activeWordStateAt(
   const timing = wordTimings(phrase).find(
     entry => entry.text.toLowerCase() === activeWord.toLowerCase()
   );
-  if (!timing) return { text: activeWord, color: CAPTION_STYLE.highlightColor };
+  if (!timing) {
+    return { text: activeWord, color: CAPTION_STYLE.activeTextColor };
+  }
   const elapsed = timeMs - timing.startMs;
   const t = easeOutCubic(Math.min(1, elapsed / CAPTION_MOTION.activeWordMs));
   return {
     text: activeWord,
-    color: blendHex(CAPTION_STYLE.color, CAPTION_STYLE.highlightColor, t),
+    color: blendHex(CAPTION_STYLE.color, CAPTION_STYLE.activeTextColor, t),
   };
 }
 
 /**
- * Complete per-frame caption markup: the animated group wrapper plus the
- * phrase HTML (with the active individual word, colour-ramped inline).
+ * Complete per-frame caption markup: the dark panel, the moving pill and the
+ * phrase HTML (with exactly one `.current` word).
  *
- * `browser-capture.ts` injects this once per frame. Everything is derived
- * from the shared audio timeline; rendering the same frame twice produces
- * byte-identical markup.
+ * The panel is absent when no phrase is active, so the overlay never leaves an
+ * empty black rectangle on screen. `browser-capture.ts` injects this once per
+ * frame. Everything is derived from the shared audio timeline; rendering the
+ * same frame twice produces byte-identical markup.
  */
 export function captionFrameHtml(
   phrase: CaptionPhrase | null,
@@ -415,7 +503,13 @@ export function captionFrameHtml(
 ): string {
   if (!phrase) return "";
   const group = captionGroupStyleAt(phrase, timeMs);
-  const inner = captionHtml(phrase, activeWordAt(phrase, timeMs), null);
+  const inner = captionHtml(phrase, activeWordIndexAt(phrase, timeMs));
   const style = `opacity:${group.opacity};transform:translate3d(0,${group.translateY}px,0) scale(${group.scale})`;
-  return `<div class="caption-group" style="${style}"><div class="caption-highlight" id="caption-hl"></div>${inner}</div>`;
+  return (
+    `<div class="caption-group" style="${style}">` +
+    `<div class="caption-panel">` +
+    `<div class="caption-highlight" id="caption-hl"></div>` +
+    `<div class="caption-lines">${inner}</div>` +
+    `</div></div>`
+  );
 }
