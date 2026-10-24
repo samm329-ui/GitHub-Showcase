@@ -12,6 +12,8 @@
     "check": "tsc --noEmit",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "preview": "tsx tools/preview.ts",
+    "preview:live": "tsx tools/preview-server.ts",
+    "preview:launch": "tsx tools/launch-preview.ts",
     "voice:audition": "python tools/kokoro-audition.py"
   },
   "dependencies": {
