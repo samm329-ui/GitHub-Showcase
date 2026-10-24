@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import { buildFactLedger } from "../src/facts.js";
-import { buildNarrationPlan, validateScript } from "../src/narration.js";
+import { validateScript } from "../src/narration.js";
+import { composeScript } from "../src/script-composer.js";
 import {
   compileRepoNarration,
   MAX_METADATA_WORD_SHARE,
   validateNarration,
 } from "../src/narration-ir.js";
 import { enriched, fixtureNames } from "./helpers.js";
-import type { FactLedger, NarrationPlan } from "../src/types.js";
+import type { Fact, FactLedger, NarrationPlan } from "../src/types.js";
 
 function planFor(
   name: string,
@@ -17,8 +18,17 @@ function planFor(
 ): { plan: NarrationPlan; ledger: FactLedger } {
   const repo = enriched(name, repoOverrides);
   const ledger = buildFactLedger(repo);
-  const plan = buildNarrationPlan(ledger, repo, overrides);
+  const plan = composeScript(ledger, repo, overrides).plan;
   return { plan, ledger };
+}
+
+/** True when the fact demonstrates a practical use case. */
+function demonstratesUseCase(fact: Fact): boolean {
+  return (
+    fact.kind === "use_case" ||
+    fact.semantic === "example" ||
+    fact.semantic === "workflow"
+  );
 }
 
 describe("narration structure", () => {
@@ -36,12 +46,14 @@ describe("narration structure", () => {
     }
   });
 
-  test("a use case demonstrated by a demo walkthrough satisfies the gate", () => {
+  test("documented example evidence satisfies the use-case gate", () => {
     const { plan, ledger } = planFor("high-quality-popular");
     const compiled = compileRepoNarration(plan, ledger);
-    const hasUseCaseFacts = ledger.facts.some(fact => fact.kind === "use_case");
-    if (hasUseCaseFacts) return;
-    assert.equal(compiled.coverage.useCaseSource, "demo-walkthrough");
+    assert.ok(
+      ledger.facts.some(demonstratesUseCase),
+      "the fixture must carry example or workflow evidence"
+    );
+    assert.equal(compiled.coverage.useCaseSource, "use-case-facts");
     assert.ok(compiled.script.useCase.trim().length > 0);
     assert.ok(
       !validateNarration(compiled.script, compiled.coverage).some(error =>
@@ -51,9 +63,9 @@ describe("narration structure", () => {
   });
 
   test("evidence for a use case may not be omitted silently", () => {
-    // A README whose usage section is real prose gives the ledger a use_case
-    // fact. If the compiled script has neither that clause nor a demo
-    // walkthrough, validation must fail instead of skipping the section.
+    // A README whose usage section is real prose gives the ledger use-case
+    // evidence. If the compiled script cites none of it, validation must fail
+    // instead of skipping the section.
     const repo = enriched("high-quality-popular", {
       readmeText:
         "# Rocket CLI\n\nA command-line tool for TypeScript services.\n\n" +
@@ -63,21 +75,26 @@ describe("narration structure", () => {
     });
     const ledger = buildFactLedger(repo);
     assert.ok(
-      ledger.facts.some(fact => fact.kind === "use_case"),
-      "fixture must produce a use_case fact"
+      ledger.facts.some(demonstratesUseCase),
+      "fixture must produce use-case evidence"
     );
-    const plan = buildNarrationPlan(ledger, repo);
-    // Simulate a compiler gap: drop the demo walkthrough and the use-case clause.
-    const withoutDemo: NarrationPlan = {
+    const plan = composeScript(ledger, repo).plan;
+    // Simulate a compiler gap: drop every segment that cites use-case evidence.
+    const withoutUseCase: NarrationPlan = {
       ...plan,
-      segments: plan.segments.filter(segment => {
-        const role = segment.narrativeRole ?? "";
-        if (role === "demo") return false;
-        return !segment.factIds.some(id => id.startsWith("use-case") || id.includes("usage"));
-      }),
+      segments: plan.segments.filter(segment =>
+        segment.factIds.every(id => {
+          const fact = ledger.facts.find(candidate => candidate.id === id);
+          return !fact || !demonstratesUseCase(fact);
+        })
+      ),
     };
-    const compiled = compileRepoNarration(withoutDemo, ledger);
-    if (compiled.coverage.useCaseSource !== "none") return; // a value clause still demonstrates it
+    const compiled = compileRepoNarration(withoutUseCase, ledger);
+    assert.equal(
+      compiled.coverage.useCaseSource,
+      "none",
+      "no surviving segment cites use-case evidence"
+    );
     const errors = validateNarration(compiled.script, compiled.coverage);
     assert.ok(
       errors.some(error => /use case/.test(error)),
@@ -125,10 +142,12 @@ describe("narration structure", () => {
     }
   });
 
-  test("a thin repository may lean on metadata without failing the run", () => {
+  test("a thin repository produces an honest short script, not metadata filler", () => {
     const { plan, ledger } = planFor("abandoned");
     const compiled = compileRepoNarration(plan, ledger);
-    assert.ok(compiled.coverage.metadataWordShare > MAX_METADATA_WORD_SHARE);
+    // The composer never manufactures metadata segments: with no explanation
+    // evidence there is nothing to say, and the script says only that.
+    assert.ok(compiled.coverage.metadataWordShare <= MAX_METADATA_WORD_SHARE);
     assert.deepEqual(
       validateNarration(compiled.script, compiled.coverage).filter(error =>
         /metadata|dominates/.test(error)
