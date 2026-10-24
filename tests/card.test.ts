@@ -103,25 +103,76 @@ describe("stationary card markup", () => {
   test("the caption style matches the specification", () => {
     assert.match(html, /font-size:\s*50px/);
     assert.match(html, /color:\s*#F8F6EF/);
-    assert.match(html, /--caption-yellow:\s*#FFD629/);
+    assert.match(html, /--caption-yellow:\s*#FFE66D/);
     assert.match(html, /text-shadow:\s*0 3px 10px/);
+    // The dark panel is a separate layer from the moving word pill.
+    assert.match(html, /\.caption-panel\s*\{[^}]*background:\s*rgba\(23,25,29,0\.92\)/s);
+    assert.match(html, /\.caption-panel\s*\{[^}]*box-shadow:/s);
     assert.ok(
       !/\.caption-overlay\s*\{[^}]*background:/s.test(html),
-      "captions must not draw a filled background box"
+      "the positioning root must stay transparent (no empty black plate)"
     );
-    assert.ok(!/\.hl\s*\{[^}]*background:/s.test(html), "highlights are colour only");
+    assert.match(html, /\.caption-overlay \.w\.current\s*\{\s*color:\s*#151619/);
+    assert.match(html, /\.caption-overlay \.w\.key-emphasis\s*\{\s*color:\s*#FFE66D/);
+    assert.ok(!/\.w\.active/.test(html), "the old combined active class is gone");
   });
 
-  test("captions sit in a fixed block over the page", () => {
+  test("captions sit in a fixed dark panel in the lower third", () => {
     const rule = html.match(/\.caption-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
-    assert.match(rule, /left:\s*165px/);
-    assert.match(rule, /top:\s*876px/);
-    assert.match(rule, /width:\s*718px/);
-    assert.match(rule, /max-height:\s*314px/);
+    assert.match(rule, /left:\s*200px/);
+    assert.match(rule, /top:\s*1510px/);
+    assert.match(rule, /width:\s*680px/);
+    assert.match(rule, /max-height:\s*190px/);
+    // The shadow must not be clipped by the positioning root.
+    assert.match(rule, /overflow:\s*visible/);
     // The animated per-frame wrapper is part of the composition.
     assert.match(html, /\.caption-group\s*\{[^}]*will-change:\s*transform,\s*opacity/s);
     // The moving highlight element exists behind the glyphs.
-    assert.match(html, /\.caption-highlight\s*\{/);
+    assert.match(html, /\.caption-highlight\s*\{[^}]*background:\s*#FFE66D/s);
+  });
+
+  test("the callout bubble is a stage-level sibling outside the clipped card", () => {
+    const articleEnd = html.indexOf("</article>");
+    const calloutAt = html.indexOf('id="callout"');
+    assert.ok(calloutAt > articleEnd, "the card's overflow:hidden must not clip the bubble");
+    assert.match(html, /<div class="callout-overlay" id="callout" aria-hidden="true">/);
+    // Shape and copy are separate elements: the text is never baked into SVG.
+    assert.match(html, /<svg class="callout-shape"/);
+    assert.match(html, /<div class="callout-text" id="callout-text"><\/div>/);
+    // Yellow backing first, then the warm-white cloud and its dark contour.
+    const accentAt = html.indexOf('fill="#FFE66D"');
+    const whiteAt = html.indexOf('fill="#FFFDF7"');
+    assert.ok(accentAt > 0 && whiteAt > accentAt, "accent behind the white bubble");
+    assert.match(html, /transform="translate\(6 8\)"/);
+    // Rays are a separate, initially hidden accent element.
+    assert.match(html, /<svg class="callout-rays" id="callout-rays"/);
+    assert.match(html, /\.callout-rays\s*\{[^}]*opacity:\s*0/s);
+  });
+
+  test("overlay z-order keeps the face visible and the caption in front", () => {
+    const z = (selector: string) =>
+      Number(
+        html.match(new RegExp(`\\.${selector}\\s*\\{[^}]*z-index:\\s*(\\d+)`, "s"))?.[1]
+      );
+    assert.equal(z("card"), 1);
+    assert.equal(z("character"), 2);
+    assert.equal(z("callout-overlay"), 4);
+    assert.equal(z("caption-overlay"), 5);
+    // The bubble is placed from the mascot's head anchor, not an unrelated
+    // hard-coded timeline coordinate: its authored box sits in the head band.
+    const rule = html.match(/\.callout-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
+    const left = Number(rule.match(/left:\s*([\d.]+)px/)?.[1]);
+    const top = Number(rule.match(/top:\s*([\d.]+)px/)?.[1]);
+    assert.ok(left >= 560 && left <= 684, `callout left ${left}`);
+    assert.ok(top >= 820 && top <= 930, `callout top ${top}`);
+    assert.ok(left + 360 <= 1080, "the bubble body stays inside the canvas");
+  });
+
+  test("no caption panel exists until a phrase is active", () => {
+    assert.match(html, /<div class="caption-overlay" id="caption"><\/div>/);
+    // Text is written as textContent, and only when the cue changes.
+    assert.match(html, /setCallout\(cueId, text, opacity/);
+    assert.match(html, /textEl\.textContent = text/);
   });
 
   test("the character layer is optional and independent of the card", () => {
