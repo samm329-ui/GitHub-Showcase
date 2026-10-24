@@ -607,12 +607,47 @@ export function extractProblem(repo: EnrichedRepo, parsed: ParsedReadme): Fact[]
  * Dedicated "how it works" prose. When a repository documents its mechanism,
  * this is stronger evidence than a feature bullet, so the planner prefers it.
  */
+/**
+ * Join budget for a mechanism quote. A longer quote stays speakable prose
+ * (three short sentences ≈ 25 words), so it shares the narratable-prose cap.
+ */
+const MECHANISM_SPOKEN_BUDGET = 220;
+
+/**
+ * A mechanism paragraph quoted one sentence at a time can say the opposite of
+ * what the README means: "The composer does not discover knowledge." is a
+ * setup clause whose payoff — "It reasons over knowledge that has already
+ * been extracted by Pass 1" — follows immediately, and narrating only the
+ * first half misrepresents the project. Quote the opening explanation as a
+ * whole: the first narratable sentence plus the ones that complete it, capped
+ * so the fact stays speakable.
+ */
+function mechanismSpokenOf(paragraph: string): string | null {
+  const sentences = cleanSentences(paragraph);
+  const start = sentences.findIndex(isNarratableProse);
+  if (start === -1) return null;
+  const parts: string[] = [];
+  let length = 0;
+  for (let index = start; index < sentences.length; index += 1) {
+    const part = sentences[index];
+    if (!isNarratableProse(part)) break;
+    if (parts.length > 0 && length + 1 + part.length > MECHANISM_SPOKEN_BUDGET) {
+      break;
+    }
+    parts.push(part);
+    length = part.length + (parts.length > 1 ? length + 1 : 0);
+    if (parts.length >= 4) break;
+  }
+  if (parts.length === 0) return null;
+  return parts.join(". ");
+}
+
 export function extractMechanism(repo: EnrichedRepo, parsed: ParsedReadme): Fact[] {
   for (const section of parsed.sections) {
     if (!MECHANISM_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
     const facts: Fact[] = [];
     for (const paragraph of paragraphsIn(parsed, section)) {
-      const line = cleanSentences(paragraph.text).find(isNarratableProse);
+      const line = mechanismSpokenOf(paragraph.text);
       if (!line) continue;
       facts.push(
         fact(
@@ -639,6 +674,13 @@ export function extractMechanism(repo: EnrichedRepo, parsed: ParsedReadme): Fact
   return [];
 }
 
+const SETUP_COMMAND_RE =
+  /^(git(\s+clone|\s+checkout|\s+pull)?\b|cd\b|mkdir\b|rmdir\b|cp\b|copy\b|mv\b|move\b|rm\b|del\b|echo\b|cat\b|touch\b|chmod\b|chown\b|source\b|export\b|set\b|env\b|clear\b|cls\b|exit\b|sudo\b|su\b|which\b|where\b|curl\b|wget\b|npm\s+(i|install|ci|run\s+build)|yarn(\s+install)?|pnpm(\s+install)?|pip\s+install|cargo\s+install|go\s+install|brew\s+install|docker\s+compose|docker-compose|docker\s+run|docker\s+build|python\s+-m\s+venv|virtualenv|\.[\/\\]venv)/i;
+
+export function isGenericSetupCommand(command: string): boolean {
+  return SETUP_COMMAND_RE.test(command.trim());
+}
+
 /**
  * A documented workflow: an ordered list of steps or the command sequence in a
  * Usage / Quick start section. A lone code block with no operation is *not* a
@@ -649,7 +691,9 @@ export function extractWorkflow(repo: EnrichedRepo, parsed: ParsedReadme): Fact[
     if (!WORKFLOW_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
     const ordered = orderedStepsOf(section);
     const parts =
-      ordered.length >= 2 ? ordered.map(step => step.text) : commandsIn(section, true);
+      ordered.length >= 2
+        ? ordered.map(step => step.text).filter(text => !isGenericSetupCommand(text))
+        : commandsIn(section, true).filter(cmd => !isGenericSetupCommand(cmd));
     if (parts.length < 2) continue;
     return parts.slice(0, 3).map((part, index) =>
       fact(
@@ -726,6 +770,23 @@ function commandExampleFact(
 }
 
 /**
+ * First-column cells of a *command* table look like shell commands: lowercase,
+ * at least two tokens. API-parameter tables (headers like
+ * "Name | Type | Required | Description") pass the header check — "name" is a
+ * generic column title — and quoting their rows speaks nonsense ("file file
+ * Yes Video file (...)"). A bare parameter name documents an argument, not a
+ * demonstrated operation.
+ */
+function looksLikeCommandCell(value: string): boolean {
+  const cell = value.replace(/[`*~_]/g, "").trim();
+  if (!cell) return false;
+  const firstAlpha = cell.match(/[A-Za-z]/)?.[0];
+  if (!firstAlpha) return false;
+  if (firstAlpha !== firstAlpha.toLowerCase()) return false;
+  return cell.split(/\s+/).filter(Boolean).length >= 2;
+}
+
+/**
  * Documented examples. A command table that pairs a command with what it does
  * is the strongest example evidence a README can carry: it names the operation
  * rather than describing a feature. When there is no table, a documented
@@ -744,6 +805,7 @@ export function extractExamples(repo: EnrichedRepo, parsed: ParsedReadme): Fact[
       const [command, ...rest] = row;
       const description = rest.join(" ").trim();
       if (!command || !description) continue;
+      if (!looksLikeCommandCell(command)) continue;
       if (!isNarratableProse(description)) continue;
       const spoken = sentence(`${command} ${lowerFirst(description)}`);
       facts.push(
@@ -772,7 +834,7 @@ export function extractExamples(repo: EnrichedRepo, parsed: ParsedReadme): Fact[
   // is not a documented example.
   for (const section of parsed.sections) {
     if (!WORKFLOW_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
-    const command = commandsIn(section, true)[0];
+    const command = commandsIn(section, true).find(cmd => !isGenericSetupCommand(cmd));
     if (!command) continue;
     const example = commandExampleFact(repo, section, command);
     if (example) return [example];
