@@ -184,7 +184,8 @@ export function estimateNodeDurationMs(
 function makeNode(
   id: string,
   role: ExplanationRole,
-  fact: Fact
+  fact: Fact,
+  required = ROLE_REQUIRED[role]
 ): ExplanationNode {
   const proposition = fact.spoken.trim();
   return {
@@ -196,7 +197,7 @@ function makeNode(
     novelty: 1,
     explanatoryValue: ROLE_EXPLANATORY_VALUE[role],
     estimatedWords: spokenWords(proposition),
-    required: ROLE_REQUIRED[role],
+    required,
     visualTargetIds: visualTargetIds(fact),
   };
 }
@@ -280,12 +281,18 @@ export function planEvidence(
   const used = new Set<string>();
   const omitted: { id: string; reason: string }[] = [];
 
+  const hasExampleEvidence = rankExamples(ledger).length > 0;
+  const isRoleRequired = (role: ExplanationRole) => {
+    if (role === "example") return hasExampleEvidence;
+    return ROLE_REQUIRED[role];
+  };
+
   const specs: NodeSpec[] = [
     {
       id: "problem",
       role: "problem",
       candidates: withSemantic(ledger, "problem"),
-      priority: 2,
+      priority: 3,
     },
     {
       id: "purpose",
@@ -303,13 +310,13 @@ export function planEvidence(
       id: "example",
       role: "example",
       candidates: rankExamples(ledger),
-      priority: 1,
+      priority: hasExampleEvidence ? 0 : 1,
     },
     {
       id: "benefit",
       role: "benefit",
       candidates: withSemantic(ledger, "outcome"),
-      priority: 3,
+      priority: 4,
     },
     {
       id: "tradeoff",
@@ -321,15 +328,15 @@ export function planEvidence(
       id: "installation",
       role: "installation",
       candidates: withSemantic(ledger, "setup"),
-      priority: 4,
+      priority: 2,
     },
   ];
 
   /* Required roles first, then optional roles by explanatory priority. */
   const ordered = [
-    ...specs.filter(spec => ROLE_REQUIRED[spec.role]),
+    ...specs.filter(spec => isRoleRequired(spec.role)),
     ...specs
-      .filter(spec => !ROLE_REQUIRED[spec.role])
+      .filter(spec => !isRoleRequired(spec.role))
       .sort((a, b) => a.priority - b.priority),
   ];
 
@@ -346,9 +353,9 @@ export function planEvidence(
       });
       continue;
     }
-    const node = makeNode(spec.id, spec.role, fact);
+    const node = makeNode(spec.id, spec.role, fact, isRoleRequired(spec.role));
     const nodeMs = estimateNodeDurationMs(node);
-    if (!ROLE_REQUIRED[spec.role] && usedMs + nodeMs > targetDurationMs) {
+    if (!isRoleRequired(spec.role) && usedMs + nodeMs > targetDurationMs) {
       omitted.push({
         id: spec.id,
         reason: `a ${spec.role} node does not fit the ${targetDurationMs}ms duration budget`,
