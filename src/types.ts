@@ -282,6 +282,14 @@ export type NarrationSegment = {
   narrativeRole?: StorySlot;
   /** Stable id of the clause template that produced this segment. */
   clauseId?: string;
+  /**
+   * Short, evidence-backed summary for the mascot callout bubble.
+   *
+   * Derivation happens in the script composer from the already-selected
+   * purpose evidence, never from the raw README at render time. The segment's
+   * `factIds` are the audit trail for this copy.
+   */
+  calloutText?: string;
 };
 
 export type NarrationAngle =
@@ -409,6 +417,8 @@ export type Timeline = {
   anchors: MeasuredAnchor[];
   documentHeight: number;
   viewportHeight: number;
+  /** The exact callout cues used for frame capture (at most one in v1). */
+  callouts?: CalloutCue[];
   /** Where the story was cropped, in displayed screenshot pixels. */
   story?: {
     startPx: number;
@@ -457,6 +467,38 @@ export type CharacterCue = {
   startMs: number;
   endMs: number;
   pose: CharacterPoseName;
+};
+
+/* ------------------------------------------------------------------ */
+/* Callout bubble                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One callout bubble event, bound to the measured audio timeline.
+ *
+ * The first implementation renders at most one per video: a short summary of
+ * the project's purpose, attached to the mascot's head. `factIds` are the
+ * evidence that supports the displayed copy.
+ */
+export type CalloutCue = {
+  id: string;
+  segmentId: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+  factIds: string[];
+  anchor: "mascot-head";
+};
+
+/** Deterministic per-frame visual state of a callout cue. */
+export type CalloutState = {
+  cueId: string | null;
+  visible: boolean;
+  text: string;
+  opacity: number;
+  translateY: number;
+  scale: number;
+  raysOpacity: number;
 };
 
 /* ------------------------------------------------------------------ */
