@@ -10,7 +10,7 @@ import {
   STAGE_BG,
   VIEWPORT,
 } from "./config.js";
-import { CAPTION_STYLE } from "./caption-overlay.js";
+import { CAPTION_STYLE, CAPTION_HIGHLIGHT } from "./caption-overlay.js";
 import { readmeHighlights } from "./narration.js";
 import { formatCount } from "./facts.js";
 
@@ -47,12 +47,45 @@ export type CardComposition = {
   characterPoses?: CharacterPoseAsset[] | null;
 };
 
-export const CARD_SHADOW = [
-  "0 3px 8px rgba(25,23,20,0.06)",
-  "0 14px 30px rgba(25,23,20,0.12)",
-  "0 36px 72px rgba(25,23,20,0.18)",
-  "0 70px 100px rgba(25,23,20,0.07)",
-].join(", ");
+/**
+ * Card shadow: four neutral layers, near contact through broad ambient.
+ *
+ * The geometry is fixed; the *feel* is tuned live in
+ * `tools/preview-live.html` and saved back through `tools/config-writer.ts`.
+ * `buildCardShadow` is the only place the CSS is assembled, so the preview and
+ * the renderer can never disagree about what a tuning means.
+ */
+export const CARD_SHADOW_LAYERS = [
+  { y: 2, blur: 6, base: 0.14 },
+  { y: 10, blur: 22, base: 0.12 },
+  { y: 24, blur: 45, base: 0.18 },
+  { y: 48, blur: 90, base: 0.14 },
+] as const;
+
+export type CardShadowTuning = {
+  /** Multiplier on the neutral layer opacity (authored in the live preview). */
+  intensity: number;
+  /** Multiplier on each layer's blur radius. */
+  blurScale: number;
+};
+
+export const CARD_SHADOW_TUNING: CardShadowTuning = {
+  intensity: 0.05,
+  blurScale: 0.5,
+};
+
+/** Assemble the layered box-shadow from the tuned intensity/blur scale. */
+export function buildCardShadow(
+  tuning: CardShadowTuning = CARD_SHADOW_TUNING
+): string {
+  return CARD_SHADOW_LAYERS.map(layer => {
+    const blur = Math.round(layer.blur * tuning.blurScale);
+    const opacity = Math.min(0.95, layer.base * tuning.intensity * 10);
+    return `0 ${layer.y}px ${blur}px rgba(25,23,20,${opacity.toFixed(3)})`;
+  }).join(", ");
+}
+
+export const CARD_SHADOW = buildCardShadow();
 
 export const UI_TOKENS = {
   stageBg: STAGE_BG,
@@ -427,16 +460,9 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     })
     .join("\n  ");
 
-  /* Mascot placement comes from the dedicated layout config: anchored to the
-     lower-right corner of the canvas (not the card), sized by canvas width.
-     The viewport's own overflow:hidden provides the canvas-boundary clip. */
   const mascotWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
-  const mascotRight = MASCOT_LAYOUT.allowOffscreen
-    ? MASCOT_LAYOUT.offsetX
-    : Math.max(0, MASCOT_LAYOUT.offsetX);
-  const mascotBottom = MASCOT_LAYOUT.allowOffscreen
-    ? MASCOT_LAYOUT.offsetY
-    : Math.max(0, MASCOT_LAYOUT.offsetY);
+  const mascotRight = MASCOT_LAYOUT.offsetX;
+  const mascotBottom = MASCOT_LAYOUT.offsetY;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -515,39 +541,51 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     user-select: none; pointer-events: none;
   }
 
-  /* ---- captions: fixed over the page, no filled word boxes ---- */
+  /* ---- captions: stable stage-level group, moving word highlight ---- */
   .caption-overlay {
     position: absolute; z-index: 5;
-    left: ${Math.round(CAPTION_OVERLAY.leftRatio * 100)}%;
-    right: ${Math.round(CAPTION_OVERLAY.rightRatio * 100)}%;
-    top: ${Math.round(CAPTION_OVERLAY.topRatio * 100)}%;
-    transform: translateY(-50%);
-    text-align: center; pointer-events: none;
+    left: ${CAPTION_OVERLAY.leftPx}px;
+    top: ${CAPTION_OVERLAY.topPx}px;
+    width: ${CAPTION_OVERLAY.widthPx}px;
+    max-height: ${CAPTION_OVERLAY.maxHeightPx}px;
+    overflow: hidden;
+    pointer-events: none;
     color: ${CAPTION_STYLE.color};
     font-size: ${CAPTION_STYLE.fontSizePx}px;
     font-weight: ${CAPTION_STYLE.fontWeight};
     line-height: ${CAPTION_STYLE.lineHeight};
     letter-spacing: ${CAPTION_STYLE.letterSpacingPx}px;
     text-shadow: ${CAPTION_STYLE.textShadow};
-    -webkit-text-stroke: ${CAPTION_STYLE.textStroke};
-    paint-order: stroke fill;
     text-wrap: balance; overflow-wrap: break-word;
   }
   .caption-line { display: block; }
-  .caption-overlay .hl { color: ${CAPTION_STYLE.highlightColor}; }
+  .caption-group {
+    position: relative; display: block;
+    transform-origin: 50% 100%;
+    will-change: transform, opacity;
+  }
+  .caption-highlight {
+    position: absolute; z-index: 0;
+    background: ${CAPTION_HIGHLIGHT.background};
+    border-radius: ${CAPTION_HIGHLIGHT.radiusPx}px;
+    pointer-events: none;
+    opacity: 0;
+    will-change: left, top, width, height;
+  }
+  .caption-overlay .w { position: relative; z-index: 1; }
+  .caption-overlay .w.active { color: ${CAPTION_HIGHLIGHT.text}; }
 
-  /* ---- optional character: independent stage layer ---- */
+  /* ---- optional character: independent stage layer, alpha-mask shadow ---- */
   .character {
     position: absolute; z-index: 2;
     right: ${mascotRight}px;
     bottom: ${mascotBottom}px;
     width: ${mascotWidthPx}px;
     height: auto; max-width: none;
-    /* keepFaceVisible guard: bottom-anchored, so the head can only ever leave
-       the canvas if the artwork is taller than the canvas itself. */
     max-height: ${MASCOT_LAYOUT.keepFaceVisible ? `${VIEWPORT.height}px` : "none"};
     transform-origin: 50% 100%;
     filter: ${CHARACTER.shadow};
+    background: transparent;
     user-select: none; pointer-events: none;
     will-change: transform, opacity;
   }
@@ -643,9 +681,9 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
 
     <div class="viewport" id="viewport">
       <div class="document" id="document">${documentMarkup}</div>
-      <div class="caption-overlay" id="caption"></div>
     </div>
   </article>
+  <div class="caption-overlay" id="caption"></div>
   ${characterMarkup}
 </div>
 <script>
@@ -662,7 +700,55 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       documentLayer.style.transform = 'translate3d(0,' + (-clamped) + 'px,0)';
     },
     setCaption(html) {
-      document.getElementById('caption').innerHTML = html || '';
+      const el = document.getElementById('caption');
+      if (el.__lastHtml !== html) {
+        el.innerHTML = html || '';
+        el.__lastHtml = html || '';
+        el.__wordBoxes = null;
+      }
+    },
+    measureCaption() {
+      const el = document.getElementById('caption');
+      if (el.__wordBoxes) return el.__wordBoxes;
+      const group = el.querySelector('.caption-group');
+      if (!group) { el.__wordBoxes = []; return []; }
+      const gr = group.getBoundingClientRect();
+      const boxes = [];
+      for (const span of group.querySelectorAll('.w')) {
+        const r = span.getBoundingClientRect();
+        boxes.push({
+          index: Number(span.getAttribute('data-i')),
+          left: r.left - gr.left,
+          top: r.top - gr.top,
+          width: r.width,
+          height: r.height,
+        });
+      }
+      boxes.sort((a, b) => a.index - b.index);
+      el.__wordBoxes = boxes;
+      return boxes;
+    },
+    setCaptionActive(index, progress) {
+      const el = document.getElementById('caption');
+      const hl = el.querySelector('#caption-hl');
+      if (!hl) return;
+      const boxes = this.measureCaption();
+      if (!boxes.length || index < 0 || index >= boxes.length) {
+        hl.style.opacity = '0';
+        return;
+      }
+      const curr = boxes[index];
+      const prev = index === 0 ? curr : boxes[index - 1];
+      const t = Math.max(0, Math.min(1, Number(progress) || 0));
+      const ease = 1 - Math.pow(1 - t, 3);
+      const interp = (a, b) => a + (b - a) * ease;
+      const padX = ${CAPTION_HIGHLIGHT.padXPx};
+      const padY = ${CAPTION_HIGHLIGHT.padYPx};
+      hl.style.left = (interp(prev.left, curr.left) - padX) + 'px';
+      hl.style.top = (interp(prev.top, curr.top) - padY) + 'px';
+      hl.style.width = (interp(prev.width, curr.width) + padX * 2) + 'px';
+      hl.style.height = (interp(prev.height, curr.height) + padY * 2) + 'px';
+      hl.style.opacity = '1';
     },
     setCharacterPose(pose, poseName) {
       if (!pose) return;
