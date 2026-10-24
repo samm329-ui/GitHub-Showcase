@@ -1,12 +1,21 @@
-import type { EnrichedRepo, Fact, FactLedger } from "./types.js";
+import type { EnrichedRepo, Fact, FactLedger, FactSemantic } from "./types.js";
+import { ESTIMATED_WPM } from "./config.js";
 
 /**
  * Evidence-driven explanation planner (Pass A).
  *
- * The planner does not invent narrative content. It only selects which verified
- * fact groups are worth explaining, maps them into a stable narrative shape,
- * and reports any role that had no usable evidence. The graph selection and
- * script composer consume the resulting `ExplanationPlan`.
+ * The planner does not invent narrative content. It selects which verified
+ * fact groups are worth explaining, maps them into a stable narrative shape
+ * grounded in *semantic roles* — a mechanism node is backed by mechanism
+ * evidence, an example node by example evidence — and reports any role that
+ * had no usable evidence. The graph search (`narrative-graph.ts`) picks the
+ * connected path; the script composer turns that path into sentences.
+ *
+ * Budget discipline: required roles (purpose, mechanism) are admitted first,
+ * then optional roles in explanatory priority order, each only if the running
+ * estimate still fits the target duration. A metadata fact (stars, license,
+ * activity) is never a node — padding the word budget with metadata is the
+ * defect this planner exists to prevent.
  */
 
 export type ExplanationRole =
@@ -65,19 +74,6 @@ export type ExplanationPlan = {
   omitted: { id: string; reason: string }[];
 };
 
-const ROLE_ORDER: ExplanationRole[] = [
-  "hook",
-  "problem",
-  "purpose",
-  "mechanism",
-  "example",
-  "benefit",
-  "differentiator",
-  "tradeoff",
-  "installation",
-  "closing",
-];
-
 const ROLE_IMPORTANCE: Record<ExplanationRole, number> = {
   hook: 0.4,
   problem: 0.7,
@@ -117,6 +113,25 @@ const ROLE_REQUIRED: Record<ExplanationRole, boolean> = {
   closing: false,
 };
 
+/** Fallback semantic mapping for facts extracted without an explicit role. */
+const KIND_SEMANTIC: Record<string, FactSemantic> = {
+  purpose: "purpose",
+  problem: "problem",
+  feature: "mechanism",
+  mechanism: "mechanism",
+  workflow: "workflow",
+  example: "example",
+  use_case: "example",
+  outcome: "outcome",
+  install: "setup",
+  requirement: "limitation",
+  limitation: "limitation",
+};
+
+export function semanticOf(fact: Fact): FactSemantic {
+  return fact.semantic ?? KIND_SEMANTIC[fact.kind] ?? "metadata";
+}
+
 /** Weighted node score; the graph search consumes this directly. */
 export function scoreNode(node: ExplanationNode): number {
   return (
@@ -137,7 +152,11 @@ function evidenceRef(fact: Fact): EvidenceRef {
 }
 
 function visualTargetIds(fact: Fact): string[] {
-  if (fact.source.kind === "readme-section" || fact.source.kind === "readme-code") {
+  if (
+    fact.source.kind === "readme-section" ||
+    fact.source.kind === "readme-code" ||
+    fact.source.kind === "readme-table"
+  ) {
     return [fact.source.location];
   }
   if (fact.source.kind === "release") return ["release"];
@@ -148,19 +167,26 @@ function spokenWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function nodeText(fact: Fact, prefix: string): string {
-  const cleaned = fact.spoken.trim();
-  return `${prefix} ${cleaned}`;
+/** Estimated spoken duration for what will actually be spoken. */
+export function estimateNodeDurationMs(
+  node: ExplanationNode,
+  wpm: number = ESTIMATED_WPM
+): number {
+  return (node.estimatedWords / wpm) * 60_000;
 }
 
+/**
+ * A planned idea: one verified claim, stated plainly. The script composer —
+ * not the planner — decides how to phrase the sentence around it, so the
+ * proposition is the evidence's own spoken form, never a templated prefix
+ * glued onto a README bullet.
+ */
 function makeNode(
   id: string,
   role: ExplanationRole,
-  facts: Fact[]
-): ExplanationNode | null {
-  if (facts.length === 0) return null;
-  const fact = facts[0];
-  const proposition = nodeText(fact, ROLE_PREFIX[role]);
+  fact: Fact
+): ExplanationNode {
+  const proposition = fact.spoken.trim();
   return {
     id,
     role,
@@ -175,152 +201,216 @@ function makeNode(
   };
 }
 
-const ROLE_PREFIX: Record<ExplanationRole, string> = {
-  hook: "Meet",
-  problem: "It solves",
-  purpose: "It is",
-  mechanism: "How it works",
-  example: "For example",
-  benefit: "The benefit",
-  differentiator: "This stands out",
-  tradeoff: "The trade-off",
-  installation: "To get started",
-  closing: "Wrap up",
-};
-
-function groupByKind(
-  ledger: FactLedger
-): Map<Fact["kind"], Fact[]> {
-  const map = new Map<Fact["kind"], Fact[]>();
-  for (const fact of ledger.facts) {
-    const bucket = map.get(fact.kind) ?? [];
-    bucket.push(fact);
-    map.set(fact.kind, bucket);
-  }
-  return map;
+function bestFact(candidates: Fact[], used: Set<string>): Fact | null {
+  // `candidates` arrive already ranked (tier, confidence, README order); the
+  // first unused entry wins so the ranking above is not silently discarded.
+  return candidates.find(fact => !used.has(fact.id)) ?? null;
 }
+
+function withSemantic(ledger: FactLedger, role: FactSemantic): Fact[] {
+  return ledger.facts
+    .filter(fact => semanticOf(fact) === role)
+    .sort(
+      (a, b) => b.confidence - a.confidence || lineOf(a) - lineOf(b) || a.id.localeCompare(b.id)
+    );
+}
+
+/** Provenance line when known; later than any unknown line. */
+function lineOf(fact: Fact): number {
+  return fact.provenance?.lineStart ?? Number.MAX_SAFE_INTEGER;
+}
+
+/** Rank mechanism evidence: dedicated "how it works" prose, then mechanism
+ * bullets, then outcome bullets; earlier README placement wins ties. */
+function rankMechanisms(ledger: FactLedger): Fact[] {
+  const candidates = ledger.facts.filter(fact => {
+    const semantic = semanticOf(fact);
+    return semantic === "mechanism" || semantic === "outcome";
+  });
+  return candidates.sort((a, b) => {
+    const tier = (fact: Fact) => {
+      const semantic = semanticOf(fact);
+      if (fact.kind === "mechanism") return 0;
+      return semantic === "mechanism" ? 1 : 2;
+    };
+    return (
+      tier(a) - tier(b) ||
+      b.confidence - a.confidence ||
+      lineOf(a) - lineOf(b) ||
+      a.id.localeCompare(b.id)
+    );
+  });
+}
+
+/** Rank example evidence: command tables and documented commands first. */
+function rankExamples(ledger: FactLedger): Fact[] {
+  const candidates = ledger.facts.filter(fact => {
+    const semantic = semanticOf(fact);
+    return semantic === "example" || semantic === "workflow";
+  });
+  return candidates.sort(
+    (a, b) =>
+      b.confidence - a.confidence ||
+      lineOf(a) - lineOf(b) ||
+      a.id.localeCompare(b.id)
+  );
+}
+
+type NodeSpec = {
+  id: string;
+  role: ExplanationRole;
+  candidates: Fact[];
+  /** Lower fills the budget first. Required roles bypass the priority. */
+  priority: number;
+};
 
 /**
  * Build an `ExplanationPlan` from verified evidence.
- * We never project a claim that the ledger itself does not contain; a fact can
- * support multiple nodes, but every duplicate keeps the same `factId`, which
- * makes the evidence gate explicit.
+ *
+ * Every node claims exactly one fact, and no fact is claimed twice, so the
+ * evidence gate stays explicit. Nodes are admitted in narrative order but only
+ * while the running estimate fits the duration budget; roles that never fit
+ * (or have no evidence) are recorded in `omitted` with the reason.
  */
 export function planEvidence(
   ledger: FactLedger,
   repo: EnrichedRepo,
   targetDurationMs: number
 ): ExplanationPlan {
-  const byKind = groupByKind(ledger);
-  const usedFactIds = new Set<string>();
-  const nodes: ExplanationNode[] = [];
+  const used = new Set<string>();
   const omitted: { id: string; reason: string }[] = [];
-  const usedNodeIds = new Set<string>();
 
-  const push = (node: ExplanationNode): void => {
-    if (usedNodeIds.has(node.id)) return;
-    if (node.evidence.some(reference => usedFactIds.has(reference.factId))) {
-      omitted.push({ id: node.id, reason: "the fact is already claimed by another node" });
-      return;
+  const specs: NodeSpec[] = [
+    {
+      id: "problem",
+      role: "problem",
+      candidates: withSemantic(ledger, "problem"),
+      priority: 2,
+    },
+    {
+      id: "purpose",
+      role: "purpose",
+      candidates: withSemantic(ledger, "purpose"),
+      priority: 0,
+    },
+    {
+      id: "mechanism",
+      role: "mechanism",
+      candidates: rankMechanisms(ledger),
+      priority: 0,
+    },
+    {
+      id: "example",
+      role: "example",
+      candidates: rankExamples(ledger),
+      priority: 1,
+    },
+    {
+      id: "benefit",
+      role: "benefit",
+      candidates: withSemantic(ledger, "outcome"),
+      priority: 3,
+    },
+    {
+      id: "tradeoff",
+      role: "tradeoff",
+      candidates: withSemantic(ledger, "limitation"),
+      priority: 5,
+    },
+    {
+      id: "installation",
+      role: "installation",
+      candidates: withSemantic(ledger, "setup"),
+      priority: 4,
+    },
+  ];
+
+  /* Required roles first, then optional roles by explanatory priority. */
+  const ordered = [
+    ...specs.filter(spec => ROLE_REQUIRED[spec.role]),
+    ...specs
+      .filter(spec => !ROLE_REQUIRED[spec.role])
+      .sort((a, b) => a.priority - b.priority),
+  ];
+
+  const nodes: ExplanationNode[] = [];
+  const admitted = new Set<ExplanationRole>();
+  let usedMs = 0;
+
+  for (const spec of ordered) {
+    const fact = bestFact(spec.candidates, used);
+    if (!fact) {
+      omitted.push({
+        id: spec.id,
+        reason: `the ledger has no ${spec.role} evidence`,
+      });
+      continue;
     }
-    usedNodeIds.add(node.id);
+    const node = makeNode(spec.id, spec.role, fact);
+    const nodeMs = estimateNodeDurationMs(node);
+    if (!ROLE_REQUIRED[spec.role] && usedMs + nodeMs > targetDurationMs) {
+      omitted.push({
+        id: spec.id,
+        reason: `a ${spec.role} node does not fit the ${targetDurationMs}ms duration budget`,
+      });
+      continue;
+    }
     nodes.push(node);
-    node.evidence.forEach(reference => usedFactIds.add(reference.factId));
-  };
-
-  let featureCount = 0;
-  const features = byKind.get("feature") ?? [];
-  const useCases = byKind.get("use_case") ?? [];
-  const installs = byKind.get("install") ?? [];
-  const requirements = [...(byKind.get("requirement") ?? []), ...(byKind.get("limitation") ?? [])];
-  const licenses = byKind.get("license") ?? [];
-  const activity = byKind.get("activity") ?? [];
-
-  const purposes = byKind.get("purpose") ?? [];
-  if (purposes.length > 0) {
-    const node = makeNode("purpose", "purpose", [purposes[0]]);
-    if (node) push(node);
-  } else {
-    const feature = features[0] ?? null;
-    const fallback = feature ?? activity[0] ?? null;
-    if (fallback) {
-      const node = makeNode("hook", "hook", [fallback]);
-      if (node) push(node);
-    } else {
-      omitted.push({ id: "hook", reason: "the repository has no purpose or feature fact" });
-    }
+    admitted.add(spec.role);
+    used.add(fact.id);
+    usedMs += nodeMs;
   }
 
-  for (const feature of features) {
-    if (featureCount >= 2) break;
-    const role = featureCount === 0 ? "mechanism" : "benefit";
-    const node = makeNode(
-      `${role}-${featureCount + 1}`,
-      role,
-      [feature]
-    );
-    if (node) push(node);
-    featureCount += 1;
-  }
-  if (featureCount === 0) {
-    omitted.push({ id: "mechanism", reason: "the ledger has no feature evidence" });
-  }
+  /* Narrative order, independent of admission priority. */
+  const order: ExplanationRole[] = [
+    "problem",
+    "purpose",
+    "mechanism",
+    "example",
+    "benefit",
+    "tradeoff",
+    "installation",
+  ];
+  nodes.sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
 
-  if (useCases.length > 0) {
-    const node = makeNode("example", "example", [useCases[0]]);
-    if (node) push(node);
-  } else {
-    omitted.push({ id: "example", reason: "the ledger has no use-case evidence" });
-  }
-
-  if (installs.length > 0) {
-    const node = makeNode("installation", "installation", [installs[0]]);
-    if (node) push(node);
-  } else {
-    omitted.push({ id: "installation", reason: "the ledger has no install evidence" });
-  }
-
-  if (requirements.length > 0) {
-    const node = makeNode("tradeoff", "tradeoff", [requirements[0]]);
-    if (node) push(node);
-  } else {
-    omitted.push({ id: "tradeoff", reason: "the ledger has no constraint or licence evidence" });
-  }
-
-  if (licenses.length > 0) {
-    const node = makeNode("differentiator", "differentiator", [licenses[0]]);
-    if (node) push(node);
-  } else {
-    omitted.push({ id: "differentiator", reason: "the ledger has no licence evidence" });
-  }
-
-  if (activity.length > 0) {
-    const node = makeNode("closing", "closing", [activity[0]]);
-    if (node) push(node);
-  } else {
-    omitted.push({ id: "closing", reason: "the ledger has no recent-activity evidence" });
-  }
+  const edges = connectNodes(nodes);
+  const totalMs = nodes.reduce((sum, node) => sum + estimateNodeDurationMs(node), 0);
 
   return {
     repositoryNodeId: ledger.repositoryNodeId,
     fullName: ledger.fullName,
     targetDurationMs,
-    estimatedDurationMs: 0,
+    estimatedDurationMs: Math.round(totalMs),
     nodes,
-    edges: connectNodes(nodes),
+    edges,
     selectedPath: [],
     omitted,
   };
 }
 
+/**
+ * Connect the planned nodes. Every consecutive pair gets an edge, and a
+ * skip-one edge lets the graph search drop a middle idea (say, the problem)
+ * without disconnecting the path — the selector reasons over relationships,
+ * not over list adjacency alone.
+ */
 function connectNodes(nodes: ExplanationNode[]): ExplanationEdge[] {
   const edges: ExplanationEdge[] = [];
   for (let index = 1; index < nodes.length; index += 1) {
     const previous = nodes[index - 1];
     const current = nodes[index];
     const relation = edgeFor(previous.role, current.role);
-    if (!relation) continue;
     edges.push({ from: previous.id, to: current.id, relation, strength: 0.8 });
+  }
+  for (let index = 0; index + 2 < nodes.length; index += 1) {
+    const previous = nodes[index];
+    const next = nodes[index + 2];
+    edges.push({
+      from: previous.id,
+      to: next.id,
+      relation: "follows",
+      strength: 0.6,
+    });
   }
   return edges;
 }
@@ -328,18 +418,14 @@ function connectNodes(nodes: ExplanationNode[]): ExplanationEdge[] {
 function edgeFor(
   from: ExplanationRole,
   to: ExplanationRole
-): ExplanationEdge["relation"] | null {
-  if (from === "purpose" && (to === "mechanism" || to === "benefit" || to === "example")) return "explains";
+): ExplanationEdge["relation"] {
+  if (from === "problem" && (to === "purpose" || to === "mechanism")) return "explains";
+  if (from === "purpose" && (to === "mechanism" || to === "benefit" || to === "example")) {
+    return "explains";
+  }
   if (from === "mechanism" && (to === "example" || to === "benefit")) return "demonstrates";
   if (from === "example" && to === "benefit") return "enables";
-  if (from === "benefit" && to === "differentiator") return "contrasts";
-  if (from === "differentiator" && to === "tradeoff") return "qualifies";
+  if (from === "benefit" && to === "tradeoff") return "qualifies";
   if (from === "tradeoff" && to === "installation") return "follows";
-  if (to === "installation" || to === "closing") return "follows";
   return "follows";
-}
-
-/** Estimated spoken duration, ignoring pauses baked into synthesized audio. */
-export function estimateNodeDurationMs(node: ExplanationNode, wpm = 165): number {
-  return (node.estimatedWords / wpm) * 60_000;
 }
