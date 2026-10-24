@@ -1,11 +1,26 @@
-import type { MediaInfo, QaCheck, QaReport } from "./types.js";
+import type { CalloutCue, MediaInfo, QaCheck, QaReport } from "./types.js";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { stat as statFile } from "node:fs/promises";
 import { createCanvas, loadImage } from "canvas";
 import { promisify } from "node:util";
-import { CARD, CARD_CHROME_HEIGHT, FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
+import {
+  CALLOUT,
+  CARD,
+  CARD_CHROME_HEIGHT,
+  FPS,
+  MASCOT_LAYOUT,
+  MAX_DURATION_SECONDS,
+  VIEWPORT,
+  captionOverlayGeometry,
+} from "./config.js";
+import { calloutFitsBubble } from "./callout-overlay.js";
+import {
+  CHARACTER_ALPHA_BOUNDS,
+  mascotHeadAnchor,
+  mascotPlacementCss,
+} from "./mascot-layout.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -235,6 +250,135 @@ export function checkAudioReachesEnd(
     ok: gap >= -toleranceSeconds && gap <= 2.5,
     detail: `video ${videoSeconds.toFixed(2)}s vs audio ${audioSeconds.toFixed(2)}s (gap ${gap.toFixed(2)}s)`,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay checks (callout + caption panel)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Temporal and copy validation for the narration-driven callout. Pure: it
+ * reasons about the same cues that were written to timeline.json and handed to
+ * the renderer, so no estimated words-per-minute or fixed timestamp is used.
+ */
+export function calloutChecks(cues: CalloutCue[], durationMs: number): QaCheck[] {
+  const checks: QaCheck[] = [
+    {
+      name: "callout-count",
+      ok: cues.length <= 4,
+      detail: `${cues.length} cue(s); renders at most 4 callouts per video`,
+    },
+    {
+      name: "callout-non-overlapping",
+      ok: cues.every((cue, i) => i === 0 || cue.startMs >= cues[i - 1].endMs),
+      detail: "all callout cues are strictly non-overlapping",
+    },
+  ];
+
+  for (const cue of cues) {
+    const words = cue.text.trim().split(/\s+/).filter(Boolean).length;
+    const timed =
+      cue.startMs >= 0 &&
+      cue.startMs < cue.endMs &&
+      cue.endMs <= durationMs + 1;
+    checks.push({
+      name: "callout-timing",
+      ok: timed,
+      detail: `${cue.id}: ${cue.startMs}-${cue.endMs}ms within ${Math.round(durationMs)}ms`,
+    });
+    checks.push({
+      name: "callout-copy",
+      ok:
+        words >= CALLOUT.minWords &&
+        words <= CALLOUT.maxWords &&
+        calloutFitsBubble(cue.text),
+      detail: `"${cue.text}" (${words} words, ${
+        calloutFitsBubble(cue.text) ? "fits" : "exceeds"
+      } ${CALLOUT.maxLines} lines)`,
+    });
+    checks.push({
+      name: "callout-evidence",
+      ok: cue.factIds.length > 0 && cue.anchor === "mascot-head",
+      detail: `${cue.factIds.length} fact(s), anchor ${cue.anchor}`,
+    });
+  }
+
+  return checks;
+}
+
+/** The mascot face region the overlays must never cover. */
+function protectedFaceRegion(): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} {
+  const input = {
+    bounds: CHARACTER_ALPHA_BOUNDS,
+    renderedWidthPx: Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width),
+    canvasWidth: VIEWPORT.width,
+    canvasHeight: VIEWPORT.height,
+    clipRightPx: MASCOT_LAYOUT.offsetX,
+    clipBottomPx: MASCOT_LAYOUT.offsetY,
+  };
+  const placement = mascotPlacementCss(input);
+  const head = mascotHeadAnchor(input, placement);
+  return {
+    left: head.faceCenterX - placement.visibleWidthPx * 0.16,
+    top: head.headTopY,
+    right: head.faceCenterX + placement.visibleWidthPx * 0.16,
+    bottom: head.headTopY + placement.visibleHeightPx * 0.3,
+  };
+}
+
+/**
+ * Static geometry validation for the two overlay layers: inside the canvas,
+ * inside the bottom safe zone, and clear of the mascot's face/glasses.
+ */
+export function overlayLayoutChecks(): QaCheck[] {
+  const caption = captionOverlayGeometry();
+  const face = protectedFaceRegion();
+  const captionBottom = caption.topPx + caption.maxHeightPx;
+  const calloutLeft = CALLOUT.leftMinPx;
+  const calloutRight = VIEWPORT.width - CALLOUT.rightMarginPx;
+  const calloutTop = CALLOUT.topMinPx;
+  const calloutBottom = CALLOUT.topMaxPx + CALLOUT.bubbleHeightPx;
+
+  return [
+    {
+      name: "callout-inside-canvas",
+      ok:
+        calloutLeft >= 0 &&
+        calloutRight <= VIEWPORT.width &&
+        calloutTop >= 0 &&
+        calloutBottom <= VIEWPORT.height,
+      detail: `left ${calloutLeft}, right ${calloutRight}, top ${calloutTop}-${calloutBottom}`,
+    },
+    {
+      name: "caption-inside-canvas",
+      ok:
+        caption.leftPx >= 0 &&
+        caption.leftPx + caption.widthPx <= VIEWPORT.width &&
+        caption.topPx >= 0 &&
+        captionBottom <= VIEWPORT.height,
+      detail: `${caption.leftPx},${caption.topPx} ${caption.widthPx}x${caption.maxHeightPx}`,
+    },
+    {
+      name: "caption-bottom-safe-zone",
+      ok: captionBottom <= 1780 && caption.topPx >= 1300,
+      detail: `panel ${caption.topPx}-${captionBottom}px (safe 1300-1780)`,
+    },
+    {
+      name: "caption-clear-of-face",
+      ok:
+        caption.topPx >= face.bottom ||
+        caption.leftPx >= face.right ||
+        caption.leftPx + caption.widthPx <= face.left,
+      detail: `panel top ${caption.topPx} vs face ${Math.round(face.top)}-${Math.round(
+        face.bottom
+      )}, x ${Math.round(face.left)}-${Math.round(face.right)}`,
+    },
+  ];
 }
 
 /* ------------------------------------------------------------------ */
