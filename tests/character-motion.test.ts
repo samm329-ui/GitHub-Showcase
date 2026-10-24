@@ -49,6 +49,22 @@ describe("character pose", () => {
     assert.ok(point.rotationDeg < present.rotationDeg);
   });
 
+  test("the entrance is a short, controlled ease-in that settles", () => {
+    const first = characterPoseAt(0, 0, "present");
+    assert.equal(first.entranceX, 0);
+    assert.equal(first.entranceY, 0);
+    assert.equal(first.entranceOpacity, 0);
+
+    const early = characterPoseAt(120, 0.4, "present");
+    assert.ok(early.entranceX && early.entranceX > 0);
+    assert.ok(early.entranceY && early.entranceY > 0);
+
+    const settled = characterPoseAt(600, 0.4, "present");
+    assert.equal(settled.entranceX, 0);
+    assert.equal(settled.entranceY, 0);
+    assert.equal(settled.entranceOpacity, 1);
+  });
+
   test("narration slots choose a presenter action and carry it on the timeline", () => {
     assert.equal(characterPoseForSlot("cta"), "close");
     assert.equal(characterPoseForSlot("demo"), "point");
