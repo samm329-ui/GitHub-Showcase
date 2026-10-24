@@ -9,7 +9,15 @@ import {
   speechCalloutZone,
   type AlphaBounds,
 } from "../src/mascot-layout.js";
-import { CARD, CARD_CHROME_HEIGHT, CARD_VIEWPORT_HEIGHT, MASCOT_LAYOUT, VIEWPORT } from "../src/config.js";
+import {
+  CALLOUT,
+  CARD,
+  CARD_CHROME_HEIGHT,
+  CARD_VIEWPORT_HEIGHT,
+  MASCOT_LAYOUT,
+  VIEWPORT,
+} from "../src/config.js";
+import { placeCallout } from "../src/callout-overlay.js";
 
 const RENDERED_WIDTH = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
 const PLACEMENT_INPUT = {
@@ -165,6 +173,20 @@ describe("mascot head anchor and caption callout zone", () => {
     // Speech bob is <= 8px; the 32px gap plus entrance margin 16px means the
     // caption can never intersect the artwork.
     assert.ok(32 > 8 + 16);
+  });
+
+  test("the callout bubble is placed from the same head anchor", () => {
+    const layout = placeCallout(head);
+    assert.deepEqual(layout, placeCallout(head));
+    // The bubble body sits fully above the head-top line, so the face never
+    // disappears behind it; only the tail reaches down toward the glasses.
+    assert.ok(
+      layout.top + CALLOUT.bodyHeightPx <= head.headTopY,
+      `body ends ${layout.top + CALLOUT.bodyHeightPx}, head at ${head.headTopY}`
+    );
+    assert.ok(layout.tailTipY > head.headTopY);
+    assert.ok(Math.abs(layout.tailTipX - head.faceCenterX) <= 120);
+    assert.ok(layout.left + layout.width <= VIEWPORT.width);
   });
 
   test("the zone is deterministic", () => {
