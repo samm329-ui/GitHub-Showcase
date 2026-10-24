@@ -153,11 +153,12 @@ export type CalloutZone = {
 };
 
 /**
- * Position the caption block so it reads as a callout coming from the
- * mascot's head: the block hangs with its bottom edge a fixed gap above the
- * head-top line. Horizontal margins are safe-area ratios from
- * `CAPTION_OVERLAY`, applied directly in `card.ts`. Deterministic and
- * frame-order independent.
+ * Legacy caption-zone helper: places a *caption block* a fixed gap above the
+ * head-top line. This is not the speech bubble — the white callout is a
+ * separate stage-level layer rendered from `src/callout-overlay.ts` and its
+ * `placeCallout()`, which consumes the same `mascotHeadAnchor()`. Kept for
+ * backwards compatibility with the caption layout maths.
+ * Deterministic and frame-order independent.
  */
 export function speechCalloutZone(options: {
   headTopY: number;
