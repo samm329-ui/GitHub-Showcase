@@ -25,13 +25,13 @@ describe("preview config writer", () => {
     assert.equal(config.mascotWidthPx, 943);
     assert.equal(config.mascotRight, -60);
     assert.equal(config.mascotBottom, -23);
-    assert.equal(config.captionLeft, 165);
-    assert.equal(config.captionTop, 876);
-    assert.equal(config.captionWidth, 718);
-    assert.equal(config.captionMaxHeight, 314);
+    assert.equal(config.captionLeft, 200);
+    assert.equal(config.captionTop, 1510);
+    assert.equal(config.captionWidth, 680);
+    assert.equal(config.captionMaxHeight, 190);
     assert.equal(config.captionFontWeight, 900);
     assert.equal(config.captionFontSize, 50);
-    assert.equal(config.captionLineHeight, 1.11);
+    assert.equal(config.captionLineHeight, 1.08);
     assert.equal(config.captionLetterSpacing, -1.3);
     assert.equal(config.cardRadius, 52);
     assert.equal(config.cardShadowIntensity, CARD_SHADOW_TUNING.intensity);
