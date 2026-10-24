@@ -7,6 +7,7 @@ import { FPS, MAX_DURATION_SECONDS } from "./config.js";
 import { renderCardVideo } from "./browser-capture.js";
 import type { CharacterPoseAsset } from "./card.js";
 import type {
+  CalloutCue,
   CaptionPhrase,
   CharacterCue,
   EnrichedRepo,
@@ -35,6 +36,10 @@ export type RenderVideoOptions = {
   /** Presenter action/framing changes, aligned to narration segments. */
   characterCues?: CharacterCue[] | null;
   captions: CaptionPhrase[];
+  /** Callout cues written to timeline.json; passed straight through. */
+  callouts?: CalloutCue[] | null;
+  /** Loopback URL of the comic speech bubble sticker. */
+  calloutImageUrl?: string | null;
   scrollKeyframes: ScrollKeyframe[];
   audioPath: string;
   audioDurationMs: number;
@@ -62,6 +67,8 @@ export async function renderVideo(
     characterCues: options.characterCues,
     speechEnvelope: options.speechEnvelope,
     captions: options.captions,
+    callouts: options.callouts,
+    calloutImageUrl: options.calloutImageUrl,
     scrollKeyframes: options.scrollKeyframes,
     durationMs: options.audioDurationMs,
     outputPath: options.outputPath,
