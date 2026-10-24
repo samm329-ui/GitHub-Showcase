@@ -23,9 +23,37 @@ export type CharacterPose = {
   rotationDeg: number;
   scale: number;
   opacity: number;
+  /** One-time entrance offset (px) and opacity ramp at the start of the video. */
+  entranceX?: number;
+  entranceY?: number;
+  entranceOpacity?: number;
+  entranceScale?: number;
 };
 
 const TWO_PI = Math.PI * 2;
+
+/** One-time entrance offset + opacity ramp before the initial settle. */
+function entranceAt(timeMs: number): {
+  entranceX?: number;
+  entranceY?: number;
+  entranceOpacity?: number;
+  entranceScale?: number;
+} {
+  const startMs = 0;
+  const durationMs = 380;
+  const progress = Math.min(1, Math.max(0, (timeMs - startMs) / durationMs));
+  if (progress <= 0) {
+    return { entranceX: 0, entranceY: 0, entranceOpacity: 0, entranceScale: 1 };
+  }
+  const ease = 1 - Math.pow(1 - progress, 3);
+  const remaining = 1 - ease;
+  return {
+    entranceX: 140 * remaining,
+    entranceY: 420 * remaining,
+    entranceOpacity: progress < 0.08 ? 0 : 1,
+    entranceScale: 1,
+  };
+}
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -69,6 +97,7 @@ export function characterPoseAt(
     rotationDeg: baseRotation + actionRotation,
     scale: baseScale * actionScale,
     opacity: 1,
+    ...entranceAt(timeMs),
   };
 }
 
