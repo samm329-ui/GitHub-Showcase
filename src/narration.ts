@@ -72,6 +72,30 @@ export function findBoilerplate(text: string): string[] {
   return BANNED_PHRASES.filter(phrase => lowered.includes(phrase));
 }
 
+/**
+ * Quote-aware boilerplate: banned filler is hype the script *generated*. A
+ * repository can describe itself with those words ("identify the best
+ * segments"), and quoting the evidence's own wording is exactly what a
+ * traceable script is supposed to do. A segment counts as quoting when any
+ * cited fact behind the segment contains the phrase in its spoken form,
+ * claim, or source provenance excerpt.
+ * Anything else is generated hype and stays a hard error.
+ */
+function isQuotedFromEvidence(
+  segment: NarrationSegment,
+  ledger: FactLedger,
+  phrase: string
+): boolean {
+  const lowered = segment.spokenText.toLowerCase();
+  if (!lowered.includes(phrase)) return false;
+  for (const cited of ledger.facts) {
+    if (!segment.factIds.includes(cited.id)) continue;
+    const wording = `${cited.spoken} ${cited.claim} ${cited.provenance?.excerpt ?? ""}`.toLowerCase();
+    if (wording.includes(phrase)) return true;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ */
 /* Text helpers                                                        */
 /* ------------------------------------------------------------------ */
@@ -306,7 +330,18 @@ export function validateScript(plan: NarrationPlan, ledger: FactLedger): ScriptV
   }
 
   for (const phrase of findBoilerplate(full)) {
-    errors.push(`banned filler phrase: "${phrase}"`);
+    const quoted = plan.segments.some(
+      segment =>
+        segment.spokenText.toLowerCase().includes(phrase) &&
+        isQuotedFromEvidence(segment, ledger, phrase)
+    );
+    if (quoted) {
+      warnings.push(
+        `banned filler phrase "${phrase}" is the evidence's own wording — quoted from a cited fact, not generated`
+      );
+    } else {
+      errors.push(`banned filler phrase: "${phrase}"`);
+    }
   }
 
   if (/\btrending\b/i.test(full) && !ledger.facts.some(fact => fact.source.kind === "star-snapshot")) {
