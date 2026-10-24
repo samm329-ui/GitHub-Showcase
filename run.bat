@@ -36,6 +36,21 @@ if errorlevel 1 (
 
 set "ARGS=%*"
 
+if exist ".env" (
+  for /f "usebackq eol=# tokens=1* delims==" %%A in (".env") do (
+    if /I "%%A"=="GITHUB_TOKEN" set "GITHUB_TOKEN=%%B"
+  )
+)
+
+if "%GITHUB_TOKEN%"=="" (
+  set "TOKEN="
+  set /p "TOKEN=GitHub token (optional, press Enter to skip): "
+  if not "!TOKEN!"=="" (
+    set "GITHUB_TOKEN=!TOKEN!"
+    > .env echo GITHUB_TOKEN=!TOKEN!
+  )
+)
+
 if "!ARGS!"=="" (
   echo GitHub Showcase Pipeline
   echo -----------------------
