@@ -125,6 +125,18 @@ describe("script quality", () => {
     );
   });
 
+  test("banned filler quoted from repository description is allowed with a warning", () => {
+    const repo = enriched("promo-description");
+    const ledger = buildFactLedger(repo);
+    const plan = composeScript(ledger, repo).plan;
+    const validation = validateScript(plan, ledger);
+    assert.equal(validation.ok, true, validation.errors.join("; "));
+    assert.ok(
+      validation.warnings.some(w => /banned filler phrase "the best" is the evidence's own wording/.test(w)),
+      "must issue a warning explaining it was quoted from evidence"
+    );
+  });
+
   test("the script never repeats a single fact three times", () => {
     const repo = enriched("high-quality-popular");
     const ledger = buildFactLedger(repo);
