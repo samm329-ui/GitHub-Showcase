@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
 import CDP from "chrome-remote-interface";
 import { CHROME_DEBUG_URL } from "./config.js";
 
@@ -21,11 +25,100 @@ function endpoint(): { host: string; port: number } {
   return { host: url.hostname, port: Number(url.port || 9222) };
 }
 
+export async function isCdpAvailable(host: string, port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://${host}:${port}/json/version`, {
+      signal: AbortSignal.timeout(600),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function findChromiumExecutable(): string | null {
+  if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) {
+    return process.env.CHROME_BIN;
+  }
+  const candidates: string[] = [];
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA ?? "";
+    const programFiles = process.env.PROGRAMFILES ?? "C:\\Program Files";
+    const programFilesX86 = process.env["PROGRAMFILES(X86)"] ?? "C:\\Program Files (x86)";
+    candidates.push(
+      path.join(localAppData, "Chromium", "Application", "chrome.exe"),
+      path.join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(localAppData, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(programFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"),
+      path.join(programFiles, "Microsoft", "Edge", "Application", "msedge.exe")
+    );
+  } else if (process.platform === "darwin") {
+    candidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+    );
+  } else {
+    candidates.push(
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/microsoft-edge"
+    );
+  }
+  return candidates.find(p => p && fs.existsSync(p)) ?? null;
+}
+
+export async function ensureBrowser(): Promise<void> {
+  const { host, port } = endpoint();
+  if (await isCdpAvailable(host, port)) return;
+
+  const exe = findChromiumExecutable();
+  if (!exe) {
+    throw new Error(
+      `Chromium browser with remote debugging is not reachable at http://${host}:${port}, ` +
+      `and no installed Chrome/Chromium/Edge executable was found.`
+    );
+  }
+
+  const userDataDir = path.join(os.tmpdir(), "github-showcase-chrome");
+  const child = spawn(
+    exe,
+    [
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${userDataDir}`,
+      "--headless=new",
+      "--hide-scrollbars",
+      "--mute-audio",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-default-browser-check",
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    }
+  );
+  child.on("error", () => {});
+  child.unref();
+
+  const start = Date.now();
+  while (Date.now() - start < 8000) {
+    if (await isCdpAvailable(host, port)) return;
+    await sleep(200);
+  }
+
+  throw new Error(`Started ${exe} but remote debugging port ${port} did not respond within 8 seconds.`);
+}
+
 export async function openTarget(): Promise<{
   client: CdpClient;
   targetId: string;
 }> {
   const { host, port } = endpoint();
+  await ensureBrowser();
   const target = await CDP.New({ host, port });
   const client = (await CDP({ target: target.id, host, port })) as CdpClient;
   return { client, targetId: target.id };
