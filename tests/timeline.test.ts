@@ -11,7 +11,7 @@ import {
   splitPhrases,
   syllableCount,
 } from "../src/timeline.js";
-import { captionAt, captionHtml, wrapCaptionText } from "../src/caption-overlay.js";
+import { activeWordAt, captionAt, captionHtml, wrapCaptionText, wordTimings } from "../src/caption-overlay.js";
 import { toTimedChunks, type SynthesizedChunk } from "../src/voice.js";
 import { toSpoken } from "../src/pronunciation.js";
 import type { AudioChunk, NarrationSegment } from "../src/types.js";
@@ -234,8 +234,26 @@ describe("caption presentation", () => {
     const highlighted = captions.find(caption => caption.highlights.length > 0);
     assert.ok(highlighted);
     const html = captionHtml(highlighted);
-    assert.match(html, /<span class="hl">/);
+    assert.match(html, /<span class="w/);
     assert.ok(!/background/i.test(html), "captions must not draw filled boxes");
+  });
+
+  test("the active word follows its measured phrase timing", () => {
+    const phrase = {
+      index: 0,
+      startMs: 1000,
+      endMs: 1300,
+      text: "Fast sync and sync",
+      highlights: [],
+      segmentId: "s",
+    };
+    const timings = wordTimings(phrase);
+    assert.equal(timings.length, 4);
+    assert.ok(activeWordAt(phrase, 1000));
+    assert.equal(activeWordAt(phrase, 999), null);
+    const html = captionHtml(phrase, activeWordAt(phrase, 1050));
+    assert.match(html, /<span class="w/);
+    assert.match(html, /<span class="w active" data-i="0"[^>]*>Fast<\/span>/);
   });
 
   test("caption html escapes repository text", () => {
