@@ -1,6 +1,8 @@
 import type { CharacterPoseName, EnrichedRepo } from "./types.js";
 import {
-  CAPTION_OVERLAY,
+  ACCENT_YELLOW,
+  CALLOUT,
+  CAPTION_PANEL_STYLE,
   CARD,
   CARD_BG,
   CARD_CHROME_HEIGHT,
@@ -9,8 +11,19 @@ import {
   MASCOT_LAYOUT,
   STAGE_BG,
   VIEWPORT,
+  captionOverlayGeometry,
 } from "./config.js";
 import { CAPTION_STYLE, CAPTION_HIGHLIGHT } from "./caption-overlay.js";
+import {
+  CALLOUT_PATH,
+  CALLOUT_RAY_PATHS,
+  placeCallout,
+} from "./callout-overlay.js";
+import {
+  CHARACTER_ALPHA_BOUNDS,
+  mascotHeadAnchor,
+  mascotPlacementCss,
+} from "./mascot-layout.js";
 import { readmeHighlights } from "./narration.js";
 import { formatCount } from "./facts.js";
 
@@ -20,16 +33,19 @@ import { formatCount } from "./facts.js";
  * Layering (the important part):
  *
  *   .stage              1080x1920, solid #F2EFE9
- *     .card             810x1668, upright, radius 28, stationary shadow
+ *     .card             810x1668, upright, radius 52, stationary shadow
  *       .chrome         browser bar, static
  *       .viewport       overflow hidden, static box, 1584px tall
  *         .document     the ONLY scrolling layer: one tall page screenshot
- *         .caption-overlay  fixed over the page, lower-middle
+ *     .callout-overlay  stage-level white bubble, z-index 4
+ *     .caption-overlay  stage-level dark caption panel, z-index 5
  *     .character        optional transparent PNG, stage-level, independent
  *
- * The card, border, shadow, browser bar, captions and character never move.
- * Only `.document` is translated, and only inside `.viewport`, so page content
- * can never escape the rounded corners. There is no progress scrubber.
+ * The callout and caption panel live *outside* `<article id="card">`: the card
+ * clips its overflow, and the bubble deliberately crosses its edge onto the
+ * cream background. Only `.document` is translated, and only inside
+ * `.viewport`, so page content can never escape the rounded corners. There is
+ * no progress scrubber.
  */
 
 export type CharacterPoseAsset = {
@@ -45,6 +61,8 @@ export type CardComposition = {
   characterUrl?: string | null;
   /** Optional named poses; layer order should put `present` first. */
   characterPoses?: CharacterPoseAsset[] | null;
+  /** Optional loopback URL for the comic speech bubble sticker. */
+  calloutImageUrl?: string | null;
 };
 
 /**
@@ -95,7 +113,7 @@ export const UI_TOKENS = {
   textPrimary: "#F0F6FC",
   textSecondary: "#8B949E",
   githubBlue: "#58A6FF",
-  captionYellow: "#FFD629",
+  captionYellow: ACCENT_YELLOW,
   codeGreen: "#238636",
 } as const;
 
@@ -432,6 +450,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
   const composition: CardComposition =
     "repo" in input ? input : { repo: input };
   const { repo, pageImageUrl, characterUrl } = composition;
+  const calloutImageUrl = composition.calloutImageUrl ?? null;
 
   const documentMarkup = pageImageUrl
     ? `<img id="mobile-page" src="${escapeHtml(pageImageUrl)}" alt="" draggable="false">`
@@ -463,6 +482,31 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
   const mascotWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
   const mascotRight = MASCOT_LAYOUT.offsetX;
   const mascotBottom = MASCOT_LAYOUT.offsetY;
+
+  // Callout placement reads the same alpha-aware mascot placement and head
+  // anchor the character layer uses, so the bubble can never drift away from
+  // the head it is meant to belong to.
+  const mascotPlacement = mascotPlacementCss({
+    bounds: CHARACTER_ALPHA_BOUNDS,
+    renderedWidthPx: mascotWidthPx,
+    canvasWidth: VIEWPORT.width,
+    canvasHeight: VIEWPORT.height,
+    clipRightPx: MASCOT_LAYOUT.offsetX,
+    clipBottomPx: MASCOT_LAYOUT.offsetY,
+  });
+  const headAnchor = mascotHeadAnchor(
+    {
+      bounds: CHARACTER_ALPHA_BOUNDS,
+      renderedWidthPx: mascotWidthPx,
+      canvasWidth: VIEWPORT.width,
+      canvasHeight: VIEWPORT.height,
+      clipRightPx: MASCOT_LAYOUT.offsetX,
+      clipBottomPx: MASCOT_LAYOUT.offsetY,
+    },
+    mascotPlacement
+  );
+  const calloutLayout = placeCallout(headAnchor);
+  const captionGeometry = captionOverlayGeometry();
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -541,14 +585,64 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     user-select: none; pointer-events: none;
   }
 
-  /* ---- captions: stable stage-level group, moving word highlight ---- */
+  /* ---- callout bubble: stage-level, outside the clipped card ---- */
+  .callout-overlay {
+    position: absolute; z-index: 4;
+    left: ${calloutLayout.left}px; top: ${calloutLayout.top}px;
+    width: ${calloutLayout.width}px; height: ${calloutLayout.height}px;
+    opacity: 0; visibility: hidden;
+    transform-origin: ${CALLOUT.tailXLocalPx}px 100%;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+  .callout-sticker {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18));
+  }
+  .callout-shape {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18));
+  }
+  .callout-text {
+    position: absolute;
+    left: ${CALLOUT.textPadXPx}px; right: ${CALLOUT.textPadXPx}px;
+    top: 30px; height: ${CALLOUT.bodyHeightPx - 34}px;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; text-wrap: balance; overflow-wrap: break-word;
+    color: ${CALLOUT.text};
+    font-size: ${CALLOUT.fontSizePx}px;
+    font-weight: ${CALLOUT.fontWeight};
+    line-height: ${CALLOUT.lineHeight};
+    letter-spacing: -0.6px;
+    text-shadow: none;
+  }
+  .callout-rays {
+    position: absolute;
+    left: -58px; top: -34px;
+    width: 110px; height: 110px;
+    opacity: 0; overflow: visible;
+    will-change: opacity;
+  }
+  .callout-rays path {
+    fill: none;
+    stroke: ${CALLOUT.accent};
+    stroke-width: ${CALLOUT.rayStrokePx};
+    stroke-linecap: round;
+  }
+
+  /* ---- captions: stable dark panel + one moving accent pill ---- */
   .caption-overlay {
     position: absolute; z-index: 5;
-    left: ${CAPTION_OVERLAY.leftPx}px;
-    top: ${CAPTION_OVERLAY.topPx}px;
-    width: ${CAPTION_OVERLAY.widthPx}px;
-    max-height: ${CAPTION_OVERLAY.maxHeightPx}px;
-    overflow: hidden;
+    left: ${captionGeometry.leftPx}px;
+    top: ${captionGeometry.topPx}px;
+    width: ${captionGeometry.widthPx}px;
+    max-height: ${captionGeometry.maxHeightPx}px;
+    overflow: visible;
     pointer-events: none;
     color: ${CAPTION_STYLE.color};
     font-size: ${CAPTION_STYLE.fontSizePx}px;
@@ -558,12 +652,22 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     text-shadow: ${CAPTION_STYLE.textShadow};
     text-wrap: balance; overflow-wrap: break-word;
   }
-  .caption-line { display: block; }
   .caption-group {
     position: relative; display: block;
     transform-origin: 50% 100%;
     will-change: transform, opacity;
   }
+  .caption-panel {
+    position: relative; width: 100%;
+    background: ${CAPTION_PANEL_STYLE.background};
+    border: ${CAPTION_PANEL_STYLE.border};
+    border-radius: ${CAPTION_PANEL_STYLE.radiusPx}px;
+    padding: ${CAPTION_PANEL_STYLE.padYPx}px ${CAPTION_PANEL_STYLE.padXPx}px;
+    box-shadow: ${CAPTION_PANEL_STYLE.shadow};
+    overflow: hidden;
+  }
+  .caption-lines { position: relative; z-index: 1; text-align: center; }
+  .caption-line { display: block; }
   .caption-highlight {
     position: absolute; z-index: 0;
     background: ${CAPTION_HIGHLIGHT.background};
@@ -573,7 +677,8 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     will-change: left, top, width, height;
   }
   .caption-overlay .w { position: relative; z-index: 1; }
-  .caption-overlay .w.active { color: ${CAPTION_HIGHLIGHT.text}; }
+  .caption-overlay .w.key-emphasis { color: ${CAPTION_STYLE.emphasisColor}; }
+  .caption-overlay .w.current { color: ${CAPTION_HIGHLIGHT.text}; }
 
   /* ---- optional character: independent stage layer, alpha-mask shadow ---- */
   .character {
@@ -683,6 +788,17 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       <div class="document" id="document">${documentMarkup}</div>
     </div>
   </article>
+  <div class="callout-overlay" id="callout" aria-hidden="true">
+    ${calloutImageUrl ? `<img class="callout-sticker" src="${escapeHtml(calloutImageUrl)}" alt="bubble" aria-hidden="true">` : ""}
+    <svg class="callout-shape"${calloutImageUrl ? ' style="display:none"' : ""} viewBox="0 0 ${CALLOUT.bubbleWidthPx} ${CALLOUT.bubbleHeightPx}" aria-hidden="true">
+      <path d="${CALLOUT_PATH}" fill="${CALLOUT.accent}" stroke="none" transform="translate(${CALLOUT.accentOffsetX} ${CALLOUT.accentOffsetY})"/>
+      <path d="${CALLOUT_PATH}" fill="${CALLOUT.fill}" stroke="${CALLOUT.outline}" stroke-width="${CALLOUT.outlineWidthPx}" stroke-linejoin="round"/>
+    </svg>
+    <div class="callout-text" id="callout-text"></div>
+    <svg class="callout-rays"${calloutImageUrl ? ' style="display:none"' : ""} id="callout-rays" viewBox="0 0 110 110" aria-hidden="true">
+      ${CALLOUT_RAY_PATHS.map(path => `<path d="${path}"/>`).join("\n      ")}
+    </svg>
+  </div>
   <div class="caption-overlay" id="caption"></div>
   ${characterMarkup}
 </div>
@@ -710,16 +826,21 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     measureCaption() {
       const el = document.getElementById('caption');
       if (el.__wordBoxes) return el.__wordBoxes;
-      const group = el.querySelector('.caption-group');
-      if (!group) { el.__wordBoxes = []; return []; }
-      const gr = group.getBoundingClientRect();
+      const panel = el.querySelector('.caption-panel');
+      if (!panel) { el.__wordBoxes = []; return []; }
+      // The moving pill is absolutely positioned inside the panel, so word
+      // rectangles are measured against the panel's *padding box* (the
+      // border is excluded) — the same coordinate basis the pill uses.
+      const pr = panel.getBoundingClientRect();
+      const originX = pr.left + panel.clientLeft;
+      const originY = pr.top + panel.clientTop;
       const boxes = [];
-      for (const span of group.querySelectorAll('.w')) {
+      for (const span of panel.querySelectorAll('.w')) {
         const r = span.getBoundingClientRect();
         boxes.push({
           index: Number(span.getAttribute('data-i')),
-          left: r.left - gr.left,
-          top: r.top - gr.top,
+          left: r.left - originX,
+          top: r.top - originY,
           width: r.width,
           height: r.height,
         });
@@ -749,6 +870,25 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       hl.style.width = (interp(prev.width, curr.width) + padX * 2) + 'px';
       hl.style.height = (interp(prev.height, curr.height) + padY * 2) + 'px';
       hl.style.opacity = '1';
+    },
+    setCallout(cueId, text, opacity, translateY, scale, raysOpacity) {
+      const el = document.getElementById('callout');
+      if (!el) return;
+      const textEl = document.getElementById('callout-text');
+      // Text is repository-derived and untrusted: write it as textContent, and
+      // only when the cue actually changes (not on every rendered frame).
+      if (el.__cueId !== cueId) {
+        el.__cueId = cueId;
+        if (textEl) textEl.textContent = text || '';
+      }
+      const alpha = Number(opacity) || 0;
+      el.style.opacity = String(alpha);
+      el.style.visibility = alpha > 0.001 ? 'visible' : 'hidden';
+      el.style.transform =
+        'translate3d(0,' + (Number(translateY) || 0) + 'px,0) ' +
+        'scale(' + (Number(scale) || 1) + ')';
+      const rays = document.getElementById('callout-rays');
+      if (rays) rays.style.opacity = String(Number(raysOpacity) || 0);
     },
     setCharacterPose(pose, poseName) {
       if (!pose) return;
@@ -821,6 +961,9 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       const stage = document.querySelector('.stage').getBoundingClientRect();
       const card = document.getElementById('card').getBoundingClientRect();
       const caption = document.getElementById('caption').getBoundingClientRect();
+      const callout = document.getElementById('callout').getBoundingClientRect();
+      const panel = document.querySelector('.caption-panel');
+      const panelRect = panel ? panel.getBoundingClientRect() : null;
       const layers = Array.from(document.querySelectorAll('.character'));
       const character =
         layers.find(layer => layer.style.opacity !== '0') || layers[0] || null;
@@ -835,6 +978,14 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
           left: caption.left - stage.left, top: caption.top - stage.top,
           width: caption.width, height: caption.height,
         },
+        callout: {
+          left: callout.left - stage.left, top: callout.top - stage.top,
+          width: callout.width, height: callout.height,
+        },
+        captionPanel: panelRect ? {
+          left: panelRect.left - stage.left, top: panelRect.top - stage.top,
+          width: panelRect.width, height: panelRect.height,
+        } : null,
         character: characterRect ? {
           left: characterRect.left - stage.left, top: characterRect.top - stage.top,
           width: characterRect.width, height: characterRect.height,
