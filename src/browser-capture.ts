@@ -17,7 +17,7 @@ import {
   type CardComposition,
   type CharacterPoseAsset,
 } from "./card.js";
-import { captionHtml } from "./caption-overlay.js";
+import { captionFrameHtml, wordTimings } from "./caption-overlay.js";
 import {
   characterCueAt,
   characterPoseAt,
@@ -265,11 +265,28 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
         poseName
       );
 
+      // Resolve the active word + its measured start time for the moving
+      // highlight. The highlight interpolates over 70 ms (within the 60-80 ms
+      // spec) from the previous word's box to the current one.
+      let activeIndex = -1;
+      let highlightProgress = 0;
+      if (caption) {
+        const timings = wordTimings(caption);
+        const active = timings.find(t => timeMs >= t.startMs && timeMs < t.endMs);
+        if (active) {
+          activeIndex = timings.indexOf(active);
+          const elapsed = timeMs - active.startMs;
+          highlightProgress = Math.max(0, Math.min(1, elapsed / 70));
+        }
+      }
+
       await evaluate(
         client,
         `(() => {
           window.__showcase.setScroll(${scrollY.toFixed(2)});
-          window.__showcase.setCaption(${JSON.stringify(caption ? captionHtml(caption) : "")});
+          window.__showcase.setCaption(${JSON.stringify(captionFrameHtml(caption, timeMs))});
+          window.__showcase.measureCaption();
+          window.__showcase.setCaptionActive(${activeIndex}, ${highlightProgress.toFixed(4)});
           window.__showcase.setCharacterPose(${JSON.stringify(pose)}, ${JSON.stringify(poseName)});
           return 1;
         })()`
@@ -277,7 +294,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
 
       const shot = await client.Page.captureScreenshot({
         format: "jpeg",
-        quality: 96,
+        quality: 85,
         fromSurface: true,
         captureBeyondViewport: false,
         optimizeForSpeed: true,
