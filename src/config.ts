@@ -102,6 +102,74 @@ export const TTS_PAUSE_BETWEEN_SEGMENTS_MS = readNumber(
 export const TTS_MAX_RETRIES = 2;
 
 /* ------------------------------------------------------------------ */
+/* Script engine (evidence -> explanation -> composition)              */
+/*                                                                     */
+/* The pipeline has three deliberately separate stages:                */
+/*   (1) repository understanding (facts + semantic roles),            */
+/*   (2) script composition (graph path -> sentences),                 */
+/*   (3) speech delivery (pause schedule + TTS + timeline).            */
+/* These weights are tunable defaults, not claims of precision.        */
+/* ------------------------------------------------------------------ */
+
+/** Evidence ranking weights; must sum to 1. */
+export const EVIDENCE_WEIGHTS = {
+  strength: 0.3,
+  specificity: 0.25,
+  actionability: 0.2,
+  relevance: 0.15,
+  novelty: 0.1,
+} as const;
+
+/** Narrative-path scoring weights. */
+export const PATH_WEIGHTS = {
+  relation: 0.5,
+  redundancy: 0.7,
+  metadata: 0.6,
+} as const;
+
+/** Evidence quality floor; below this a fact may still be spoken but not relied on. */
+export const EVIDENCE_STRENGTH_FLOOR = 0.5;
+
+/** Scriptability gate: can this repository support an honest explanation? */
+export const SCRIPTABILITY = {
+  threshold: readNumber(process.env.SHOWCASE_SCRIPTABILITY_MIN, 0.65),
+  weights: { purpose: 0.25, how: 0.35, example: 0.25, diversity: 0.15 },
+} as const;
+
+/** A practical use case is mandatory whenever this much example evidence exists. */
+export const MIN_EXAMPLE_EVIDENCE = 0.55;
+
+/**
+ * Phrase-level pause policy (milliseconds). One schedule is shared by
+ * `concatChunks()` and `toTimedChunks()` so the audio and the visual timeline
+ * can never diverge. Values are starting points, calibrated by listening.
+ */
+export const TTS_PAUSE_POLICY = {
+  /** Continuation of the same explanatory thought. */
+  continuation: { min: 80, max: 130, default: 100 },
+  /** Transition to a new mechanism or idea. */
+  newIdea: { min: 140, max: 200, default: 170 },
+  /** Before a concrete example. */
+  example: { min: 180, max: 240, default: 200 },
+  /** Before a genuine contrast or limitation. */
+  contrast: { min: 220, max: 300, default: 260 },
+  /** Before installation or closing. */
+  closing: { min: 140, max: 220, default: 180 },
+} as const;
+
+export type PauseKind = keyof typeof TTS_PAUSE_POLICY;
+
+/** Hard ceiling on a single inter-segment pause; guards against runaway gaps. */
+export const MAX_PAUSE_MS = 400;
+
+/** Clamp a requested pause to its kind's range (and the hard ceiling). */
+export function pauseFor(kind: PauseKind, requested?: number): number {
+  const range = TTS_PAUSE_POLICY[kind];
+  const value = requested ?? range.default;
+  return Math.max(0, Math.min(MAX_PAUSE_MS, Math.min(range.max, Math.max(range.min, value))));
+}
+
+/* ------------------------------------------------------------------ */
 /* Render                                                              */
 /* ------------------------------------------------------------------ */
 

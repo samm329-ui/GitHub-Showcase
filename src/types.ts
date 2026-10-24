@@ -139,8 +139,13 @@ export type CandidateEvaluation = {
 
 export type FactKind =
   | "purpose"
+  | "problem"
   | "feature"
+  | "mechanism"
+  | "workflow"
+  | "example"
   | "use_case"
+  | "outcome"
   | "install"
   | "license"
   | "adoption"
@@ -154,12 +159,54 @@ export type FactSourceKind =
   | "api-field"
   | "readme-section"
   | "readme-code"
+  | "readme-table"
+  | "source-file"
   | "release"
   | "star-snapshot";
+
+/**
+ * What a claim *does* inside an explanation (Pass A).
+ *
+ * `FactKind` records where a claim came from; `FactSemantic` records its job in
+ * the narrative. They are deliberately separate axes: a README paragraph and a
+ * command table can both be `mechanism` evidence even though their kinds differ,
+ * and a `feature` bullet is not automatically an `example`. The planner and the
+ * script composer reason about `semantic`, never about raw kinds.
+ */
+export type FactSemantic =
+  | "identity"
+  | "problem"
+  | "purpose"
+  | "mechanism"
+  | "workflow"
+  | "example"
+  | "outcome"
+  | "limitation"
+  | "setup"
+  | "metadata";
+
+/**
+ * Where a claim can be traced to. A claim is only as trustworthy as the piece
+ * of documentation that supports it, so the excerpt and its location travel
+ * with the fact instead of being recomputed at scoring time.
+ */
+export type FactProvenance = {
+  /** Short verbatim excerpt that supports the claim. */
+  excerpt?: string;
+  /** Source file + section, e.g. "README.md#how-it-works". */
+  path?: string;
+  /** Inclusive line range in the source document (1-based). */
+  lineStart?: number;
+  lineEnd?: number;
+  /** Name of the deterministic extraction rule that produced the fact. */
+  rule?: string;
+};
 
 export type Fact = {
   id: string;
   kind: FactKind;
+  /** What the claim does in an explanation. Optional for backwards compat. */
+  semantic?: FactSemantic;
   /** Human-readable statement of the verified claim. */
   claim: string;
   /** Short form used when speaking (no trailing period, no markdown). */
@@ -169,6 +216,8 @@ export type Fact = {
     location: string;
     capturedAt: string;
   };
+  /** Traceability back to the supporting document. */
+  provenance?: FactProvenance;
   /** 0..1, assigned by deterministic rules in `facts.ts`. */
   confidence: number;
 };
