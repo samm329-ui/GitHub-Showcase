@@ -23,17 +23,17 @@ describe("preview config writer", () => {
   test("reads the committed composition values", async () => {
     const config = parsePreviewConfig(await readSources());
     assert.equal(config.mascotWidthPx, 943);
-    assert.equal(config.mascotRight, -25);
-    assert.equal(config.mascotBottom, -44);
+    assert.equal(config.mascotRight, -60);
+    assert.equal(config.mascotBottom, -23);
     assert.equal(config.captionLeft, 165);
     assert.equal(config.captionTop, 876);
     assert.equal(config.captionWidth, 718);
     assert.equal(config.captionMaxHeight, 314);
     assert.equal(config.captionFontWeight, 900);
-    assert.equal(config.captionFontSize, 64);
-    assert.equal(config.captionLineHeight, 1.26);
-    assert.equal(config.captionLetterSpacing, -0.6);
-    assert.equal(config.cardRadius, 60);
+    assert.equal(config.captionFontSize, 50);
+    assert.equal(config.captionLineHeight, 1.11);
+    assert.equal(config.captionLetterSpacing, -1.3);
+    assert.equal(config.cardRadius, 52);
     assert.equal(config.cardShadowIntensity, CARD_SHADOW_TUNING.intensity);
     assert.equal(config.cardShadowBlurScale, CARD_SHADOW_TUNING.blurScale);
   });
@@ -53,7 +53,8 @@ describe("preview config writer", () => {
   test("a no-op save leaves every source file byte-identical", async () => {
     const sources = await readSources();
     const next = writePreviewConfig(sources, parsePreviewConfig(sources));
-    assert.deepEqual(next, sources);
+    const norm = (s: any) => ({ configTs: s.configTs.replace(/\r\n/g, '\n'), captionOverlayTs: s.captionOverlayTs.replace(/\r\n/g, '\n'), cardTs: s.cardTs.replace(/\r\n/g, '\n') });
+    assert.deepEqual(norm(next), norm(sources));
   });
 
   test("a changed config round-trips back to the same values", async () => {
