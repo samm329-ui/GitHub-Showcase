@@ -6,6 +6,7 @@ import {
   factsOfKind,
   narratableFacts,
   parseReadme,
+  speakCommand,
   unsupportedClaims,
 } from "../src/facts.js";
 import { enriched } from "./helpers.js";
@@ -208,5 +209,103 @@ describe("narratable facts", () => {
     const ledger = buildFactLedger(repo);
     assert.ok(narratableFacts(ledger).length <= ledger.facts.length);
     assert.ok(narratableFacts(ledger).every(fact => fact.confidence >= 0.5));
+  });
+});
+
+describe("classified readme evidence", () => {
+  function firstSectionLine(repo: { readmeText: string | null }): number {
+    const lines = (repo.readmeText ?? "").split(/\r?\n/);
+    const index = lines.findIndex(line => /^##\s/.test(line));
+    return index === -1 ? lines.length : index + 1; // 1-based
+  }
+
+  test("the overview is only the prose before the first section heading", () => {
+    const repo = enriched("high-quality-popular");
+    const ledger = buildFactLedger(repo);
+    const sectionStart = firstSectionLine(repo);
+    const problem = factsOfKind(ledger, "problem")[0];
+    assert.ok(problem, "the intro states the problem");
+    assert.ok(
+      (problem.provenance?.lineStart ?? Number.MAX_SAFE_INTEGER) < sectionStart,
+      `the problem fact must come from the intro, not a section (line ${problem.provenance?.lineStart} vs ${sectionStart})`
+    );
+    const feature = factsOfKind(ledger, "feature")[0];
+    assert.ok(feature);
+    assert.ok(
+      (feature.provenance?.lineStart ?? 0) > sectionStart,
+      "feature evidence comes from a section beyond the overview"
+    );
+  });
+
+  test("a command table produces example evidence with provenance", () => {
+    const repo = enriched("high-quality-popular");
+    const ledger = buildFactLedger(repo);
+    const tableExamples = ledger.facts.filter(
+      fact => fact.provenance?.rule === "readme-command-table"
+    );
+    assert.ok(tableExamples.length >= 2, "the fixture's command table has rows");
+    for (const fact of tableExamples) {
+      assert.equal(fact.kind, "example");
+      assert.equal(fact.semantic, "example");
+      assert.ok(fact.provenance?.excerpt, "the verbatim command is recorded");
+    }
+  });
+
+  test("shell fences produce workflow evidence", () => {
+    const repo = enriched("high-quality-popular");
+    const ledger = buildFactLedger(repo);
+    const workflow = factsOfKind(ledger, "workflow");
+    assert.ok(workflow.length >= 2, "the usage fence lists two commands");
+    for (const fact of workflow) {
+      assert.equal(fact.semantic, "workflow");
+      assert.match(fact.spoken, /rocket /);
+    }
+  });
+
+  test("program output in an undeclared fence is never workflow evidence", () => {
+    const repo = enriched("useful-underdog");
+    const ledger = buildFactLedger(repo);
+    for (const fact of ledger.facts) {
+      assert.ok(
+        !/^error\b/i.test(fact.spoken),
+        `output text leaked into a fact: ${fact.spoken}`
+      );
+    }
+    assert.equal(factsOfKind(ledger, "workflow").length, 0);
+  });
+
+  test("a single documented usage command counts as example evidence", () => {
+    const repo = enriched("no-license");
+    const ledger = buildFactLedger(repo);
+    const examples = factsOfKind(ledger, "example");
+    assert.ok(examples.length >= 1, "the documented command is an example");
+    assert.match(examples[0].spoken, /tinyfmt table\.csv/i);
+    assert.equal(examples[0].semantic, "example");
+  });
+
+  test("feature bullets carry mechanism or outcome semantics", () => {
+    const repo = enriched("high-quality-popular");
+    const ledger = buildFactLedger(repo);
+    const features = factsOfKind(ledger, "feature");
+    assert.ok(features.length >= 4);
+    for (const feature of features) {
+      assert.ok(
+        feature.semantic === "mechanism" || feature.semantic === "outcome",
+        `feature ${feature.id} is classified, got ${feature.semantic}`
+      );
+    }
+    assert.ok(features.some(feature => feature.semantic === "mechanism"));
+    assert.ok(features.some(feature => feature.semantic === "outcome"));
+  });
+
+  test("commands are rendered for speech, not read character by character", () => {
+    assert.equal(
+      speakCommand("my-service 2>&1 | logline"),
+      "my-service piped into logline"
+    );
+    assert.equal(
+      speakCommand("rocket deploy my-service --env staging"),
+      "rocket deploy my-service"
+    );
   });
 });
