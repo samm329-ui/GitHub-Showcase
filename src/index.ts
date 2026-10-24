@@ -33,6 +33,8 @@ import {
 } from "./github.js";
 import { HistoryStore, canonicalFullName } from "./history.js";
 import { buildFactLedger } from "./facts.js";
+import { planEvidence } from "./explanation-planner.js";
+import { evaluateScriptQuality } from "./script-quality.js";
 import { buildNarrationPlan, type PhraseHistory, validateScript } from "./narration.js";
 import {
   kokoroPaths,
@@ -347,6 +349,20 @@ async function main(): Promise<void> {
     });
     await writeJson(path.join(runDir, "facts.json"), ledger);
     log(`Stage 2/9: Extracted ${ledger.facts.length} verifiable facts.`);
+
+    /* ---------------- Stage 3: explanation plan + narration ---- */
+    const explanationPlan = planEvidence(ledger, repo, TARGET_DURATION_SECONDS * 1000);
+    await writeJson(path.join(runDir, "explanation-plan.json"), explanationPlan);
+    const quality = evaluateScriptQuality(
+      buildNarrationPlan(ledger, repo, {
+        targetDurationSeconds: TARGET_DURATION_SECONDS,
+        voiceId: TTS_VOICE,
+        speed: TTS_SPEED,
+        recentUsage: new Map(),
+      }),
+      ledger
+    );
+    await writeJson(path.join(runDir, "script-quality.json"), quality);
 
     /* ---------------- Stage 3: narration --------------------- */
     currentStage = "narration";
