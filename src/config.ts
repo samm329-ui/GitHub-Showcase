@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { DiscoveryMode } from "./types.js";
 
@@ -175,6 +176,16 @@ export function pauseFor(kind: PauseKind, requested?: number): number {
 
 export const STAGE_BG = "#F2EFE9";
 export const CARD_BG = "#0D1117";
+
+/**
+ * One canonical accent for the whole composition. The caption pill, the
+ * callout's offset accent and every yellow accent read this token (or the
+ * config-writer-backed defaults that are asserted equal to it), so the
+ * overlay can never drift into three different yellows.
+ */
+export const ACCENT_YELLOW = "#FFE66D";
+/** Near-black used for callout text and the active karaoke word. */
+export const INK = "#151619";
 export const CARD = {
   width: 810,
   height: 1668,
@@ -197,21 +208,146 @@ export const CARD_VIEWPORT_HEIGHT = CARD.height - CARD_CHROME_HEIGHT;
 export const VIEWPORT_PADDING = 32;
 
 /**
- * Caption overlay: speech-callout placement near the mascot's head.
+ * Caption panel: a dark backing plate for the current spoken phrase.
  *
- * The mascot owns the lower-right corner, so captions hang just *above* its
- * head like a callout: the block's bottom edge sits `headGapPx` above the
- * head-top line computed by `src/mascot-layout.ts`. Horizontal ratios are
- * safe-area margins against the card viewport (platform UI overlays live in
- * the far corners). There is deliberately no fixed top position: the block
- * grows upward from the head.
+ * The panel is what keeps subtitles legible over arbitrary README content.
+ * It is a separate layer from the moving yellow word pill: the panel holds the
+ * phrase steady, while exactly one rounded accent pill travels behind the word
+ * actually being spoken.
+ */
+export const CAPTION_PANEL_STYLE = {
+  background: "rgba(23,25,29,0.92)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  radiusPx: 26,
+  padXPx: 24,
+  padYPx: 16,
+  shadow: "0 14px 32px rgba(0,0,0,0.25)",
+  maxLines: 2,
+} as const;
+
+/**
+ * Caption panel placement in canvas coordinates.
+ *
+ * The panel sits in the lower third, clear of the mascot's face and of the
+ * Reels-style UI margins. These authored numbers are the committed
+ * geometry the live preview reads and writes; `captionOverlayGeometry()`
+ * layers validated environment overrides on top for device testing.
  */
 export const CAPTION_OVERLAY = {
-  /** Canvas-coordinate geometry of the stable caption group. */
-  leftPx: 165,
-  topPx: 876,
-  widthPx: 718,
-  maxHeightPx: 314,
+  leftPx: 200,
+  topPx: 1510,
+  widthPx: 680,
+  maxHeightPx: 190,
+} as const;
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export type CaptionOverlayGeometry = {
+  leftPx: number;
+  topPx: number;
+  widthPx: number;
+  maxHeightPx: number;
+};
+
+/**
+ * Committed caption geometry with validated, canvas-clamped environment
+ * overrides. Every override is parsed by `readNumber` (finite and positive)
+ * and then clamped so an overlay can never be pushed outside the 1080x1920
+ * canvas, even by a bad shell variable.
+ */
+export function captionOverlayGeometry(
+  env: NodeJS.ProcessEnv = process.env
+): CaptionOverlayGeometry {
+  const leftPx = clampNumber(
+    readNumber(env.SHOWCASE_CAPTION_LEFT_PX, CAPTION_OVERLAY.leftPx),
+    0,
+    VIEWPORT.width - 240
+  );
+  const widthPx = clampNumber(
+    readNumber(env.SHOWCASE_CAPTION_WIDTH_PX, CAPTION_OVERLAY.widthPx),
+    240,
+    VIEWPORT.width - leftPx
+  );
+  const topPx = clampNumber(
+    readNumber(env.SHOWCASE_CAPTION_TOP_PX, CAPTION_OVERLAY.topPx),
+    0,
+    VIEWPORT.height - CAPTION_OVERLAY.maxHeightPx - 20
+  );
+  return {
+    leftPx: Math.round(leftPx),
+    topPx: Math.round(topPx),
+    widthPx: Math.round(widthPx),
+    maxHeightPx: CAPTION_OVERLAY.maxHeightPx,
+  };
+}
+
+/**
+ * Callout bubble: a short, evidence-backed summary attached to the mascot's
+ * head. Geometry is derived from `mascotHeadAnchor()` at render time; the
+ * constants here are the authored shape, bounds and motion.
+ *
+ * Motion is a pure function of media time (see `src/callout-overlay.ts`); there
+ * are no CSS transitions and no browser timers, so a frame rendered out of
+ * order looks exactly the same as one rendered in order.
+ */
+export const CALLOUT = {
+  // Named `bubble*` deliberately: the live preview rewrites the caption's
+  // `widthPx`, and two `widthPx` keys in this file would make that save
+  // ambiguous (the writer refuses to guess).
+  bubbleWidthPx: 360,
+  bubbleHeightPx: 285,
+  /** Rounded cloud body height before the tail. */
+  bodyHeightPx: 176,
+  /**
+   * Clamp bounds so the tail can track the face without leaving the canvas.
+   * The upper bound keeps the whole body inside the right margin. Calibrate
+   * the lower bound against a real reference render before tightening it: the
+   * tail must stay visibly attached to the measured head anchor.
+   */
+  leftMinPx: 620,
+  rightMarginPx: 36,
+  topOffsetPx: 210,
+  topMinPx: 820,
+  topMaxPx: 930,
+  /** Tail tip, in callout-local pixels. */
+  tailXLocalPx: 82,
+  tailInsetPx: 27,
+  /** The tail aims this far right of the measured face centre. */
+  faceOffsetPx: 25,
+  /** Entrance / exit / ray timing, all in media milliseconds. */
+  enterMs: 200,
+  rayMs: 140,
+  exitMs: 180,
+  enterYPx: 12,
+  exitYPx: 6,
+  enterScale: 0.96,
+  exitScale: 0.01,
+  /** Cue bounds relative to the measured audio chunk. */
+  startLeadMs: 100,
+  endTailMs: 200,
+  minStartMs: 380,
+  minVisibleMs: 900,
+  minCueDurationMs: 400,
+  maxVisibleMs: 3400,
+  /** Copy limits: a bubble is a summary, never a second subtitle track. */
+  minWords: 3,
+  maxWords: 7,
+  maxLines: 2,
+  /** Visual tokens. */
+  fill: "#FFFDF7",
+  outline: INK,
+  outlineWidthPx: 5,
+  accent: ACCENT_YELLOW,
+  accentOffsetX: 6,
+  accentOffsetY: 8,
+  text: INK,
+  fontSizePx: 35,
+  fontWeight: 800,
+  lineHeight: 1.08,
+  textPadXPx: 28,
+  rayStrokePx: 6,
 } as const;
 
 /**
@@ -280,6 +416,23 @@ function readOptionalCharacterPath(envKey: string, fallback: string): string | n
 
 /** `null` disables the character layer entirely. */
 export const CHARACTER_PNG = readCharacterPath();
+
+function readCalloutPath(): string | null {
+  const raw = process.env.SHOWCASE_CALLOUT_PNG;
+  if (raw !== undefined) {
+    const trimmed = raw.trim();
+    if (trimmed === "" || trimmed.toLowerCase() === "none") return null;
+    return path.resolve(ROOT, trimmed);
+  }
+  const cropped = path.join(ROOT, "assets", "callout-bubble.png");
+  if (fs.existsSync(cropped)) return cropped;
+  const sticker = path.join(ROOT, "assets", "Comic Speech Bubble Sticker.png");
+  if (fs.existsSync(sticker)) return sticker;
+  return null;
+}
+
+/** Authentic comic speech bubble sticker asset. */
+export const CALLOUT_PNG = readCalloutPath();
 
 /**
  * Optional presenter poses. The renderer falls back to `CHARACTER_PNG` for any
