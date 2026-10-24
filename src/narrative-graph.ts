@@ -4,14 +4,15 @@ import type {
   ExplanationPlan,
 } from "./explanation-planner.js";
 import { estimateNodeDurationMs } from "./explanation-planner.js";
+import { PATH_WEIGHTS } from "./config.js";
 
 /**
  * Deterministic bounded narrative search (Pass A).
  *
- * The graph is a DAG over the evidence-backed explanation nodes. `choosePath`
- * evaluates a small meanwhile of contiguous paths. It is *not* a graph
- * optimizer over arbitrary cycles, because the evidence and duration budget
- * tolerate a linear explanatory sequence.
+ * The graph is a small DAG over evidence-backed explanation nodes. `choosePath`
+ * walks *edges*, not list positions: every consecutive pair in a candidate
+ * path must be joined by a real relationship, so the selected sequence is a
+ * connected explanation rather than an arbitrary slice of the node list.
  */
 
 export type NarrativeGraph = {
@@ -41,7 +42,7 @@ export function buildNarrativeGraphFromPlan(
   return buildNarrativeGraph(plan.nodes, plan.edges);
 }
 
-function requiredRoles(nodes: ExplanationNode[]): Set<string> {
+function requiredNodeIds(nodes: ExplanationNode[]): Set<string> {
   return new Set(nodes.filter(node => node.required).map(node => node.id));
 }
 
@@ -49,17 +50,32 @@ function nodeById(graph: NarrativeGraph, id: string) {
   return graph.nodes.find(node => node.id === id) ?? null;
 }
 
+function edgeBetween(
+  graph: NarrativeGraph,
+  from: string,
+  to: string
+): ExplanationEdge | null {
+  return graph.edges.find(edge => edge.from === from && edge.to === to) ?? null;
+}
+
 /**
- * Score a contiguous path against the graph. The path must contain every
- * required node and must stay inside the duration budget. Repeating a claim
- * is rejected immediately, before the style score is considered.
+ * Score a candidate path against the graph.
+ *
+ * Hard constraints first, then style:
+ *  - every required node must be present (purpose, mechanism);
+ *  - every consecutive pair must have a real edge (connectedness);
+ *  - the estimated duration must fit the budget;
+ *  - no fact may be claimed by two nodes.
+ * Only a path that passes all four is scored; the score rewards node
+ * utility plus the strength of the relationships between neighbours, and
+ * penalises metadata-heavy sequences.
  */
 export function scorePath(
   graph: NarrativeGraph,
   nodeIds: string[],
   budgetMs: number
 ): PathCandidate {
-  const missingRequired = [...requiredRoles(graph.nodes)].filter(
+  const missingRequired = [...requiredNodeIds(graph.nodes)].filter(
     id => !nodeIds.includes(id)
   );
   if (missingRequired.length > 0) {
@@ -73,12 +89,47 @@ export function scorePath(
     };
   }
 
+  for (let index = 1; index < nodeIds.length; index += 1) {
+    if (!edgeBetween(graph, nodeIds[index - 1], nodeIds[index])) {
+      return {
+        nodeIds,
+        totalMs: 0,
+        score: Number.NEGATIVE_INFINITY,
+        valid: false,
+        reason: `no edge between ${nodeIds[index - 1]} and ${nodeIds[index]}`,
+        skipped: [],
+      };
+    }
+  }
+
   const usedFactIds = new Set<string>();
-  const totalMs = nodeIds.reduce((sum, id) => {
+  const skipped: string[] = [];
+  let totalMs = 0;
+  let metadataMs = 0;
+  for (const id of nodeIds) {
     const node = nodeById(graph, id);
-    if (!node) return sum;
-    return sum + estimateNodeDurationMs(node);
-  }, 0);
+    if (!node) continue;
+    if (node.evidence.some(reference => usedFactIds.has(reference.factId))) {
+      skipped.push(id);
+      continue;
+    }
+    const nodeMs = estimateNodeDurationMs(node);
+    totalMs += nodeMs;
+    if (node.role === "closing" || node.role === "differentiator") {
+      metadataMs += nodeMs;
+    }
+    node.evidence.forEach(reference => usedFactIds.add(reference.factId));
+  }
+  if (skipped.length > 0) {
+    return {
+      nodeIds,
+      totalMs,
+      score: Number.NEGATIVE_INFINITY,
+      valid: false,
+      reason: `path repeats evidence: ${skipped.join(", ")}`,
+      skipped,
+    };
+  }
   if (totalMs > budgetMs) {
     return {
       nodeIds,
@@ -90,72 +141,51 @@ export function scorePath(
     };
   }
 
-  let reusable = 0;
-  const skipped: string[] = [];
-  for (const id of nodeIds) {
-    const node = nodeById(graph, id);
-    if (!node) continue;
-    if (node.evidence.some(reference => usedFactIds.has(reference.factId))) {
-      skipped.push(id);
-      continue;
-    }
-    reusable += 1;
-    node.evidence.forEach(reference => usedFactIds.add(reference.factId));
+  let relationBonus = 0;
+  for (let index = 1; index < nodeIds.length; index += 1) {
+    const edge = edgeBetween(graph, nodeIds[index - 1], nodeIds[index]);
+    if (edge) relationBonus += PATH_WEIGHTS.relation * edge.strength;
   }
-  if (reusable < nodeIds.length) {
-    return {
-      nodeIds,
-      totalMs,
-      score: Number.NEGATIVE_INFINITY,
-      valid: false,
-      reason: `path repeats evidence: ${skipped.join(", ")}`,
-      skipped,
-    };
-  }
-
-  const relevance = nodeIds.reduce((sum, id) => {
+  const nodeUtility = nodeIds.reduce((sum, id) => {
     const node = nodeById(graph, id);
-    if (!node) return sum;
-    return sum + nodeScore(graph, id);
+    return node ? sum + nodeScore(node) : sum;
   }, 0);
+  const metadataShare = totalMs > 0 ? metadataMs / totalMs : 0;
 
   return {
     nodeIds,
     totalMs,
-    score: relevance,
+    score: nodeUtility + relationBonus - PATH_WEIGHTS.metadata * metadataShare,
     valid: true,
     skipped: [],
   };
 }
 
-/** Weighted, deterministic score for one node within a *path*. */
-function nodeScore(graph: NarrativeGraph, nodeId: string): number {
-  const node = nodeById(graph, nodeId);
-  if (!node) return 0;
-  const relation = graph.edges.find(
-    edge => edge.from === nodeId || edge.to === nodeId
-  );
-  const relationBonus = relation ? 0.2 * relation.strength : 0;
+/** Weighted, deterministic utility for one node. */
+function nodeScore(node: ExplanationNode): number {
   return (
     0.3 * node.importance +
     0.2 * node.novelty +
     0.3 * node.explanatoryValue +
-    0.2 * (node.visualTargetIds.length > 0 ? 1 : 0.3) +
-    relationBonus
+    0.2 * (node.visualTargetIds.length > 0 ? 1 : 0.3)
   );
 }
 
 /**
- * Pick a contiguous path of evidence-enabled nodes that fits the duration
- * budget. Contiguous paths are enough for the current DAG because the planner
- * already emits nodes in narrative order.
+ * Enumerate every simple path in the DAG (bounded: the graph has fewer than a
+ * dozen nodes) and keep the highest-scoring valid one. Ties break toward the
+ * shorter path, then lexicographically, so the same graph always yields the
+ * same path.
  */
 export function choosePath(
   graph: NarrativeGraph,
   budgetMs: number
 ): PathCandidate {
-  const ids = graph.nodes.map(node => node.id);
-  if (ids.length === 0) {
+  const starts = graph.nodes
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map(node => node.id);
+  if (starts.length === 0) {
     return {
       nodeIds: [],
       totalMs: 0,
@@ -172,25 +202,40 @@ export function choosePath(
       totalMs: 0,
       score: 0,
       valid: false,
-      reason: "no path satisfied the required roles and duration budget",
+      reason: "no path satisfied the required roles, connectedness and duration budget",
       skipped: [],
     },
     score: Number.NEGATIVE_INFINITY,
   };
 
-  for (let start = 0; start < ids.length; start += 1) {
-    for (let end = start + 1; end <= ids.length; end += 1) {
-      const slice = ids.slice(start, end);
-      const candidate = scorePath(graph, slice, budgetMs);
-      if (!candidate.valid) continue;
-      if (
-        candidate.score > best.score ||
-        (candidate.score === best.score && candidate.totalMs < best.candidate.totalMs)
-      ) {
-        best.candidate = candidate;
-        best.score = candidate.score;
-      }
+  const outgoing = (id: string): string[] =>
+    graph.edges
+      .filter(edge => edge.from === id)
+      .map(edge => edge.to)
+      .sort();
+
+  const visit = (path: string[]): void => {
+    const candidate = scorePath(graph, path, budgetMs);
+    if (
+      candidate.valid &&
+      (candidate.score > best.score ||
+        (candidate.score === best.score && candidate.totalMs < best.candidate.totalMs) ||
+        (candidate.score === best.score &&
+          candidate.totalMs === best.candidate.totalMs &&
+          candidate.nodeIds.join() < best.candidate.nodeIds.join()))
+    ) {
+      best.candidate = candidate;
+      best.score = candidate.score;
     }
+    const tail = path[path.length - 1];
+    for (const next of outgoing(tail)) {
+      if (path.includes(next)) continue;
+      visit([...path, next]);
+    }
+  };
+
+  for (const start of starts) {
+    visit([start]);
   }
 
   return best.candidate;
@@ -198,21 +243,37 @@ export function choosePath(
 
 /**
  * Convenience: plan a complete path and expose the discarded nodes. This is
- * what the run artifact should record, so a failing run can be explained.
+ * what the run artifact records, so a failing run can be explained: the plan
+ * carries the selected path and its estimated duration, and every omission —
+ * budget, evidence, or lost the search — carries a reason.
  */
-export function planPathWithOmissions(
-  plan: ExplanationPlan
-): { plan: ExplanationPlan; selected: ExplanationNode[]; omitted: { id: string; reason: string }[] } {
+export function planPathWithOmissions(plan: ExplanationPlan): {
+  plan: ExplanationPlan;
+  selected: ExplanationNode[];
+  omitted: { id: string; reason: string }[];
+} {
   const graph = buildNarrativeGraphFromPlan(plan);
   const candidate = choosePath(graph, plan.targetDurationMs);
   const selected = candidate.nodeIds
     .map(id => nodeById(graph, id))
     .filter((node): node is ExplanationNode => Boolean(node));
-  const omitted: { id: string; reason: string }[] = [];
+  const omitted: { id: string; reason: string }[] = [...plan.omitted];
   for (const node of graph.nodes) {
     if (!selected.some(selectedNode => selectedNode.id === node.id)) {
-      omitted.push({ id: node.id, reason: "not reachable within the duration budget" });
+      omitted.push({
+        id: node.id,
+        reason: candidate.reason ?? "not selected within the duration budget",
+      });
     }
   }
-  return { plan: { ...plan, selectedPath: candidate.nodeIds }, selected, omitted };
+  return {
+    plan: {
+      ...plan,
+      selectedPath: candidate.nodeIds,
+      estimatedDurationMs: Math.round(candidate.totalMs),
+      omitted,
+    },
+    selected,
+    omitted,
+  };
 }
