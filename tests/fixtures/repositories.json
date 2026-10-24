@@ -281,6 +281,54 @@
         "published_at": "2026-09-01T00:00:00Z",
         "html_url": ""
       }
+    },
+    "promo-description": {
+      "node_id": "R_fixture_promo",
+      "full_name": "acme/clipscout",
+      "html_url": "https://github.com/acme/clipscout",
+      "description": "Clipscout finds the best moments in long-form video and turns them into ready-to-post shorts with a hybrid scoring engine.",
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2026-09-28T10:00:00Z",
+      "pushed_at": "2026-10-05T10:00:00Z",
+      "stargazers_count": 2100,
+      "forks_count": 88,
+      "open_issues_count": 12,
+      "language": "Python",
+      "default_branch": "main",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT"
+      },
+      "topics": [
+        "video",
+        "clips",
+        "python"
+      ],
+      "homepage": null,
+      "archived": false,
+      "disabled": false,
+      "fork": false,
+      "size": 1800,
+      "readme": "# Clipscout\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://example.com)\n\nClipscout finds the best moments in long-form video and turns them into\nready-to-post shorts with a hybrid scoring engine. The pipeline transcribes\nlocally, ranks story boundaries deterministically and renders with FFmpeg.\n\n## How It Works\n\nThe story detector does not invent cuts. It reasons over boundaries the\nscoring pass has already ranked. Its only job is choosing which of the ranked\nboundaries to keep.\n\n## API Parameters\n\n| Name | Type | Required | Description |\n| --- | --- | --- | --- |\n| `video` | File | Yes | Video file (.mp4, .mov, .mkv, .webm, .m4v) |\n| `job` | UUID | path | Job identifier |\n\n## Features\n\n- Scores every story boundary on narrative, value and resolution axes\n- Searches multiple candidate edits with beam search\n- Keeps overlapping alternatives instead of forcing a single merge\n\n## Install\n\n```bash\npip install clipscout\n```\n\n## Quick Start\n\n```bash\nclipscout process recording.mp4\nclipscout preview ./output\n```\n\n## License\n\nMIT\n",
+      "root_files": [
+        {
+          "name": "src",
+          "path": "src",
+          "type": "dir"
+        },
+        {
+          "name": "docker-compose.yml",
+          "path": "docker-compose.yml",
+          "type": "file"
+        }
+      ],
+      "release": {
+        "tag_name": "v1.4.0",
+        "name": "1.4.0",
+        "published_at": "2026-08-20T00:00:00Z",
+        "html_url": ""
+      }
     }
   }
 }
