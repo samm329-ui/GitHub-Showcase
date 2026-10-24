@@ -13,6 +13,7 @@ import {
   type PhraseHistory,
 } from "../src/narration.js";
 import { toSpoken, pronunciationEntries } from "../src/pronunciation.js";
+import { composeScript } from "../src/script-composer.js";
 import { enriched } from "./helpers.js";
 import { ESTIMATED_WPM, MAX_DURATION_SECONDS, MIN_DURATION_SECONDS } from "../src/config.js";
 import type { NarrationPlan } from "../src/types.js";
@@ -34,8 +35,10 @@ function planFor(
 
 describe("script quality", () => {
   test("the script explains the project clearly", () => {
-    const plan = planFor("high-quality-popular");
-    const validation = validateScript(plan, buildFactLedger(enriched("high-quality-popular")));
+    const repo = enriched("high-quality-popular");
+    const ledger = buildFactLedger(repo);
+    const plan = composeScript(ledger, repo).plan;
+    const validation = validateScript(plan, ledger);
     assert.ok(validation.ok, validation.errors.join("; "));
     const displayed = plan.segments.map(s => s.captionText).join(" ");
     const firstTwo = plan.segments.slice(0, 2).map(s => s.captionText).join(" ");
@@ -65,7 +68,7 @@ describe("script quality", () => {
   test("a repository with no license is never called open source", () => {
     const repo = enriched("no-license");
     const ledger = buildFactLedger(repo);
-    const plan = buildNarrationPlan(ledger, repo);
+    const plan = composeScript(ledger, repo).plan;
     const text = plan.segments.map(s => s.spokenText).join(" ");
     assert.ok(!/open[- ]source/i.test(text), text);
     const validation = validateScript(plan, ledger);
