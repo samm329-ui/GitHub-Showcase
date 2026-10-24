@@ -69,7 +69,7 @@ export const CAPTION_MOTION = {
  * colour ramp on the active word read these, so the two can never drift apart.
  */
 const CAPTION_HIGHLIGHT_BG =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FF0000";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FF2600";
 const CAPTION_HIGHLIGHT_TEXT =
   process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? "#FFFFFF";
 
@@ -78,10 +78,10 @@ export const CAPTION_STYLE: CaptionStyle = {
     "'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   monoFamily:
     "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
-  fontSizePx: 64,
+  fontSizePx: 50,
   fontWeight: 900,
-  lineHeight: 1.26,
-  letterSpacingPx: -0.6,
+  lineHeight: 1.11,
+  letterSpacingPx: -1.3,
   color: "#F8F6EF",
   highlightColor: CAPTION_HIGHLIGHT_BG,
   textShadow: "0 3px 10px rgba(0,0,0,0.95)",
