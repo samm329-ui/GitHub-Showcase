@@ -1,7 +1,49 @@
-﻿import type { EnrichedRepo, Fact, FactKind, FactLedger, Repo } from "./types.js";
+﻿import type {
+  EnrichedRepo,
+  Fact,
+  FactKind,
+  FactLedger,
+  FactProvenance,
+  FactSemantic,
+  Repo,
+} from "./types.js";
 import { FACT_CONFIDENCE_THRESHOLD } from "./config.js";
 
 const DAY = 86400000;
+
+/**
+ * What each fact kind *does* by default when the extractor does not say
+ * otherwise. `feature` bullets describe how the project works (mechanism),
+ * `use_case` prose is an example, and stars/license/language are metadata.
+ */
+const DEFAULT_SEMANTIC: Record<FactKind, FactSemantic> = {
+  purpose: "purpose",
+  problem: "problem",
+  feature: "mechanism",
+  mechanism: "mechanism",
+  workflow: "workflow",
+  example: "example",
+  use_case: "example",
+  outcome: "outcome",
+  install: "setup",
+  license: "metadata",
+  adoption: "metadata",
+  activity: "metadata",
+  requirement: "limitation",
+  limitation: "limitation",
+  release: "metadata",
+  language: "metadata",
+};
+
+type FactExtras = {
+  semantic?: FactSemantic;
+  /** Verbatim excerpt that supports the claim. */
+  exact?: string;
+  lineStart?: number;
+  lineEnd?: number;
+  /** Deterministic extraction rule that produced the fact. */
+  rule?: string;
+};
 
 function fact(
   repo: EnrichedRepo,
@@ -10,14 +52,24 @@ function fact(
   spoken: string,
   confidence: number,
   source: Fact["source"]["kind"],
-  location: string
+  location: string,
+  extras: FactExtras = {}
 ): Fact {
+  const provenance: FactProvenance = {
+    path: source === "api-field" ? "GitHub API" : "README.md",
+    rule: extras.rule ?? kind,
+    ...(extras.exact ? { excerpt: extras.exact } : {}),
+    ...(extras.lineStart !== undefined ? { lineStart: extras.lineStart } : {}),
+    ...(extras.lineEnd !== undefined ? { lineEnd: extras.lineEnd } : {}),
+  };
   return {
     id: `${kind}:${location}:${slug(claim).slice(0, 32)}`,
     kind,
+    semantic: extras.semantic ?? DEFAULT_SEMANTIC[kind],
     claim,
     spoken,
     source: { kind: source, location, capturedAt: repo.capturedAt },
+    provenance,
     confidence: Number(confidence.toFixed(2)),
   };
 }
@@ -44,37 +96,139 @@ export type ReadmeSection = {
   body: string;
   /** Raw fenced-code contents, without the fence markers. */
   codeBlocks: string[];
+  /** Fence language of each `codeBlocks` entry ("" when none was declared). */
+  codeLangs?: string[];
+  /** 1-based inclusive line range of the section in the source document. */
+  lineStart: number;
+  lineEnd: number;
+};
+
+/** A prose paragraph with its section and exact source lines. */
+export type ReadmeParagraph = {
+  text: string;
+  heading: string;
+  level: number;
+  lineStart: number;
+  lineEnd: number;
+};
+
+/** A Markdown table with its header row and section. */
+export type ReadmeTable = {
+  headers: string[];
+  rows: string[][];
+  heading: string;
+  lineStart: number;
 };
 
 export type ParsedReadme = {
+  /**
+   * Introduction only: the prose before the first level-2 heading (the
+   * preamble and the document title body). This is deliberately *not* the whole
+   * flattened README, so a purpose fallback can never pick a sentence from a
+   * later, unrelated section.
+   */
   overview: string;
   sections: ReadmeSection[];
   codeBlocks: string[];
   plainText: string;
   headings: string[];
+  /** Narratable prose paragraphs, in document order. */
+  paragraphs: ReadmeParagraph[];
+  /** Markdown tables, in document order (command tables included). */
+  tables: ReadmeTable[];
 };
+
+const BULLET_RE = /^\s*[-*+]\s+/;
+const ORDERED_RE = /^\s*\d+[.)]\s+/;
+const TABLE_RE = /^\s*\|.*\|\s*$/;
+const TABLE_SEP_RE = /^\s*\|?[\s:|-]+\|[\s:|-]*\|?\s*$/;
+
+/** Parse consecutive Markdown table lines starting at `startIndex`. */
+function parseTableRows(
+  lines: string[],
+  startIndex: number
+): { rows: string[][]; endIndex: number } {
+  const rows: string[][] = [];
+  let index = startIndex;
+  while (index < lines.length && TABLE_RE.test(lines[index])) {
+    if (!TABLE_SEP_RE.test(lines[index])) {
+      rows.push(
+        lines[index]
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map(cell => stripMarkdown(cell.trim()))
+      );
+    }
+    index += 1;
+  }
+  return { rows, endIndex: index - 1 };
+}
 
 export function parseReadme(readme: string | null): ParsedReadme {
   const text = readme ?? "";
   const lines = text.split(/\r?\n/);
   const sections: ReadmeSection[] = [];
   const codeBlocks: string[] = [];
-  let current: ReadmeSection = { heading: "", level: 0, body: "", codeBlocks: [] };
+  const paragraphs: ReadmeParagraph[] = [];
+  const tables: ReadmeTable[] = [];
+
+  let current: ReadmeSection = {
+    heading: "",
+    level: 0,
+    body: "",
+    codeBlocks: [],
+    codeLangs: [],
+    lineStart: 1,
+    lineEnd: 1,
+  };
   let inFence = false;
   let fenceLines: string[] = [];
+  let fenceLang = "";
 
-  for (const line of lines) {
+  let paragraph: string[] = [];
+  let paragraphStart = 1;
+  const flushParagraph = (endLine: number): void => {
+    const raw = paragraph.join(" ").trim();
+    const startLine = paragraphStart;
+    paragraph = [];
+    if (!raw) return;
+    const plain = stripMarkdown(raw);
+    if (!plain) return;
+    paragraphs.push({
+      text: plain,
+      heading: current.heading,
+      level: current.level,
+      lineStart: startLine,
+      lineEnd: Math.max(startLine, endLine),
+    });
+  };
+
+  const closeSection = (endLine: number): void => {
+    current.lineEnd = Math.max(current.lineStart, endLine);
+    if (current.heading || current.body.trim() || current.codeBlocks.length) {
+      sections.push(current);
+    }
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+
     const fenceMatch = line.match(/^\s*```(\w*)\s*$/);
     if (fenceMatch) {
+      flushParagraph(lineNumber - 1);
       if (!inFence) {
         inFence = true;
         fenceLines = [];
+        fenceLang = (fenceMatch[1] ?? "").toLowerCase();
         continue;
       }
       inFence = false;
       const block = fenceLines.join("\n").trim();
       if (block) {
         current.codeBlocks.push(block);
+        current.codeLangs!.push(fenceLang);
         codeBlocks.push(block);
       }
       continue;
@@ -83,27 +237,66 @@ export function parseReadme(readme: string | null): ParsedReadme {
       fenceLines.push(line);
       continue;
     }
+
     const heading = line.match(/^(#{1,6})\s+(.+?)\s*$/);
     if (heading) {
-      if (current.heading || current.body.trim() || current.codeBlocks.length) {
-        sections.push(current);
-      }
+      flushParagraph(lineNumber - 1);
+      closeSection(lineNumber - 1);
       current = {
         heading: heading[2].trim(),
         level: heading[1].length,
         body: "",
         codeBlocks: [],
+        codeLangs: [],
+        lineStart: lineNumber,
+        lineEnd: lineNumber,
       };
       continue;
     }
+
+    if (TABLE_RE.test(line)) {
+      flushParagraph(lineNumber - 1);
+      const table = parseTableRows(lines, index);
+      if (table.rows.length >= 2) {
+        tables.push({
+          headers: table.rows[0],
+          rows: table.rows.slice(1),
+          heading: current.heading,
+          lineStart: lineNumber,
+        });
+      }
+      for (let cursor = index; cursor <= table.endIndex; cursor += 1) {
+        current.body += `${lines[cursor]}\n`;
+      }
+      index = table.endIndex;
+      continue;
+    }
+
+    if (BULLET_RE.test(line) || ORDERED_RE.test(line)) {
+      flushParagraph(lineNumber - 1);
+      current.body += `${line}\n`;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      flushParagraph(lineNumber - 1);
+      current.body += `${line}\n`;
+      continue;
+    }
+
+    if (paragraph.length === 0) paragraphStart = lineNumber;
+    paragraph.push(line.trim());
     current.body += `${line}\n`;
   }
+
   if (inFence && fenceLines.length) {
     // An unclosed fence is still real code; keep it out of the prose.
     current.codeBlocks.push(fenceLines.join("\n").trim());
+    current.codeLangs!.push(fenceLang);
     codeBlocks.push(fenceLines.join("\n").trim());
   }
-  if (current.heading || current.body.trim() || current.codeBlocks.length) sections.push(current);
+  flushParagraph(lines.length);
+  closeSection(lines.length);
 
   const plainText = text
     .replace(/```[\s\S]*?```/g, " ")
@@ -116,12 +309,22 @@ export function parseReadme(readme: string | null): ParsedReadme {
     .replace(/\s+/g, " ")
     .trim();
 
+  // The overview is the introduction: paragraphs that live before the first
+  // level-2 heading (preamble + document title). Never later sections.
+  const overview = paragraphs
+    .filter(item => item.level < 2)
+    .map(item => item.text)
+    .join(" ")
+    .trim();
+
   return {
-    overview: plainText,
+    overview,
     sections,
     codeBlocks,
     plainText,
     headings: sections.filter(s => s.level > 0).map(s => s.heading.toLowerCase()),
+    paragraphs,
+    tables,
   };
 }
 
@@ -146,7 +349,10 @@ const NON_FEATURE_HEADINGS =
  * sentences. Keeping them out of spoken clauses is what stops a README from
  * turning into "import foo from 'bar'; const ..." narration.
  */
-export function looksLikeCode(value: string): boolean {
+export function looksLikeCode(
+  value: string,
+  options: { allowFilePairs?: boolean } = {}
+): boolean {
   const text = value.trim();
   if (!text) return true;
   if (/=>|https?:\/\/|[;{}]|\/\/|<\/?[a-z][^>]*>/i.test(text)) return true;
@@ -154,7 +360,12 @@ export function looksLikeCode(value: string): boolean {
     return true;
   }
   if (/\w+\([^)]*\)/.test(text)) return true;
-  if (/^[a-z0-9._/-]+\s+[a-z0-9._/-]+$/i.test(text) && /[./\\]/.test(text)) return true;
+  // "tool input.csv" is a file listing when it comes from program output, but
+  // the canonical CLI invocation when it comes from a shell fence — the
+  // workflow/example extractors read those with `allowFilePairs`.
+  if (!options.allowFilePairs && /^[a-z0-9._/-]+\s+[a-z0-9._/-]+$/i.test(text) && /[./\\]/.test(text)) {
+    return true;
+  }
   return false;
 }
 
@@ -215,21 +426,353 @@ export function stripMarkdown(value: string): string {
     .trim();
 }
 
-export function bulletsOf(section: ReadmeSection | null): string[] {
+export function bulletEntriesOf(
+  section: ReadmeSection | null
+): { text: string; line: number }[] {
   if (!section) return [];
-  return section.body
-    .split(/\r?\n/)
-    .map(line => line.match(/^\s*[-*+]\s+(.*)$/))
-    .filter((match): match is RegExpMatchArray => Boolean(match))
-    .map(match => stripMarkdown(sentence(match[1])))
-    .filter(line => line.length >= 12 && line.length <= 160)
-    .filter(line => isNarratableProse(line))
-    .filter(
-      line =>
-        !/\b(visit|see|read|docs|documentation|course|tutorial|guide|learn more|getting started)\b/i.test(
+  const entries: { text: string; line: number }[] = [];
+  section.body.split(/\r?\n/).forEach((line, index) => {
+    const match = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (!match) return;
+    const text = stripMarkdown(sentence(match[1]));
+    if (text.length < 12 || text.length > 160) return;
+    if (!isNarratableProse(text)) return;
+    if (
+      /\b(visit|see|read|docs|documentation|course|tutorial|guide|learn more|getting started)\b/i.test(
+        text
+      )
+    ) {
+      return;
+    }
+    entries.push({ text, line: section.lineStart + index + 1 });
+  });
+  return entries;
+}
+
+export function bulletsOf(section: ReadmeSection | null): string[] {
+  return bulletEntriesOf(section).map(entry => entry.text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Semantic evidence: problem, mechanism, workflow, examples           */
+/* ------------------------------------------------------------------ */
+
+const PROBLEM_HEADING_RE =
+  /^(why|the problem|problem|motivation|background|rationale|pain points?)/;
+const MECHANISM_HEADING_RE =
+  /^(how (it|does it|it'?s) works?|how .* works|how it'?s built|architecture|internals?|design|under the hood|the approach|implementation)/;
+const WORKFLOW_HEADING_RE =
+  /^(quick ?start|getting started|first steps|workflow|how to use|usage|examples?|basic usage|commands?)/;
+
+/** Sentences of a paragraph, markdown-stripped and without trailing punctuation. */
+function cleanSentences(text: string): string[] {
+  return (text.match(/[^.!?]+[.!?]?/g) ?? [])
+    .map(part => stripMarkdown(part).trim().replace(/[.!?]+$/, "").trim())
+    .filter(part => part.length >= 12);
+}
+
+/** Paragraphs whose source lines fall inside a section. */
+function paragraphsIn(parsed: ParsedReadme, section: ReadmeSection): ReadmeParagraph[] {
+  return parsed.paragraphs.filter(
+    paragraph =>
+      paragraph.lineStart >= section.lineStart && paragraph.lineStart <= section.lineEnd
+  );
+}
+
+/** Ordered-list ("1. ...") steps inside a section. */
+function orderedStepsOf(section: ReadmeSection): { text: string; line: number }[] {
+  const steps: { text: string; line: number }[] = [];
+  section.body.split(/\r?\n/).forEach((line, index) => {
+    const match = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (!match) return;
+    const text = stripMarkdown(sentence(match[1]));
+    if (!isNarratableProse(text) && !/\w/.test(text)) return;
+    steps.push({ text, line: section.lineStart + index + 1 });
+  });
+  return steps;
+}
+
+/** Fence languages that plausibly contain runnable shell commands. */
+const SHELL_LANGS = new Set([
+  "bash",
+  "sh",
+  "shell",
+  "zsh",
+  "fish",
+  "ksh",
+  "console",
+  "terminal",
+  "shellsession",
+  "powershell",
+  "pwsh",
+  "ps1",
+  "cmd",
+  "batch",
+]);
+
+/**
+ * Every command-like line in a section's fenced code blocks (not output/code).
+ *
+ * With `shellOnly`, only fences explicitly declared as a shell language are
+ * read. Undeclared fences frequently hold program *output* (an error dump, a
+ * log excerpt), and an output line can look exactly like a command — so
+ * workflow extraction, which treats every hit as a runnable step, must not
+ * consume them. `firstCommandIn` keeps the permissive view for install
+ * detection, where a wrong guess is still reviewed by the surrounding rules.
+ */
+function commandsIn(section: ReadmeSection | null, shellOnly = false): string[] {
+  if (!section) return [];
+  const found: string[] = [];
+  section.codeBlocks.forEach((block, blockIndex) => {
+    if (shellOnly) {
+      const lang = (section.codeLangs?.[blockIndex] ?? "").toLowerCase();
+      if (!SHELL_LANGS.has(lang)) return;
+    }
+    for (const raw of block.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (/^[#$>{*+\-\d]/.test(line)) continue;
+      if (/\b(output|result|response|logs?):?\s*$/i.test(line)) continue;
+      if (!/^[a-z0-9._/\\-]+\s+\S/i.test(line) && !/^\.\//.test(line)) continue;
+      if (looksLikeCode(line, { allowFilePairs: shellOnly })) continue;
+      const cleaned = line.replace(/\s{2,}.*$/, "").trim();
+      if (cleaned.length >= 4 && cleaned.length <= 90) found.push(cleaned);
+    }
+  });
+  return found;
+}
+
+function lowerFirst(value: string): string {
+  return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+}
+
+/**
+ * Bullets describe either how the project works (mechanism) or what you get
+ * from it (outcome). The distinction drives the narrative role, not the text.
+ */
+const OUTCOME_BULLET_RE =
+  /^(works? with|no |without |keeps?|stays?|config(uration)? (lives?|in)|dry[- ]run|single file|reduces?|avoids?|saves?|lets? you|so you|you can|any )/i;
+
+function classifyBulletSemantic(text: string): FactSemantic {
+  return OUTCOME_BULLET_RE.test(text.trim()) ? "outcome" : "mechanism";
+}
+
+/**
+ * The problem the project exists to solve. Only prose that actually frames a
+ * problem is used — a "Why" section, or an introduction sentence that talks
+ * about what people do *without* the tool.
+ */
+export function extractProblem(repo: EnrichedRepo, parsed: ParsedReadme): Fact[] {
+  const ranked: ReadmeParagraph[] = [];
+  for (const section of parsed.sections) {
+    const heading = section.heading.toLowerCase().trim();
+    const isWhy = PROBLEM_HEADING_RE.test(heading);
+    const isIntro = section.level < 2;
+    if (!isWhy && !isIntro) continue;
+    for (const paragraph of paragraphsIn(parsed, section)) ranked.push(paragraph);
+  }
+  for (const paragraph of ranked) {
+    for (const line of cleanSentences(paragraph.text)) {
+      if (!isNarratableProse(line)) continue;
+      const framesProblem =
+        PROBLEM_HEADING_RE.test(paragraph.heading.toLowerCase().trim()) ||
+        /\b(usually means|means (copying|editing|writing)|by hand|before you (write|start)|drifts?|buries?|instead of|without (a|an|any)|the problem|tedious|painful|hard to|difficult to)\b/i.test(
           line
+        );
+      if (!framesProblem) continue;
+      return [
+        fact(
+          repo,
+          "problem",
+          `The README describes the problem it solves: ${line}.`,
+          line,
+          0.8,
+          "readme-section",
+          `readme#${slug(paragraph.heading || "overview")}`,
+          {
+            semantic: "problem",
+            exact: line,
+            lineStart: paragraph.lineStart,
+            lineEnd: paragraph.lineEnd,
+            rule: "readme-problem",
+          }
+        ),
+      ];
+    }
+  }
+  return [];
+}
+
+/**
+ * Dedicated "how it works" prose. When a repository documents its mechanism,
+ * this is stronger evidence than a feature bullet, so the planner prefers it.
+ */
+export function extractMechanism(repo: EnrichedRepo, parsed: ParsedReadme): Fact[] {
+  for (const section of parsed.sections) {
+    if (!MECHANISM_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
+    const facts: Fact[] = [];
+    for (const paragraph of paragraphsIn(parsed, section)) {
+      const line = cleanSentences(paragraph.text).find(isNarratableProse);
+      if (!line) continue;
+      facts.push(
+        fact(
+          repo,
+          "mechanism",
+          `README ${section.heading} section: ${line}.`,
+          line,
+          0.85,
+          "readme-section",
+          `readme#${slug(section.heading)}`,
+          {
+            semantic: "mechanism",
+            exact: line,
+            lineStart: paragraph.lineStart,
+            lineEnd: paragraph.lineEnd,
+            rule: "readme-mechanism",
+          }
         )
+      );
+      if (facts.length >= 2) break;
+    }
+    if (facts.length > 0) return facts;
+  }
+  return [];
+}
+
+/**
+ * A documented workflow: an ordered list of steps or the command sequence in a
+ * Usage / Quick start section. A lone code block with no operation is *not* a
+ * workflow.
+ */
+export function extractWorkflow(repo: EnrichedRepo, parsed: ParsedReadme): Fact[] {
+  for (const section of parsed.sections) {
+    if (!WORKFLOW_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
+    const ordered = orderedStepsOf(section);
+    const parts =
+      ordered.length >= 2 ? ordered.map(step => step.text) : commandsIn(section, true);
+    if (parts.length < 2) continue;
+    return parts.slice(0, 3).map((part, index) =>
+      fact(
+        repo,
+        "workflow",
+        `README workflow step ${index + 1}: ${part}.`,
+        sentence(part),
+        0.8,
+        "readme-section",
+        `readme#${slug(section.heading)}`,
+        { semantic: "workflow", exact: part, rule: "readme-workflow" }
+      )
     );
+  }
+  return [];
+}
+
+/**
+ * Render a documented shell command for speech: drop redirections and flags,
+ * keep the pipeline shape. `my-service 2>&1 | logline` becomes
+ * "my-service piped into logline" — honest about what the README shows
+ * without asking the voice to read `2>&1`.
+ */
+export function speakCommand(command: string): string {
+  const tokens = command
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(
+      token =>
+        !/^(\d*>{1,2}&?\d*|<\d*|&\d*|\/dev\/null|2>\S*|>>?)$/.test(token) &&
+        !/^-{1,2}[\w-]+$/.test(token)
+    );
+  const segments = tokens
+    .join(" ")
+    .split("|")
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (segments.length === 0) return "";
+  return segments.join(" piped into ");
+}
+
+/**
+ * A documented command with no prose description is still example evidence:
+ * it demonstrates a concrete operation the README actually shows. Used as the
+ * fallback when no command table exists, and capped at one fact so a wall of
+ * shell lines cannot masquerade as documented examples.
+ */
+function commandExampleFact(
+  repo: EnrichedRepo,
+  section: ReadmeSection,
+  command: string
+): Fact | null {
+  const spoken = sentence(speakCommand(command));
+  // A command is not prose; the gate is speakability (enough word-like
+  // tokens for the voice to say something), not sentence structure.
+  const tokens = spoken.split(/\s+/).filter(token => /[A-Za-z]{2,}/.test(token));
+  if (spoken.length < 6 || tokens.length < 2) return null;
+  return fact(
+    repo,
+    "example",
+    `The README documents the command: ${command}.`,
+    spoken,
+    0.7,
+    "readme-code",
+    `readme#${slug(section.heading)}`,
+    { semantic: "example", exact: command, rule: "readme-usage-command" }
+  );
+}
+
+/**
+ * Documented examples. A command table that pairs a command with what it does
+ * is the strongest example evidence a README can carry: it names the operation
+ * rather than describing a feature. When there is no table, a documented
+ * command in a usage section still demonstrates a real operation.
+ */
+export function extractExamples(repo: EnrichedRepo, parsed: ParsedReadme): Fact[] {
+  for (const table of parsed.tables) {
+    const headerText = table.headers.join(" ").toLowerCase();
+    const isCommandTable =
+      /\bcommand\b/.test(headerText) ||
+      (/\b(what it does|description|purpose)\b/.test(headerText) &&
+        /\b(command|flag|option|script|usage|name)\b/.test(headerText));
+    if (!isCommandTable) continue;
+    const facts: Fact[] = [];
+    for (const row of table.rows.slice(0, 3)) {
+      const [command, ...rest] = row;
+      const description = rest.join(" ").trim();
+      if (!command || !description) continue;
+      if (!isNarratableProse(description)) continue;
+      const spoken = sentence(`${command} ${lowerFirst(description)}`);
+      facts.push(
+        fact(
+          repo,
+          "example",
+          `The command table documents ${command}: ${sentence(description)}.`,
+          spoken,
+          0.9,
+          "readme-table",
+          `readme#${slug(table.heading || "commands")}`,
+          {
+            semantic: "example",
+            exact: `${command} — ${description}`,
+            lineStart: table.lineStart,
+            rule: "readme-command-table",
+          }
+        )
+      );
+    }
+    if (facts.length > 0) return facts;
+  }
+
+  // No command table: a documented command in a usage/quick-start section is
+  // still a concrete demonstrated operation. One fact only — a wall of shell
+  // is not a documented example.
+  for (const section of parsed.sections) {
+    if (!WORKFLOW_HEADING_RE.test(section.heading.toLowerCase().trim())) continue;
+    const command = commandsIn(section, true)[0];
+    if (!command) continue;
+    const example = commandExampleFact(repo, section, command);
+    if (example) return [example];
+  }
+  return [];
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,22 +903,7 @@ export function extractInstall(
 }
 
 function firstCommandIn(section: ReadmeSection): string | null {
-  for (const block of section.codeBlocks) {
-    const lines = block
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean);
-    for (const line of lines) {
-      // Skip comments, prompts, markdown markers and output blocks.
-      if (/^[#$>{*+\-\d]/.test(line)) continue;
-      if (/\b(output|result|response|logs?):?\s*$/i.test(line)) continue;
-      if (!/^[a-z0-9._/\\-]+\s+\S/i.test(line) && !/^\.\//.test(line)) continue;
-      if (looksLikeCode(line)) continue;
-      const cleaned = line.replace(/\s{2,}.*$/, "").trim();
-      if (cleaned.length >= 4 && cleaned.length <= 90) return cleaned;
-    }
-  }
-  return null;
+  return commandsIn(section)[0] ?? null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -456,12 +984,14 @@ export function buildFactLedger(
         sentence(description),
         0.95,
         "api-field",
-        "repo.description"
+        "repo.description",
+        { semantic: "purpose", rule: "api-description" }
       )
     );
   } else {
     const overviewSentence = firstRealSentence(stripMarkdown(parsed.overview), 40);
     if (overviewSentence) {
+      const intro = parsed.paragraphs.find(item => item.level < 2) ?? null;
       facts.push(
         fact(
           repo,
@@ -470,29 +1000,48 @@ export function buildFactLedger(
           sentence(overviewSentence),
           0.7,
           "readme-section",
-          "readme#overview"
+          "readme#overview",
+          {
+            semantic: "purpose",
+            exact: overviewSentence,
+            lineStart: intro?.lineStart,
+            lineEnd: intro?.lineEnd,
+            rule: "readme-overview",
+          }
         )
       );
     }
   }
 
-  /* --- features -------------------------------------------------- */
+  /* --- problem --------------------------------------------------- */
+  facts.push(...extractProblem(repo, parsed));
+
+  /* --- features (mechanism / outcome) ---------------------------- */
   const featureSection = sectionWithBullets(parsed, [
     /^(features?|capabilities|highlights|benefits?|why|what'?s inside|use ?cases?|tools?)/,
   ]);
-  for (const bullet of bulletsOf(featureSection).slice(0, 4)) {
+  for (const entry of bulletEntriesOf(featureSection).slice(0, 4)) {
     facts.push(
       fact(
         repo,
         "feature",
-        `README feature bullet: ${bullet}.`,
-        bullet,
+        `README feature bullet: ${entry.text}.`,
+        entry.text,
         0.7,
         "readme-section",
-        `readme#${slug(featureSection!.heading)}`
+        `readme#${slug(featureSection!.heading)}`,
+        {
+          semantic: classifyBulletSemantic(entry.text),
+          exact: entry.text,
+          lineStart: entry.line,
+          rule: "readme-feature-bullet",
+        }
       )
     );
   }
+
+  /* --- dedicated mechanism prose --------------------------------- */
+  facts.push(...extractMechanism(repo, parsed));
 
   /* --- usage / examples ----------------------------------------- */
   const usageSection = sectionMatching(parsed, [
@@ -508,6 +1057,7 @@ export function buildFactLedger(
         usageSentence
       )
     ) {
+      const paragraph = paragraphsIn(parsed, usageSection)[0] ?? null;
       facts.push(
         fact(
           repo,
@@ -516,11 +1066,24 @@ export function buildFactLedger(
           sentence(usageSentence),
           0.7,
           "readme-section",
-          `readme#${slug(usageSection.heading)}`
+          `readme#${slug(usageSection.heading)}`,
+          {
+            semantic: "example",
+            exact: usageSentence,
+            lineStart: paragraph?.lineStart,
+            lineEnd: paragraph?.lineEnd,
+            rule: "readme-usage-prose",
+          }
         )
       );
     }
   }
+
+  /* --- workflow steps ------------------------------------------- */
+  facts.push(...extractWorkflow(repo, parsed));
+
+  /* --- documented command examples ------------------------------ */
+  facts.push(...extractExamples(repo, parsed));
 
   /* --- install --------------------------------------------------- */
   const install = extractInstall(repo, parsed);
