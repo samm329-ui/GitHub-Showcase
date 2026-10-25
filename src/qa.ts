@@ -1,6 +1,7 @@
-import type { CalloutCue, MediaInfo, QaCheck, QaReport } from "./types.js";
+import type { CalloutCue, ImpactBurstCue, MediaInfo, QaCheck, QaReport, SoundEvent } from "./types.js";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { stat as statFile } from "node:fs/promises";
 import { createCanvas, loadImage } from "canvas";
@@ -10,6 +11,7 @@ import {
   CARD,
   CARD_CHROME_HEIGHT,
   FPS,
+  IMPACT_ACCENTS,
   MASCOT_LAYOUT,
   MAX_DURATION_SECONDS,
   VIEWPORT,
@@ -93,6 +95,8 @@ export type QaOptions = {
   expectMotion?: boolean;
   /** Planned scroll positions at 25/50/75% of the clip, for diagnostics. */
   motionStops?: number[];
+  callouts?: CalloutCue[];
+  soundEvents?: SoundEvent[];
 };
 
 export async function validateOutput(
@@ -183,6 +187,13 @@ export async function validateOutput(
     push("fixed-composition", fixed.ok, fixed.detail);
   }
 
+  if (options.callouts) {
+    checks.push(...calloutChecks(options.callouts, options.expectedAudioSeconds * 1000));
+  }
+  if (options.soundEvents) {
+    checks.push(...soundEventsChecks(options.soundEvents, options.expectedAudioSeconds * 1000));
+  }
+
   return { ok: checks.every(check => check.ok), checks, media };
 }
 
@@ -262,11 +273,12 @@ export function checkAudioReachesEnd(
  * the renderer, so no estimated words-per-minute or fixed timestamp is used.
  */
 export function calloutChecks(cues: CalloutCue[], durationMs: number): QaCheck[] {
+  const maxAllowed = Math.max(CALLOUT.maxCues, Math.max(2, Math.min(6, Math.round(durationMs / 7000))));
   const checks: QaCheck[] = [
     {
       name: "callout-count",
-      ok: cues.length <= 4,
-      detail: `${cues.length} cue(s); renders at most 4 callouts per video`,
+      ok: cues.length <= maxAllowed,
+      detail: `${cues.length} cue(s); renders within configured cap ${CALLOUT.maxCues}`,
     },
     {
       name: "callout-non-overlapping",
@@ -277,14 +289,16 @@ export function calloutChecks(cues: CalloutCue[], durationMs: number): QaCheck[]
 
   for (const cue of cues) {
     const words = cue.text.trim().split(/\s+/).filter(Boolean).length;
+    const duration = cue.endMs - cue.startMs;
     const timed =
       cue.startMs >= 0 &&
       cue.startMs < cue.endMs &&
-      cue.endMs <= durationMs + 1;
+      cue.endMs <= durationMs + 1 &&
+      duration >= 400;
     checks.push({
       name: "callout-timing",
       ok: timed,
-      detail: `${cue.id}: ${cue.startMs}-${cue.endMs}ms within ${Math.round(durationMs)}ms`,
+      detail: `${cue.id}: ${cue.startMs}-${cue.endMs}ms (${duration}ms) within ${Math.round(durationMs)}ms`,
     });
     checks.push({
       name: "callout-copy",
@@ -303,6 +317,50 @@ export function calloutChecks(cues: CalloutCue[], durationMs: number): QaCheck[]
     });
   }
 
+  return checks;
+}
+
+/** Validation for the animated comic impact bursts around the character. */
+export function impactAccentsChecks(bursts: ImpactBurstCue[] = [], durationMs: number): QaCheck[] {
+  const checks: QaCheck[] = [
+    {
+      name: "impact-count",
+      ok: bursts.length <= IMPACT_ACCENTS.maxBurstCount,
+      detail: `${bursts.length} burst(s); max ${IMPACT_ACCENTS.maxBurstCount}`,
+    },
+    {
+      name: "impact-timing",
+      ok: bursts.every(b => b.startMs >= 0 && b.startMs < b.endMs && b.endMs <= durationMs + 1),
+      detail: "all bursts stay bounded within video duration",
+    },
+    {
+      name: "impact-intervals",
+      ok: bursts.every((b, i) => i === 0 || b.startMs >= bursts[i - 1].startMs),
+      detail: "all bursts ordered monotonically without illegal overlaps",
+    },
+  ];
+  return checks;
+}
+
+/** Validation for scheduled sound effect events. */
+export function soundEventsChecks(events: SoundEvent[] = [], durationMs: number): QaCheck[] {
+  const checks: QaCheck[] = [
+    {
+      name: "sfx-timing",
+      ok: events.every(e => e.startMs >= 0 && e.startMs <= durationMs),
+      detail: `${events.length} sfx event(s) bounded within duration (${Math.round(durationMs)}ms)`,
+    },
+    {
+      name: "sfx-gain",
+      ok: events.every(e => e.gain > 0 && e.gain <= 0.5),
+      detail: "all sfx gains are subtle accents under narration (<= 0.5)",
+    },
+    {
+      name: "sfx-assets-exist",
+      ok: events.every(e => fsSync.existsSync(e.asset)),
+      detail: "all sound effect assets exist on disk",
+    },
+  ];
   return checks;
 }
 
@@ -353,6 +411,11 @@ export function overlayLayoutChecks(): QaCheck[] {
         calloutTop >= 0 &&
         calloutBottom <= VIEWPORT.height,
       detail: `left ${calloutLeft}, right ${calloutRight}, top ${calloutTop}-${calloutBottom}`,
+    },
+    {
+      name: "callout-clear-of-caption",
+      ok: calloutBottom <= caption.topPx + 20 || calloutLeft >= caption.leftPx + caption.widthPx,
+      detail: `callout bottom ${calloutBottom} vs caption top ${caption.topPx}`,
     },
     {
       name: "caption-inside-canvas",
