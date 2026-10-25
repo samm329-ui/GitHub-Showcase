@@ -1,13 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { FPS, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
+import { FPS, MASCOT_LAYOUT, MAX_DURATION_SECONDS, VIEWPORT } from "./config.js";
 import type {
   CalloutCue,
   CaptionPhrase,
   CharacterCue,
   EnrichedRepo,
+  ImpactBurstCue,
   MeasuredAnchor,
   ScrollKeyframe,
   SpeechEnvelope,
@@ -25,6 +26,12 @@ import {
   characterPoseAt,
   speechLevelAt,
 } from "./character-motion.js";
+import {
+  CHARACTER_ALPHA_BOUNDS,
+  getMascotFrameGeometry,
+  mascotPlacementCss,
+} from "./mascot-layout.js";
+import { evaluateImpactBurstsAt } from "./impact-accents.js";
 import { scrollAt } from "./timeline.js";
 import {
   closeTarget,
@@ -83,6 +90,8 @@ export type RenderCardOptions = {
   captions: CaptionPhrase[];
   /** Narration-driven callout bubble cues. */
   callouts?: CalloutCue[] | null;
+  /** Animated comic impact bursts around the mascot. */
+  impactBursts?: ImpactBurstCue[] | null;
   /** Loopback URL of the comic speech bubble sticker. */
   calloutImageUrl?: string | null;
   scrollKeyframes: ScrollKeyframe[];
@@ -224,7 +233,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
   };
   const { client, targetId } = await openTarget();
 
-  const ffmpeg: ChildProcessWithoutNullStreams = spawn(
+  const ffmpeg = spawn(
     "ffmpeg",
     buildFfmpegArgs({
       fps,
@@ -234,10 +243,13 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
       crf: options.crf ?? 19,
       preset: options.preset ?? "medium",
     }),
-    { stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
+    { stdio: ["pipe", "ignore", "pipe"], windowsHide: true }
   );
 
   let ffmpegStderr = "";
+  ffmpeg.stdin.on("error", () => {
+    // Prevent unhandled EPIPE if FFmpeg closes before all frames are written
+  });
   ffmpeg.stderr.on("data", chunk => {
     ffmpegStderr += String(chunk);
     if (ffmpegStderr.length > 20000) ffmpegStderr = ffmpegStderr.slice(-20000);
@@ -265,6 +277,17 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
     const measured = await evaluate(client, "window.__showcase.measure()");
     const geometry = (await evaluate(client, "window.__showcase.geometry()")) as CaptureGeometry;
 
+    const mascotWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
+    const placementInput = {
+      bounds: CHARACTER_ALPHA_BOUNDS,
+      renderedWidthPx: mascotWidthPx,
+      canvasWidth: VIEWPORT.width,
+      canvasHeight: VIEWPORT.height,
+      clipRightPx: MASCOT_LAYOUT.offsetX,
+      clipBottomPx: MASCOT_LAYOUT.offsetY,
+    };
+    const mascotPlacement = mascotPlacementCss(placementInput);
+
     for (let frame = 0; frame < totalFrames; frame += 1) {
       const timeMs = Math.min(options.durationMs, (frame / fps) * 1000);
       const scrollY = scrollAt(options.scrollKeyframes, timeMs);
@@ -276,6 +299,12 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
         timeMs,
         speechLevelAt(options.speechEnvelope ?? null, timeMs),
         poseName
+      );
+      const frameGeo = getMascotFrameGeometry(placementInput, mascotPlacement, pose);
+      const activeImpacts = evaluateImpactBurstsAt(
+        options.impactBursts ?? [],
+        timeMs,
+        frameGeo.impactAnchors
       );
 
       // Resolve the active word + its measured start time for the moving
@@ -301,6 +330,7 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
           window.__showcase.measureCaption();
           window.__showcase.setCaptionActive(${activeIndex}, ${highlightProgress.toFixed(4)});
           window.__showcase.setCallout(${JSON.stringify(calloutState.cueId)}, ${JSON.stringify(calloutState.text)}, ${calloutState.opacity}, ${calloutState.translateY}, ${calloutState.scale}, ${calloutState.raysOpacity});
+          window.__showcase.setImpactState(${JSON.stringify(activeImpacts)});
           window.__showcase.setCharacterPose(${JSON.stringify(pose)}, ${JSON.stringify(poseName)});
           return 1;
         })()`
