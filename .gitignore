@@ -3,6 +3,8 @@ temp/*
 !temp/.gitkeep
 output/*
 !output/.gitkeep
-tools/
+tools/kokoro/
+tools/audition/
+tools/*.wav
 .env
 .env.local
