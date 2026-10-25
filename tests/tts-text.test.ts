@@ -78,4 +78,74 @@ describe("speech text normalisation", () => {
     assert.match(speech, /fifty percent/);
     assert.ok(!/Next\.js|50%|v1\.2\.0/.test(speech), speech);
   });
+
+  test("slashes and dashes do not cause double pronunciations or stutters", () => {
+    // Parenthetical route paths with slashes should not repeat the preceding noun
+    const opendray = prepareTtsText(
+      "A single Go binary on your host serves the web admin (/admin/) and a REST + WebSocket API (/api/v1/)."
+    );
+    assert.equal(
+      opendray,
+      "A single Go binary on your host serves the web admin and a rest plus WebSocket A P I."
+    );
+
+    // CLI option flags (--version) before version numbers should not stutter "version version"
+    const flowery = prepareTtsText(
+      "To get started, the README starts you with the command dotnet add package Flowery.NET --version 4.0.0."
+    );
+    assert.equal(
+      flowery,
+      "To get started, the read me starts you with the command dotnet add package Flowery.NET version four point zero point zero."
+    );
+
+    // Natural version sentences should never say "version version"
+    assert.equal(
+      prepareTtsText("It is currently version 1.0.0."),
+      "It is currently version one point zero point zero."
+    );
+    assert.equal(
+      prepareTtsText("Available in version v2.0."),
+      "Available in version two point zero."
+    );
+
+    // Identical owner/repo across slash should not stutter
+    assert.equal(
+      prepareTtsText("Explore Opendray/opendray and pipeshub-ai/pipeshub-ai."),
+      "Explore Opendray and pipeshub-ai."
+    );
+
+    // Repeated identical acronyms or words across slashes/dashes are deduplicated
+    assert.equal(prepareTtsText("API/API and version/version."), "A P I and version.");
+    assert.equal(prepareTtsText("Call the API API."), "Call the A P I.");
+  });
+
+  test("app symbols like plus and hashtag are properly pronounced", () => {
+    // C# and C++
+    assert.equal(
+      prepareTtsText("Built with C# and C++ for high performance."),
+      "Built with C sharp and C plus plus for high performance."
+    );
+
+    // Hashtags
+    assert.equal(
+      prepareTtsText("Trending under #ai and #opensource."),
+      "Trending under hashtag ai and hashtag opensource."
+    );
+    assert.equal(
+      prepareTtsText("Tag it with #hashtag."),
+      "Tag it with hashtag."
+    );
+
+    // Number rank (#1 tool) vs issue numbers (#42)
+    assert.equal(
+      prepareTtsText("The #1 tool on GitHub, resolving #42."),
+      "The number one tool on Git Hub, resolving issue forty two."
+    );
+
+    // Plus signs in quantities and combinations
+    assert.equal(
+      prepareTtsText("Includes 100+ controls with REST + WebSocket support."),
+      "Includes one hundred plus controls with rest plus WebSocket support."
+    );
+  });
 });
