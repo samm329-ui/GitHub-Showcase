@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GitHub Showcase — Live Composition Preview</title>
+<style>
+  :root {
+    --stage-bg: #F2EFE9; --card-bg: #0D1117; --surface-2: #161B22; --border: #30363D;
+    --text-primary: #F0F6FC; --text-secondary: #8B949E; --github-blue: #58A6FF;
+    --caption-font: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --caption-left: 165px; --caption-top: 876px; --caption-width: 718px; --caption-maxh: 314px;
+    --caption-fontsize: 64px; --caption-lineheight: 1.26; --caption-color: #F8F6EF;
+    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -0.6px;
+    --hl-bg: #FF0000; --hl-text: #FFFFFF; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
+    --hl-transition: 70ms;
+    --mascot-width: 943px; --mascot-right: -25px; --mascot-bottom: -44px;
+    --mascot-shadow: drop-shadow(0 26px 26px rgba(0,0,0,0.95));
+    --card-shadow: 0 2px 3px rgba(25,23,20,0.070), 0 10px 11px rgba(25,23,20,0.060), 0 24px 23px rgba(25,23,20,0.090), 0 48px 45px rgba(25,23,20,0.070);
+    --card-radius: 60px;
+    --ent-dur: 160ms; --ent-y: 12px; --ent-scale: 0.98;
+    --exit-dur: 120ms; --exit-y: -6px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: auto; background: #1a1a1a; font-family: var(--caption-font); }
+  body { display: flex; align-items: flex-start; justify-content: center; gap: 24px; padding: 20px; }
+  .stage-wrap { transform: scale(0.45); transform-origin: top center; flex-shrink: 0; margin-bottom: 20px; }
+  .stage { position: relative; width: 1080px; height: 1920px; background: var(--stage-bg); box-shadow: 0 0 60px rgba(0,0,0,0.6); }
+
+  .card { position: absolute; left: 135px; top: 126px; width: 810px; height: 1668px;
+    background: var(--card-bg); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: var(--card-radius); box-shadow: var(--card-shadow);
+    overflow: hidden; display: flex; flex-direction: column; color: var(--text-primary); z-index: 1; }
+  .chrome { flex: 0 0 84px; height: 84px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px; padding: 0 20px; }
+  .dots { display: flex; gap: 8px; } .dot-light,.dot-mid,.dot-dark { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-light { background: #ff5f57; } .dot-mid { background: #febc2e; } .dot-dark { background: #28c840; }
+  .urlbar { flex: 1; height: 30px; border-radius: 15px; background: rgba(110,118,129,.28);
+    display: flex; align-items: center; padding: 0 14px; color: var(--text-secondary); font-size: 13px; }
+  .viewport { flex: 1 1 auto; position: relative; overflow: hidden; background: var(--card-bg); }
+  .document { position: absolute; inset: 0; width: 100%; }
+  .document .page { padding: 24px; color: #F0F6FC; font-size: 14px; line-height: 1.5; }
+  .document h2 { margin: 0 0 8px; font-size: 19px; }
+  .document ul { margin: 8px 0 8px 20px; }
+
+  .caption-overlay { position: absolute; z-index: 5; left: var(--caption-left); top: var(--caption-top);
+    width: var(--caption-width); max-height: var(--caption-maxh); overflow: hidden; pointer-events: none;
+    color: var(--caption-color); font-size: var(--caption-fontsize); font-weight: var(--caption-fw, 800);
+    line-height: var(--caption-lineheight); letter-spacing: var(--caption-ls);
+    text-shadow: var(--caption-shadow); text-wrap: balance; overflow-wrap: break-word;
+    font-family: var(--caption-font); }
+  .caption-line { display: block; }
+  .caption-group { position: relative; display: block; transform-origin: 50% 100%;
+    transition: opacity var(--ent-dur) ease-out, transform var(--ent-dur) ease-out; }
+  .caption-group.hidden { opacity: 0; transform: translate3d(0,var(--ent-y),0) scale(var(--ent-scale)); }
+  .caption-group.exiting { opacity: 0; transform: translate3d(0,var(--exit-y),0) scale(1); transition: opacity var(--exit-dur) ease-in, transform var(--exit-dur) ease-in; }
+  .caption-highlight { position: absolute; z-index: 0; background: var(--hl-bg);
+    border-radius: var(--hl-radius); pointer-events: none; opacity: 1;
+    padding: var(--hl-pad-y) var(--hl-pad-x); box-sizing: content-box;
+    transition: all var(--hl-transition) ease-out; }
+  .caption-overlay .w { position: relative; z-index: 1; }
+  .caption-overlay .w.active { color: var(--hl-text); }
+
+  .character { position: absolute; z-index: 2; right: var(--mascot-right); bottom: var(--mascot-bottom);
+    width: var(--mascot-width); height: auto; filter: var(--mascot-shadow);
+    background: transparent; pointer-events: none;
+    transition: transform 380ms cubic-bezier(0,0,0.2,1), opacity 380ms ease; }
+  .character.char-hidden { opacity: 0; transform: translate3d(140px,420px,0) scale(1); }
+
+  .callout-overlay { position: absolute; z-index: 4; left: var(--callout-left, 620px); top: var(--callout-top, 820px);
+    width: var(--callout-width, 370px); height: var(--callout-height, 270px); pointer-events: none;
+    transform-origin: 36.5% 94.4%;
+    transition: transform var(--callout-ent-dur, 200ms) cubic-bezier(0,0,0.2,1), opacity var(--callout-ent-dur, 200ms) ease; }
+  .callout-overlay.callout-hidden { opacity: 0; transform: translate3d(0, var(--callout-ent-y, 12px), 0) scale(var(--callout-ent-scale, 0.96)); }
+  .callout-sticker { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18)); }
+  .callout-text { position: absolute; left: 14%; top: 22%; width: 72%; height: 48%;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    color: var(--callout-tc, #151619); font-size: var(--callout-fontsize, 34px); font-weight: var(--callout-fontweight, 800);
+    line-height: var(--callout-lineheight, 1.1); letter-spacing: -0.6px; z-index: 2; }
+
+  .safe-zone { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
+  .safe-zone.on { display: block; }
+  .safe-zone .sz { position: absolute; border: 2px dashed rgba(255,0,0,0.5); }
+  .safe-top { top: 0; left: 0; right: 0; height: 269px; }
+  .safe-bottom { bottom: 0; left: 0; right: 0; height: 672px; }
+  .safe-left { top: 0; bottom: 0; left: 0; width: 65px; }
+  .safe-right { top: 0; bottom: 0; right: 0; width: 65px; }
+
+  .panel { position: fixed; top: 10px; right: 10px; width: 400px; z-index: 100;
+    background: rgba(0,0,0,0.93); color: #fff; padding: 14px; border-radius: 10px;
+    font-size: 12px; font-family: system-ui, sans-serif; max-height: 96vh; overflow-y: auto; }
+  .panel h3 { margin: 0 0 8px; font-size: 14px; }
+  .panel h4 { margin: 10px 0 4px; font-size: 12px; color: #FFE66D; }
+  .panel label { display: block; margin: 4px 0 2px; }
+  .panel input[type=range] { width: 100%; }
+  .panel input[type=color] { width: 100%; height: 24px; border: none; }
+  .panel input[type=text], .panel input[type=number] { width: 100%; padding: 2px 4px; }
+  .panel input[type=file] { width: 100%; font-size: 11px; }
+  .panel .val { float: right; color: #FFE66D; font-weight: 600; }
+  .panel section { margin-bottom: 8px; border-top: 1px solid #333; padding-top: 8px; }
+  .panel button { margin: 4px 2px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+  .panel button.primary { background: #238636; color: #fff; border: 1px solid #2ea043; font-weight: 700; padding: 7px 10px; font-size: 12px; }
+  .panel button.primary:hover { background: #2ea043; }
+  .panel code { background: #333; padding: 0 3px; border-radius: 3px; }
+  .panel .row { display: flex; gap: 6px; }
+  .panel .row button { flex: 1; }
+  .ctrl { display: flex; gap: 6px; align-items: center; }
+  .ctrl input[type=range] { flex: 1; }
+  .ctrl input[type=number] { width: 62px; }
+  .note { font-size: 10px; opacity: .6; margin-top: 8px; line-height: 1.4; }
+  textarea.cfg { width: 100%; height: 90px; font-size: 10px; font-family: monospace; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+<div class="stage">
+  <article class="card">
+    <header class="chrome">
+      <span class="dots"><i class="dot-light"></i><i class="dot-mid"></i><i class="dot-dark"></i></span>
+      <span class="urlbar">github.com/thestk/rtmidi</span>
+    </header>
+    <div class="viewport">
+      <div class="document">
+        <div class="page">
+          <h2>RtMidi</h2>
+          <p>A set of C++ classes that provide a common API for realtime MIDI input/output across Linux, Mac and Windows.</p>
+          <p><strong>Features</strong></p>
+          <ul><li>Object oriented C++ design</li><li>Simple, portable API</li><li>One header and one source file</li></ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <div class="caption-overlay" id="caption">
+    <div class="caption-group" id="cgroup">
+      <div class="caption-highlight" id="chl"></div>
+      <div class="caption-line"><span class="w" data-i="0">An</span> <span class="w" data-i="1">Android</span> <span class="w" data-i="2">client</span> <span class="w" data-i="3">for</span></div>
+      <div class="caption-line"><span class="w active" data-i="4">Hermes</span> <span class="w" data-i="5">Agent</span> <span class="w" data-i="6">on</span> <span class="w" data-i="7">your</span> <span class="w" data-i="8">phone.</span></div>
+    </div>
+  </div>
+
+  <svg id="impact-rear" class="impact-layer" viewBox="0 0 1080 1920" style="position:absolute; inset:0; width:1080px; height:1920px; pointer-events:none; z-index:2;"></svg>
+  <img class="character" id="mascot" src="../assets/character.png" alt="mascot" onerror="this.style.opacity='0.9'; this.style.background='rgba(255,0,0,0.35)'">
+  <div class="callout-overlay" id="callout">
+    <img class="callout-sticker" src="../assets/callout-bubble.png" onerror="this.src='../assets/Comic%20Speech%20Bubble%20Sticker.png'" alt="callout bubble">
+    <div class="callout-text" id="callout-text">Turns long videos<br>into short clips!</div>
+  </div>
+  <svg id="impact-front" class="impact-layer" viewBox="0 0 1080 1920" style="position:absolute; inset:0; width:1080px; height:1920px; pointer-events:none; z-index:4;"></svg>
+
+  <div class="guide-layer" id="guides" style="display:none; position:absolute; inset:0; pointer-events:none; z-index:20;">
+    <div id="guide-head-dot" style="position:absolute; width:14px; height:14px; border-radius:50%; background:#FFE66D; border:2px solid #000; transform:translate(-50%, -50%);"></div>
+    <div id="guide-face-box" style="position:absolute; border:2px dashed #58A6FF; background:rgba(88,166,255,0.12);"></div>
+    <div id="guide-caption-box" style="position:absolute; border:2px dashed #FF7B72; background:rgba(255,123,114,0.12);"></div>
+  </div>
+
+  <div class="safe-zone" id="safezone">
+    <div class="sz safe-top"></div><div class="sz safe-bottom"></div>
+    <div class="sz safe-left"></div><div class="sz safe-right"></div>
+  </div>
+</div>
+</div>
+
+<div class="panel">
+  <h3>Full Composition Preview</h3>
+  <div class="note">No render needed. Edit numbers directly or drag sliders. Values sync both ways.</div>
+
+  <section>
+    <h4>Mascot image (character)</h4>
+    <label>Pick PNG file<input type="file" id="mascot-file" accept="image/png"></label>
+    <label>Or URL<input type="text" id="mascot-url" value="../assets/character.png"></label>
+    <div class="row">
+      <button id="load-url">Load URL</button>
+      <button id="load-default">Load default (assets/character.png)</button>
+    </div>
+    <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading…</div>
+  </section>
+
+  <section>
+    <h4>Mascot placement</h4>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="400" max="980" value="943" id="s-mw"><input type="number" id="n-mw" value="943"></div>
+    <div class="ctrl"><span style="width:90px">right offset</span><input type="range" min="-60" max="60" value="-25" id="s-mr"><input type="number" id="n-mr" value="-25"></div>
+    <div class="ctrl"><span style="width:90px">bottom offset</span><input type="range" min="-60" max="60" value="-44" id="s-mb"><input type="number" id="n-mb" value="-44"></div>
+  </section>
+
+  <section>
+    <h4>Mascot shadow (drop-shadow)</h4>
+    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-40" max="100" value="26" id="s-msh-y"><input type="number" id="n-msh-y" value="26"></div>
+    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="150" value="26" id="s-msh-b"><input type="number" id="n-msh-b" value="26"></div>
+    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="0.95" id="s-msh-o"><input type="number" id="n-msh-o" value="0.95" step="0.01"></div>
+  </section>
+
+  <section>
+    <h4>Comic Speech Bubble Callout</h4>
+    <label><input type="checkbox" id="s-callout-enabled" checked> Enable speech bubbles</label>
+    <label>Bubble copy preset:
+      <div class="row">
+        <button type="button" id="btn-copy-purpose">Purpose</button>
+        <button type="button" id="btn-copy-mechanism">Mechanism</button>
+        <button type="button" id="btn-copy-example">Outcome</button>
+      </div>
+    </label>
+    <label>Bubble text<input type="text" id="s-callout-text" value="Turns long videos into short clips!"></label>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="260" max="500" value="370" id="s-callout-bw"><input type="number" id="n-callout-bw" value="370"></div>
+    <div class="ctrl"><span style="width:90px">height</span><input type="range" min="180" max="400" value="270" id="s-callout-bh"><input type="number" id="n-callout-bh" value="270"></div>
+    <div class="ctrl"><span style="width:90px">top offset</span><input type="range" min="100" max="350" value="210" id="s-callout-to"><input type="number" id="n-callout-to" value="210"></div>
+    <div class="ctrl"><span style="width:90px">face offset</span><input type="range" min="-100" max="100" value="25" id="s-callout-fo"><input type="number" id="n-callout-fo" value="25"></div>
+    <div class="ctrl"><span style="width:90px">left min</span><input type="range" min="300" max="800" value="560" id="s-callout-lmin"><input type="number" id="n-callout-lmin" value="560"></div>
+    <div class="ctrl"><span style="width:90px">right margin</span><input type="range" min="0" max="100" value="32" id="s-callout-rm"><input type="number" id="n-callout-rm" value="32"></div>
+    <div class="ctrl"><span style="width:90px">top min</span><input type="range" min="600" max="1000" value="820" id="s-callout-tmin"><input type="number" id="n-callout-tmin" value="820"></div>
+    <div class="ctrl"><span style="width:90px">top max</span><input type="range" min="800" max="1200" value="930" id="s-callout-tmax"><input type="number" id="n-callout-tmax" value="930"></div>
+    <div class="ctrl"><span style="width:90px">font size</span><input type="range" min="20" max="50" value="34" id="s-callout-fs"><input type="number" id="n-callout-fs" value="34"></div>
+    <div class="ctrl"><span style="width:90px">font weight</span><input type="range" min="400" max="900" step="100" value="800" id="s-callout-fw"><input type="number" id="n-callout-fw" value="800" step="100"></div>
+    <div class="ctrl"><span style="width:90px">line height</span><input type="range" min="0.8" max="1.5" step="0.05" value="1.1" id="s-callout-lh"><input type="number" id="n-callout-lh" value="1.1" step="0.05"></div>
+    <label>fill color<input type="color" value="#FFFDF7" id="s-callout-fill"></label>
+    <label>outline color<input type="color" value="#151619" id="s-callout-outline"></label>
+    <div class="ctrl"><span style="width:90px">outline width</span><input type="range" min="1" max="12" value="5" id="s-callout-ow"><input type="number" id="n-callout-ow" value="5"></div>
+    <label>accent color<input type="color" value="#FFE66D" id="s-callout-accent"></label>
+    <div class="ctrl"><span style="width:90px">accent off X</span><input type="range" min="-20" max="20" value="6" id="s-callout-aox"><input type="number" id="n-callout-aox" value="6"></div>
+    <div class="ctrl"><span style="width:90px">accent off Y</span><input type="range" min="-20" max="20" value="8" id="s-callout-aoy"><input type="number" id="n-callout-aoy" value="8"></div>
+    <label>text color<input type="color" value="#151619" id="s-callout-tc"></label>
+    <div class="ctrl"><span style="width:90px">ent dur</span><input type="range" min="80" max="400" value="200" id="s-callout-entms"><input type="number" id="n-callout-entms" value="200"></div>
+    <div class="ctrl"><span style="width:90px">exit dur</span><input type="range" min="60" max="350" value="180" id="s-callout-exitms"><input type="number" id="n-callout-exitms" value="180"></div>
+    <div class="ctrl"><span style="width:90px">ent Y</span><input type="range" min="0" max="30" value="12" id="s-callout-enty"><input type="number" id="n-callout-enty" value="12"></div>
+    <div class="ctrl"><span style="width:90px">exit Y</span><input type="range" min="0" max="30" value="6" id="s-callout-exity"><input type="number" id="n-callout-exity" value="6"></div>
+    <div class="ctrl"><span style="width:90px">ent scale</span><input type="range" min="0.8" max="1" step="0.01" value="0.96" id="s-callout-entsc"><input type="number" id="n-callout-entsc" value="0.96" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">exit scale</span><input type="range" min="0" max="0.2" step="0.01" value="0.01" id="s-callout-exitsc"><input type="number" id="n-callout-exitsc" value="0.01" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">min visible</span><input type="range" min="500" max="3000" value="1200" id="s-callout-minvis"><input type="number" id="n-callout-minvis" value="1200"></div>
+    <div class="ctrl"><span style="width:90px">max visible</span><input type="range" min="1500" max="6000" value="3400" id="s-callout-maxvis"><input type="number" id="n-callout-maxvis" value="3400"></div>
+    <div class="ctrl"><span style="width:90px">inter gap</span><input type="range" min="200" max="1200" value="550" id="s-callout-gap"><input type="number" id="n-callout-gap" value="550"></div>
+    <div class="ctrl"><span style="width:90px">max cues</span><input type="range" min="1" max="8" value="5" id="s-callout-mc"><input type="number" id="n-callout-mc" value="5"></div>
+  </section>
+
+  <section>
+    <h4>Mascot Impact Accents (comic lines)</h4>
+    <label><input type="checkbox" id="s-impact-enabled" checked> Enable impact strokes</label>
+    <label>stroke color<input type="color" value="#FFE66D" id="s-impact-color"></label>
+    <div class="ctrl"><span style="width:90px">stroke width</span><input type="range" min="2" max="12" value="5" id="s-impact-sw"><input type="number" id="n-impact-sw" value="5"></div>
+    <div class="ctrl"><span style="width:90px">peak opacity</span><input type="range" min="0.1" max="1" step="0.02" value="0.88" id="s-impact-op"><input type="number" id="n-impact-op" value="0.88" step="0.02"></div>
+    <div class="ctrl"><span style="width:90px">min bursts</span><input type="range" min="1" max="5" value="2" id="s-impact-minbc"><input type="number" id="n-impact-minbc" value="2"></div>
+    <div class="ctrl"><span style="width:90px">max bursts</span><input type="range" min="2" max="10" value="6" id="s-impact-maxbc"><input type="number" id="n-impact-maxbc" value="6"></div>
+    <div class="ctrl"><span style="width:90px">min interval</span><input type="range" min="200" max="1500" value="500" id="s-impact-minint"><input type="number" id="n-impact-minint" value="500"></div>
+    <div class="ctrl"><span style="width:90px">jitter ms</span><input type="range" min="0" max="300" value="120" id="s-impact-jit"><input type="number" id="n-impact-jit" value="120"></div>
+    <div class="ctrl"><span style="width:90px">burst dur</span><input type="range" min="150" max="600" value="360" id="s-impact-bdur"><input type="number" id="n-impact-bdur" value="360"></div>
+    <div class="ctrl"><span style="width:90px">line stagger</span><input type="range" min="10" max="100" value="45" id="s-impact-stag"><input type="number" id="n-impact-stag" value="45"></div>
+    <div class="row">
+      <button type="button" id="btn-burst">Trigger burst preview</button>
+    </div>
+  </section>
+
+  <section>
+    <h4>Caption text shadow</h4>
+    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-20" max="40" value="3" id="s-csh-y"><input type="number" id="n-csh-y" value="3"></div>
+    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="60" value="10" id="s-csh-b"><input type="number" id="n-csh-b" value="10"></div>
+    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="0.95" id="s-csh-o"><input type="number" id="n-csh-o" value="0.95" step="0.01"></div>
+  </section>
+
+  <section>
+    <h4>Caption position &amp; size (px)</h4>
+    <div class="ctrl"><span style="width:90px">left</span><input type="range" min="0" max="400" value="165" id="s-cl"><input type="number" id="n-cl" value="165"></div>
+    <div class="ctrl"><span style="width:90px">top</span><input type="range" min="400" max="1300" value="876" id="s-ct"><input type="number" id="n-ct" value="876"></div>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="300" max="960" value="718" id="s-cw"><input type="number" id="n-cw" value="718"></div>
+    <div class="ctrl"><span style="width:90px">max-height</span><input type="range" min="60" max="400" value="314" id="s-cmh"><input type="number" id="n-cmh" value="314"></div>
+  </section>
+
+  <section>
+    <h4>Caption typography</h4>
+    <label>font family
+      <select id="s-cfont">
+        <option value="'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">Inter / Segoe UI</option>
+        <option value="'Poppins', 'Segoe UI', sans-serif">Poppins</option>
+        <option value="'Montserrat', 'Segoe UI', sans-serif">Montserrat</option>
+        <option value="'Roboto', 'Helvetica Neue', Arial, sans-serif">Roboto</option>
+        <option value="'Georgia', 'Times New Roman', serif">Georgia (serif)</option>
+        <option value="'Cascadia Code', Consolas, monospace">Cascadia (mono)</option>
+      </select>
+    </label>
+    <div class="ctrl"><span style="width:90px">font-weight</span><input type="range" min="400" max="900" step="100" value="900" id="s-cfw"><input type="number" id="n-cfw" value="900" step="100"></div>
+    <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="64" id="s-cfs"><input type="number" id="n-cfs" value="64"></div>
+    <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="1.26" id="s-clh"><input type="number" id="n-clh" value="1.26" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-0.6" id="s-cls"><input type="number" id="n-cls" value="-0.6" step="0.1"></div>
+    <label>text color<input type="color" value="#F8F6EF" id="s-ccolor"></label>
+  </section>
+
+  <section>
+    <h4>Highlight box (active word) — auto-tracks the word</h4>
+    <label>background<input type="color" value="#FF0000" id="s-hbg"></label>
+    <label>text<input type="color" value="#FFFFFF" id="s-htx"></label>
+    <div class="note">Box size, radius and padding are derived automatically from the caption's font size, line-height and word positions. No manual controls needed.</div>
+  </section>
+
+  <section>
+    <h4>Card</h4>
+    <div class="ctrl"><span style="width:90px">radius</span><input type="range" min="0" max="60" value="60" id="s-crad"><input type="number" id="n-crad" value="60"></div>
+    <div class="ctrl"><span style="width:90px">shadow intensity</span><input type="range" min="0" max="2" step="0.05" value="0.05" id="s-csh-int"><input type="number" id="n-csh-int" value="0.05" step="0.05"></div>
+    <div class="ctrl"><span style="width:90px">shadow blur scale</span><input type="range" min="0.5" max="2" step="0.05" value="0.5" id="s-csh-blur"><input type="number" id="n-csh-blur" value="0.5" step="0.05"></div>
+  </section>
+
+  <section>
+    <h4>Entrance / exit animation</h4>
+    <div class="ctrl"><span style="width:90px">ent dur</span><input type="range" min="80" max="400" value="160" id="s-entdur"><input type="number" id="n-entdur" value="160"></div>
+    <div class="ctrl"><span style="width:90px">ent Y</span><input type="range" min="4" max="30" value="12" id="s-enty"><input type="number" id="n-enty" value="12"></div>
+    <div class="ctrl"><span style="width:90px">ent scale</span><input type="range" min="0.9" max="1" step="0.01" value="0.98" id="s-entsc"><input type="number" id="n-entsc" value="0.98" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">exit dur</span><input type="range" min="60" max="240" value="120" id="s-exitdur"><input type="number" id="n-exitdur" value="120"></div>
+    <div class="ctrl"><span style="width:90px">exit Y</span><input type="range" min="-12" max="0" value="-6" id="s-exity"><input type="number" id="n-exity" value="-6"></div>
+  </section>
+
+  <section>
+    <label><input type="checkbox" id="s-safe"> Show Instagram safe zones</label>
+    <label><input type="checkbox" id="s-guides"> Show layout &amp; collision guides</label>
+    <label><input type="checkbox" id="s-hlmove" checked> Animate highlight</label>
+    <div class="row">
+      <button id="btn-entrance">Play entrance</button>
+      <button id="btn-exit">Play exit</button>
+      <button id="btn-reset">Reset</button>
+    </div>
+  </section>
+
+  <section>
+    <h4>Save to codebase (one click)</h4>
+    <div class="row">
+      <button id="savecfg" class="primary" onclick="window.__saveToCodebase && window.__saveToCodebase()">Save (one click)</button>
+    </div>
+    <div class="note" id="save-status">
+      Writes every value below straight into <code>src/config.ts</code>,
+      <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>.
+      Open the <strong>Save My Edits</strong> launcher to save with zero setup.
+    </div>
+    <div class="row">
+      <button id="reloadcfg" onclick="window.__reloadFromCodebase && window.__reloadFromCodebase()">Reload from codebase</button>
+      <button id="copycfg" onclick="window.__copyConfig && window.__copyConfig()">Copy text</button>
+      <button id="connectfolder" style="display:none" onclick="window.__connectFolder && window.__connectFolder()">Save to folder…</button>
+    </div>
+    <textarea class="cfg" id="cfgout" style="height:180px;"></textarea>
+  </section>
+
+  <section>
+    <h4>Reset</h4>
+    <div class="row">
+      <button id="btn-reset-all" onclick="window.__resetAll && window.__resetAll()">Reset all</button>
+    </div>
+    <div class="note">Clears locally stored values and reloads the committed codebase values.</div>
+  </section>
+
+  <div class="note">
+    One-click save: open this page with the <strong>Save My Edits</strong> launcher in the
+    project folder — Save writes the values into the files below. If the helper is not
+    running, Save writes to your folder directly (the browser asks once).<br>
+    Config paths: <code>src/config.ts</code> (MASCOT_LAYOUT, CAPTION_OVERLAY, CARD) ·
+    <code>src/caption-overlay.ts</code> (CAPTION_STYLE, CAPTION_HIGHLIGHT, CAPTION_MOTION) ·
+    <code>src/card.ts</code> (CARD_SHADOW_TUNING).<br>
+    Env overrides: <code>SHOWCASE_MASCOT_WIDTH_RATIO</code>, <code>SHOWCASE_MASCOT_OFFSET_X/Y</code>,
+    <code>SHOWCASE_CAPTION_HIGHLIGHT_BG/TEXT</code>, <code>SHOWCASE_CHARACTER_PNG</code>.
+  </div>
+</div>
+
+<script src="config-model.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const root = document.documentElement;
+  const setVar = (k, v) => root.style.setProperty(k, v);
+
+  /* ------------------------------------------------------------------ */
+  /* One-click save.                                                     */
+  /*                                                                     */
+  /* Save tries, in order: the helper server (tools/preview-server.ts,   */
+  /* started by the "Save My Edits" launcher), then a picked project     */
+  /* folder via the shared tools/config-model.js, then a text download.  */
+  /*                                                                     */
+  /* Defined early and exposed on `window` so the buttons keep working   */
+  /* even if anything later in this file throws.                          */
+  /* ------------------------------------------------------------------ */
+  const FIELD_MAP = {
+    mascotWidthPx: 's-mw', mascotRight: 's-mr', mascotBottom: 's-mb',
+    mascotShadowOffsetY: 's-msh-y', mascotShadowBlur: 's-msh-b', mascotShadowOpacity: 's-msh-o',
+    captionLeft: 's-cl', captionTop: 's-ct', captionWidth: 's-cw', captionMaxHeight: 's-cmh',
+    captionFontFamily: 's-cfont', captionFontWeight: 's-cfw', captionFontSize: 's-cfs',
+    captionLineHeight: 's-clh', captionLetterSpacing: 's-cls', captionColor: 's-ccolor',
+    captionShadowOffsetY: 's-csh-y', captionShadowBlur: 's-csh-b', captionShadowOpacity: 's-csh-o',
+    highlightBackground: 's-hbg', highlightText: 's-htx',
+    cardRadius: 's-crad', cardShadowIntensity: 's-csh-int', cardShadowBlurScale: 's-csh-blur',
+    enterMs: 's-entdur', enterYPx: 's-enty', enterScale: 's-entsc',
+    exitMs: 's-exitdur', exitYPx: 's-exity',
+
+    calloutEnabled: 's-callout-enabled',
+    calloutBubbleWidth: 's-callout-bw',
+    calloutBubbleHeight: 's-callout-bh',
+    calloutLeftMin: 's-callout-lmin',
+    calloutRightMargin: 's-callout-rm',
+    calloutTopOffset: 's-callout-to',
+    calloutTopMin: 's-callout-tmin',
+    calloutTopMax: 's-callout-tmax',
+    calloutFaceOffset: 's-callout-fo',
+    calloutEnterMs: 's-callout-entms',
+    calloutExitMs: 's-callout-exitms',
+    calloutEnterY: 's-callout-enty',
+    calloutExitY: 's-callout-exity',
+    calloutEnterScale: 's-callout-entsc',
+    calloutExitScale: 's-callout-exitsc',
+    calloutMinVisibleMs: 's-callout-minvis',
+    calloutMaxVisibleMs: 's-callout-maxvis',
+    calloutInterGapMs: 's-callout-gap',
+    calloutMaxCues: 's-callout-mc',
+    calloutFill: 's-callout-fill',
+    calloutOutline: 's-callout-outline',
+    calloutOutlineWidth: 's-callout-ow',
+    calloutAccent: 's-callout-accent',
+    calloutAccentOffsetX: 's-callout-aox',
+    calloutAccentOffsetY: 's-callout-aoy',
+    calloutTextColor: 's-callout-tc',
+    calloutFontSize: 's-callout-fs',
+    calloutFontWeight: 's-callout-fw',
+    calloutLineHeight: 's-callout-lh',
+
+    impactEnabled: 's-impact-enabled',
+    impactStrokeColor: 's-impact-color',
+    impactStrokeWidth: 's-impact-sw',
+    impactPeakOpacity: 's-impact-op',
+    impactMinBurstCount: 's-impact-minbc',
+    impactMaxBurstCount: 's-impact-maxbc',
+    impactMinIntervalMs: 's-impact-minint',
+    impactJitterMs: 's-impact-jit',
+    impactBurstDurationMs: 's-impact-bdur',
+    impactLineStaggerMs: 's-impact-stag'
+  };
+  const TEXT_FIELDS = new Set([
+    'captionFontFamily', 'captionColor', 'highlightBackground', 'highlightText',
+    'calloutFill', 'calloutOutline', 'calloutAccent', 'calloutTextColor',
+    'impactStrokeColor'
+  ]);
+  const BOOLEAN_FIELDS = new Set(['calloutEnabled', 'impactEnabled']);
+  // The preview shows the exit offset the way CSS applies it (negative = up),
+  // while CAPTION_MOTION stores the positive magnitude. Translate on the way
+  // in and out so a save can never flip the animation's direction.
+  const NEGATED_FIELDS = new Set(['exitYPx']);
+  const API_BASES = ['', 'http://127.0.0.1:5178'];
+
+  function controlToConfig(key, el) {
+    if (BOOLEAN_FIELDS.has(key)) return Boolean(el.checked);
+    const rawValue = el.value;
+    const value = TEXT_FIELDS.has(key) ? String(rawValue) : parseFloat(rawValue);
+    return NEGATED_FIELDS.has(key) ? -value : value;
+  }
+
+  function configToControl(key, value) {
+    if (BOOLEAN_FIELDS.has(key)) return Boolean(value);
+    return NEGATED_FIELDS.has(key) ? -Number(value) : value;
+  }
+
+  function collectConfig() {
+    const cfg = {};
+    for (const key of Object.keys(FIELD_MAP)) {
+      const el = $(FIELD_MAP[key]);
+      if (!el) continue;
+      cfg[key] = controlToConfig(key, el);
+    }
+    return cfg;
+  }
+
+  function applyConfig(cfg) {
+    for (const key of Object.keys(FIELD_MAP)) {
+      const value = cfg[key];
+      if (value === undefined || value === null) continue;
+      const el = $(FIELD_MAP[key]);
+      if (!el) continue;
+      const controlValue = configToControl(key, value);
+      if (BOOLEAN_FIELDS.has(key)) {
+        el.checked = Boolean(controlValue);
+      } else if (el.tagName === 'SELECT') {
+        if (Array.from(el.options).some(o => o.value === String(controlValue))) el.value = String(controlValue);
+      } else {
+        el.value = controlValue;
+      }
+      const pairId = el.id.startsWith('s-') ? 'n-' + el.id.slice(2) : 's-' + el.id.slice(2);
+      const paired = $(pairId);
+      if (paired && String(paired.value) !== String(controlValue)) paired.value = controlValue;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  const MODEL = window.ShowcaseConfigModel || null;
+
+  async function apiFetch(pathname, options) {
+    let lastError = new Error('no endpoint');
+    for (const base of API_BASES) {
+      try {
+        const res = await fetch(base + pathname, options);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        return data;
+      } catch (error) { lastError = error; }
+    }
+    throw lastError;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Invisible folder fallback                                           */
+  /*                                                                     */
+  /* Used only when the helper server is unreachable (e.g. the page was  */
+  /* opened straight from disk). The first Save asks the browser for the */
+  /* project folder once; afterwards Save writes the same rewrites via   */
+  /* the shared `config-model.js`. The chosen handle is remembered in    */
+  /* IndexedDB when the browser allows it.                               */
+  /* ------------------------------------------------------------------ */
+  const FOLDER_SUPPORTED = typeof window.showDirectoryPicker === 'function';
+  const IDB_NAME = 'showcase-preview';
+  const IDB_STORE = 'handles';
+  const DIR_KEY = 'project-root';
+  let dirHandle = null;
+  let dirValidated = false;
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') { reject(new Error('no indexedDB')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('indexedDB open failed'));
+    });
+  }
+
+  async function idbGet(key) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbSet(key, value) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function resolveFile(root, relPath) {
+    const parts = relPath.split('/');
+    let dir = root;
+    for (let i = 0; i < parts.length - 1; i += 1) dir = await dir.getDirectoryHandle(parts[i]);
+    return dir.getFileHandle(parts[parts.length - 1]);
+  }
+
+  /** Read the three source files out of a picked project folder. */
+  async function readFolderSources(handle) {
+    const sources = {};
+    for (const key of Object.keys(MODEL.CONFIG_PATHS)) {
+      const fh = await resolveFile(handle, MODEL.CONFIG_PATHS[key]);
+      sources[key] = await (await fh.getFile()).text();
+    }
+    return sources;
+  }
+
+  /** Ask for the project folder once and remember it. */
+  async function pickFolder() {
+    const handle = await window.showDirectoryPicker({ id: 'showcase-project', mode: 'readwrite' });
+    dirHandle = handle;
+    dirValidated = false;
+    try { await idbSet(DIR_KEY, handle); } catch (error) { /* session-only then */ }
+    return handle;
+  }
+
+  /** The stored folder, if its permission is still granted (never prompts). */
+  async function storedFolder() {
+    if (dirHandle) return dirHandle;
+    if (!FOLDER_SUPPORTED) return null;
+    let handle = null;
+    try { handle = await idbGet(DIR_KEY); } catch (error) { handle = null; }
+    if (!handle) return null;
+    try {
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') return null;
+    } catch (error) { return null; }
+    dirHandle = handle;
+    return handle;
+  }
+
+  /** Ensure we have a validated folder handle with write permission. */
+  async function ensureFolder() {
+    let handle = dirHandle;
+    if (!handle) handle = await pickFolder();
+    const perm = await handle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') throw new Error('folder permission was not granted');
+    if (!dirValidated) {
+      // Fail loudly on the wrong folder instead of writing into the void.
+      await readFolderSources(handle);
+      dirValidated = true;
+    }
+    return handle;
+  }
+
+  /** Write the config through a picked folder handle. */
+  async function saveViaFolder(config) {
+    if (!MODEL) throw new Error('the shared save engine did not load');
+    if (!FOLDER_SUPPORTED) throw new Error('this browser cannot save to a folder');
+    const handle = await ensureFolder();
+    const sources = await readFolderSources(handle);
+    const next = MODEL.writePreviewConfig(sources, config);
+    const files = [];
+    for (const key of Object.keys(MODEL.CONFIG_PATHS)) {
+      if (sources[key] === next[key]) continue;
+      const fh = await resolveFile(handle, MODEL.CONFIG_PATHS[key]);
+      const writable = await fh.createWritable();
+      await writable.write(next[key]);
+      await writable.close();
+      files.push(MODEL.CONFIG_PATHS[key]);
+    }
+    return { files };
+  }
+
+  function setStatus(html, tone) {
+    const status = $('save-status');
+    if (!status) return;
+    status.innerHTML = html;
+    status.style.color = tone === 'error' ? '#ff7b72' : tone === 'ok' ? '#7ee787' : '';
+  }
+
+  function downloadCfg() {
+    const content = $('cfgout') ? $('cfgout').value : JSON.stringify(collectConfig(), null, 2);
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'showcase-config.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  function doneSaving(btn, label) {
+    if (!btn) return;
+    btn.textContent = label;
+    setTimeout(() => { btn.textContent = 'Save (one click)'; }, 1500);
+  }
+
+  window.__saveToCodebase = async function () {
+    const btn = $('savecfg');
+    if (btn) btn.textContent = 'Saving...';
+    const config = collectConfig();
+
+    // 1. The helper server, when it is running (the normal path).
+    try {
+      const data = await apiFetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      const files = data.files && data.files.length
+        ? data.files.map(f => '<code>' + f + '</code>').join(', ')
+        : 'no changes (already up to date)';
+      setStatus('✓ Saved to ' + files, 'ok');
+      doneSaving(btn, 'Saved ✓');
+      if (typeof refreshCfg === 'function') refreshCfg();
+      return;
+    } catch (serverError) { /* fall through to the folder fallback */ }
+
+    // 2. Write straight into the project folder (asks once, then never again).
+    try {
+      const result = await saveViaFolder(config);
+      const files = result.files.length
+        ? result.files.map(f => '<code>' + f + '</code>').join(', ')
+        : 'no changes (already up to date)';
+      setStatus('✓ Saved to your folder — ' + files, 'ok');
+      doneSaving(btn, 'Saved ✓');
+      if (typeof refreshCfg === 'function') refreshCfg();
+      return;
+    } catch (folderError) {
+      if (folderError && folderError.name === 'AbortError') {
+        setStatus('Save cancelled — no folder was chosen.', 'error');
+        doneSaving(btn, 'Cancelled');
+        return;
+      }
+      // 3. Last resort: hand the values over as a text download.
+      setStatus('Could not save to the codebase (' + folderError.message +
+        '). Downloaded a text copy instead.', 'error');
+      downloadCfg();
+      doneSaving(btn, 'Downloaded');
+    }
+  };
+
+  window.__reloadFromCodebase = async function () {
+    // Prefer the committed values from the helper server…
+    try {
+      const data = await apiFetch('/api/config', { method: 'GET' });
+      applyConfig(data.config);
+      setStatus('Loaded the committed values from the codebase.', 'ok');
+      return;
+    } catch (error) { /* try the folder next */ }
+
+    // …then from a folder that is already connected.
+    const handle = await storedFolder();
+    if (handle && MODEL) {
+      try {
+        const sources = await readFolderSources(handle);
+        applyConfig(MODEL.parsePreviewConfig(sources));
+        setStatus('Loaded the committed values from your folder.', 'ok');
+        return;
+      } catch (error) { /* fall back to the local copy already applied */ }
+    }
+    // No helper and no folder: the localStorage copy is already on screen.
+    setStatus('Showing your last values. Open the <strong>Save My Edits</strong> launcher to save to the files.', '');
+    if (FOLDER_SUPPORTED) {
+      const connect = $('connectfolder');
+      if (connect) connect.style.display = '';
+    }
+  };
+
+  window.__connectFolder = async function () {
+    if (!FOLDER_SUPPORTED) {
+      setStatus('This browser cannot save to a folder. Use Chrome or Edge, or the launcher.', 'error');
+      return;
+    }
+    try {
+      await ensureFolder();
+      setStatus('✓ Folder connected — Save now writes to the files.', 'ok');
+    } catch (error) {
+      if (error && error.name === 'AbortError') { setStatus('Folder connection cancelled.', ''); return; }
+      setStatus('Could not connect that folder (' + error.message + '). Pick the project folder that contains <code>src</code>.', 'error');
+    }
+  };
+
+
+  window.__copyConfig = function () {
+    const ta = $('cfgout');
+    if (ta) { ta.select(); try { document.execCommand('copy'); } catch (error) { /* ignore */ } }
+    const btn = $('copycfg');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy text'; }, 1200); }
+  };
+
+  window.__resetAll = function () {
+    try { localStorage.removeItem('showcase-preview-state-v1'); } catch (error) { /* ignore */ }
+    location.reload();
+  };
+
+
+  // paired slider + number input
+  function pair(sliderId, numId, varName, suffix='') {
+    const s = $(sliderId), n = $(numId);
+    if (!s || !n) return;
+    const sync = (val) => {
+      s.value = val; n.value = val;
+      setVar(varName, val + suffix);
+    };
+    s.addEventListener('input', () => sync(s.value));
+    n.addEventListener('input', () => sync(n.value));
+    sync(s.value);
+  }
+  pair('s-mw','n-mw','--mascot-width','px');
+  pair('s-mr','n-mr','--mascot-right','px');
+  pair('s-mb','n-mb','--mascot-bottom','px');
+  pair('s-cl','n-cl','--caption-left','px');
+  pair('s-ct','n-ct','--caption-top','px');
+  pair('s-cw','n-cw','--caption-width','px');
+  pair('s-cmh','n-cmh','--caption-maxh','px');
+  pair('s-cfs','n-cfs','--caption-fontsize','px');
+  pair('s-clh','n-clh','--caption-lineheight','');
+  pair('s-cls','n-cls','--caption-ls','px');
+  pair('s-hr','n-hr','--hl-radius','px');
+  pair('s-hpx','n-hpx','--hl-pad-x','px');
+  pair('s-hpy','n-hpy','--hl-pad-y','px');
+  pair('s-htt','n-htt','--hl-transition','ms');
+  pair('s-entdur','n-entdur','--ent-dur','ms');
+  pair('s-enty','n-enty','--ent-y','px');
+  pair('s-entsc','n-entsc','--ent-scale','');
+  pair('s-exitdur','n-exitdur','--exit-dur','ms');
+  pair('s-exity','n-exity','--exit-y','px');
+
+  pair('s-callout-bw','n-callout-bw','--callout-width','px');
+  pair('s-callout-bh','n-callout-bh','--callout-height','px');
+  pair('s-callout-to','n-callout-to','--callout-top-offset','px');
+  pair('s-callout-fo','n-callout-fo','--callout-face-offset','px');
+  pair('s-callout-lmin','n-callout-lmin','--callout-left-min','px');
+  pair('s-callout-rm','n-callout-rm','--callout-right-margin','px');
+  pair('s-callout-tmin','n-callout-tmin','--callout-top-min','px');
+  pair('s-callout-tmax','n-callout-tmax','--callout-top-max','px');
+  pair('s-callout-fs','n-callout-fs','--callout-fontsize','px');
+  pair('s-callout-fw','n-callout-fw','--callout-fontweight','');
+  pair('s-callout-lh','n-callout-lh','--callout-lineheight','');
+  pair('s-callout-ow','n-callout-ow','--callout-outline-width','px');
+  pair('s-callout-aox','n-callout-aox','--callout-accent-offset-x','px');
+  pair('s-callout-aoy','n-callout-aoy','--callout-accent-offset-y','px');
+  pair('s-callout-entms','n-callout-entms','--callout-ent-dur','ms');
+  pair('s-callout-exitms','n-callout-exitms','--callout-exit-dur','ms');
+  pair('s-callout-enty','n-callout-enty','--callout-ent-y','px');
+  pair('s-callout-exity','n-callout-exity','--callout-exit-y','px');
+  pair('s-callout-entsc','n-callout-entsc','--callout-ent-scale','');
+  pair('s-callout-exitsc','n-callout-exitsc','--callout-exit-scale','');
+  pair('s-callout-minvis','n-callout-minvis','--callout-min-vis','ms');
+  pair('s-callout-maxvis','n-callout-maxvis','--callout-max-vis','ms');
+  pair('s-callout-gap','n-callout-gap','--callout-gap','ms');
+  pair('s-callout-mc','n-callout-mc','--callout-max-cues','');
+
+  pair('s-impact-sw','n-impact-sw','--impact-stroke-width','px');
+  pair('s-impact-op','n-impact-op','--impact-opacity','');
+  pair('s-impact-minbc','n-impact-minbc','--impact-min-bursts','');
+  pair('s-impact-maxbc','n-impact-maxbc','--impact-max-bursts','');
+  pair('s-impact-minint','n-impact-minint','--impact-min-interval','ms');
+  pair('s-impact-jit','n-impact-jit','--impact-jitter','ms');
+  pair('s-impact-bdur','n-impact-bdur','--impact-burst-dur','ms');
+  pair('s-impact-stag','n-impact-stag','--impact-stagger','ms');
+
+  // text/color/shadow/filter inputs
+  function txt(id, varName) { const el=$(id); if(!el) return; const up=()=>setVar(varName, el.value); el.addEventListener('input', up); up(); }
+  txt('s-ccolor','--caption-color'); // color input → setVar with #hex (no suffix) but setVar needs property name
+  // color inputs set --caption-color etc directly via style
+  $('s-ccolor').addEventListener('input', e => setVar('--caption-color', e.target.value));
+  function rebuildCaptionShadow() {
+    const off = $('n-csh-y')?.value ?? $('s-csh-y')?.value ?? 0;
+    const blur = $('n-csh-b')?.value ?? $('s-csh-b')?.value ?? 0;
+    const op = $('n-csh-o')?.value ?? $('s-csh-o')?.value ?? 1;
+    const shadowVal = '0 ' + off + 'px ' + blur + 'px rgba(0,0,0,' + op + ')';
+    setVar('--caption-shadow', shadowVal);
+    const cap = $('caption');
+    if (cap) cap.style.textShadow = shadowVal;
+  }
+  ['s-csh-y','s-csh-b','s-csh-o','n-csh-y','n-csh-b','n-csh-o'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (id.startsWith('n-')) {
+        const sib = $('s-' + id.slice(2));
+        if (sib && sib.value !== el.value) sib.value = el.value;
+      }
+      if (id.startsWith('s-')) {
+        const sib = $('n-' + id.slice(2));
+        if (sib && sib.value !== el.value) sib.value = el.value;
+      }
+      rebuildCaptionShadow();
+    });
+  });
+  rebuildCaptionShadow();
+  // font family + weight
+  $('s-cfont').addEventListener('input', e => setVar('--caption-font', e.target.value));
+  function syncFontWeight() { const v = $('s-cfw').value; setVar('--caption-fw', v); document.querySelector('.caption-overlay').style.fontWeight = v; }
+  $('s-cfw').addEventListener('input', syncFontWeight);
+  $('n-cfw').addEventListener('input', () => { $('s-cfw').value = $('n-cfw').value; syncFontWeight(); });
+  syncFontWeight();
+  // card shadow rebuild
+  function rebuildCardShadow() {
+    const intensity = parseFloat($('s-csh-int').value) || 1;
+    const blurScale = parseFloat($('s-csh-blur').value) || 1;
+    // sync number inputs
+    if ($('n-csh-int')) $('n-csh-int').value = intensity;
+    if ($('n-csh-blur')) $('n-csh-blur').value = blurScale;
+    const real = [
+      `0 2px ${Math.round(6*blurScale)}px rgba(25,23,20,${Math.min(0.95, 0.14*intensity*10).toFixed(3)})`,
+      `0 10px ${Math.round(22*blurScale)}px rgba(25,23,20,${Math.min(0.95, 0.12*intensity*10).toFixed(3)})`,
+      `0 24px ${Math.round(45*blurScale)}px rgba(25,23,20,${Math.min(0.95, 0.18*intensity*10).toFixed(3)})`,
+      `0 48px ${Math.round(90*blurScale)}px rgba(25,23,20,${Math.min(0.95, 0.14*intensity*10).toFixed(3)})`,
+    ].join(', ');
+    setVar('--card-shadow', real);
+  }
+  ['s-csh-int','n-csh-int','s-csh-blur','n-csh-blur'].forEach(id => { const el=$(id); if(el) el.addEventListener('input', () => {
+    if (id.startsWith('n-')) { const sib = $('s-' + id.slice(2)); if (sib) sib.value = el.value; }
+    if (id.startsWith('s-')) { const sib = $('n-' + id.slice(2)); if (sib) sib.value = el.value; }
+    rebuildCardShadow();
+  }); });
+  rebuildCardShadow();
+  $('s-hbg').addEventListener('input', e => setVar('--hl-bg', e.target.value));
+  $('s-htx').addEventListener('input', e => setVar('--hl-text', e.target.value));
+  function rebuildMascotShadow() {
+    const off = $('n-msh-y')?.value ?? $('s-msh-y')?.value ?? 0;
+    const blur = $('n-msh-b')?.value ?? $('s-msh-b')?.value ?? 0;
+    const op = $('n-msh-o')?.value ?? $('s-msh-o')?.value ?? 1;
+    const shadowVal = 'drop-shadow(0 ' + off + 'px ' + blur + 'px rgba(0,0,0,' + op + '))';
+    setVar('--mascot-shadow', shadowVal);
+    const mascot = $('mascot');
+    if (mascot) mascot.style.filter = shadowVal;
+    document.querySelectorAll('.character').forEach(ch => {
+      ch.style.filter = shadowVal;
+    });
+  }
+  ['s-msh-y','s-msh-b','s-msh-o','n-msh-y','n-msh-b','n-msh-o'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (id.startsWith('n-')) {
+        const sib = $('s-' + id.slice(2));
+        if (sib && sib.value !== el.value) sib.value = el.value;
+      }
+      if (id.startsWith('s-')) {
+        const sib = $('n-' + id.slice(2));
+        if (sib && sib.value !== el.value) sib.value = el.value;
+      }
+      rebuildMascotShadow();
+    });
+  });
+  rebuildMascotShadow();
+
+  $('s-safe').addEventListener('change', e => $('safezone').classList.toggle('on', e.target.checked));
+
+  // mascot image
+  const mascotEl2 = $('mascot');
+  function setMascotSrc(src) {
+    const st = $('mascot-status');
+    if (st) st.textContent = 'mascot status: loading…';
+    mascotEl2.style.opacity = '0.25';
+    mascotEl2.onload = () => { mascotEl2.style.opacity = '1'; mascotEl2.style.background = 'transparent'; if (st) st.textContent = 'mascot status: loaded ✓'; };
+    mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED — click "Pick PNG file" to load your character'; };
+    mascotEl2.src = src;
+  }
+  $('mascot-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) setMascotSrc(URL.createObjectURL(f)); });
+  $('load-url').addEventListener('click', () => { const u = $('mascot-url').value.trim(); if (u) setMascotSrc(u); });
+  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/character.png'; setMascotSrc('../assets/character.png'); });
+  setMascotSrc('../assets/character.png');
+
+  // moving highlight
+  const words = Array.from(document.querySelectorAll('.w'));
+  const hl = $('chl');
+  let idx = 0;
+  let currentActive = 4; // index of the word currently highlighted (default: "Hermes")
+  function positionHighlight(i) {
+    const w = words[i % words.length]; if (!w) return;
+    const r = w.getBoundingClientRect();
+    const g = $('cgroup').getBoundingClientRect();
+    const padX = parseFloat(getComputedStyle(root).getPropertyValue('--hl-pad-x')) || 9;
+    const padY = parseFloat(getComputedStyle(root).getPropertyValue('--hl-pad-y')) || 4;
+    hl.style.left = (r.left - g.left - padX) + 'px';
+    hl.style.top = (r.top - g.top - padY) + 'px';
+    hl.style.width = (r.width + padX * 2) + 'px';
+    hl.style.height = (r.height + padY * 2) + 'px';
+  }
+  function moveHighlight(i) {
+    currentActive = i % words.length;
+    words.forEach(x => x.classList.remove('active'));
+    words[currentActive].classList.add('active');
+    positionHighlight(currentActive);
+  }
+  positionHighlight(currentActive);
+  document.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('input', () => {
+    setTimeout(() => positionHighlight(currentActive), 50);
+  }));
+  let timer = null;
+  $('s-hlmove').addEventListener('change', e => {
+    if (e.target.checked) { if (!timer) timer = setInterval(() => { moveHighlight(idx++); }, 700); }
+    else { if (timer) { clearInterval(timer); timer = null; } }
+  });
+
+  // callout bubble controls
+  const calloutEl = $('callout');
+  const calloutTextEl = $('callout-text');
+  $('s-callout-enabled')?.addEventListener('change', e => {
+    if (calloutEl) calloutEl.style.display = e.target.checked ? 'block' : 'none';
+  });
+  $('s-callout-text')?.addEventListener('input', e => {
+    if (calloutTextEl) calloutTextEl.textContent = e.target.value;
+  });
+
+  $('btn-copy-purpose')?.addEventListener('click', () => {
+    const t = $('s-callout-text');
+    if (t) { t.value = 'Turns long videos into short clips!'; t.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  $('btn-copy-mechanism')?.addEventListener('click', () => {
+    const t = $('s-callout-text');
+    if (t) { t.value = 'Finds the strongest moments'; t.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  $('btn-copy-example')?.addEventListener('click', () => {
+    const t = $('s-callout-text');
+    if (t) { t.value = 'Ready for vertical video'; t.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+
+  // Impact burst preview
+  $('btn-burst')?.addEventListener('click', () => {
+    const front = $('impact-front');
+    if (!front) return;
+    const color = $('s-impact-color')?.value || '#FFE66D';
+    const sw = $('s-impact-sw')?.value || 5;
+    const op = $('s-impact-op')?.value || 0.88;
+    front.innerHTML = '<path d="M 680 720 L 640 680 M 710 700 L 690 650 M 740 730 L 750 670" stroke="' + color + '" stroke-width="' + sw + '" stroke-linecap="round" fill="none" opacity="' + op + '"/>';
+    setTimeout(() => { front.innerHTML = ''; }, 360);
+  });
+
+  // Layout & collision guides
+  $('s-guides')?.addEventListener('change', e => {
+    const g = $('guides');
+    if (!g) return;
+    g.style.display = e.target.checked ? 'block' : 'none';
+    if (e.target.checked) updateGuides();
+  });
+
+  function updateGuides() {
+    const dot = $('guide-head-dot');
+    const fbox = $('guide-face-box');
+    const cbox = $('guide-caption-box');
+    const mascot = $('mascot');
+    if (!dot || !mascot) return;
+    const r = mascot.getBoundingClientRect();
+    const stage = document.querySelector('.stage').getBoundingClientRect();
+    const scale = stage.width / 1080;
+    const hx = (r.left - stage.left + r.width * 0.45) / scale;
+    const hy = (r.top - stage.top + r.height * 0.14) / scale;
+    dot.style.left = hx + 'px';
+    dot.style.top = hy + 'px';
+    if (fbox) {
+      fbox.style.left = (hx - 90) + 'px';
+      fbox.style.top = (hy - 70) + 'px';
+      fbox.style.width = '180px';
+      fbox.style.height = '140px';
+    }
+    if (cbox) {
+      const cl = parseFloat(getComputedStyle(root).getPropertyValue('--caption-left')) || 200;
+      const ct = parseFloat(getComputedStyle(root).getPropertyValue('--caption-top')) || 1510;
+      const cw = parseFloat(getComputedStyle(root).getPropertyValue('--caption-width')) || 680;
+      const ch = parseFloat(getComputedStyle(root).getPropertyValue('--caption-maxh')) || 190;
+      cbox.style.left = cl + 'px';
+      cbox.style.top = ct + 'px';
+      cbox.style.width = cw + 'px';
+      cbox.style.height = ch + 'px';
+    }
+  }
+
+  // entrance/exit
+  const cgroup = $('cgroup');
+  const mascotEl = $('mascot');
+  $('btn-entrance').addEventListener('click', () => {
+    cgroup.classList.remove('exiting'); cgroup.classList.add('hidden');
+    mascotEl.classList.add('char-hidden');
+    if (calloutEl) calloutEl.classList.add('callout-hidden');
+    void cgroup.offsetHeight;
+    requestAnimationFrame(() => {
+      cgroup.classList.remove('hidden');
+      mascotEl.classList.remove('char-hidden');
+      if (calloutEl) setTimeout(() => calloutEl.classList.remove('callout-hidden'), 200);
+    });
+  });
+  $('btn-exit').addEventListener('click', () => {
+    cgroup.classList.remove('hidden');
+    mascotEl.classList.remove('char-hidden');
+    if (calloutEl) calloutEl.classList.add('callout-hidden');
+    void cgroup.offsetHeight;
+    requestAnimationFrame(() => {
+      cgroup.classList.add('exiting'); cgroup.classList.add('hidden');
+      mascotEl.classList.add('char-hidden');
+    });
+  });
+  $('btn-reset').addEventListener('click', () => {
+    cgroup.classList.remove('hidden','exiting');
+    mascotEl.classList.remove('char-hidden');
+    if (calloutEl) calloutEl.classList.remove('callout-hidden');
+  });
+
+  // Persist & restore all values via localStorage (one-click save across reloads)
+  const STORAGE_KEY = 'showcase-preview-state-v1';
+  function collectState() {
+    const state = {};
+    document.querySelectorAll('input,select,textarea').forEach(el => {
+      if (el.id) state[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return state;
+  }
+  function applyState(state) {
+    if (!state) return;
+    Object.keys(state).forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!state[id];
+      else el.value = state[id];
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState())); } catch (e) {} }
+  function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) applyState(JSON.parse(raw)); } catch (e) {} }
+  document.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('change', saveState));
+  document.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('input', () => { clearTimeout(window.__saveTimer); window.__saveTimer = setTimeout(saveState, 300); }));
+  // restore on load (after a tick so initial wiring is done)
+  setTimeout(loadState, 100);
+
+  // copy config
+  function buildCfg() {
+    const g = (id, fallback='') => { const el = $(id); return el ? el.value : fallback; };
+    return [
+      'MASCOT_LAYOUT (src/config.ts):',
+      '  widthRatio: ' + (parseFloat(g('s-mw'))/1080).toFixed(4) + '  (SHOWCASE_MASCOT_WIDTH_RATIO)',
+      '  offsetX: ' + g('s-mr') + '  (SHOWCASE_MASCOT_OFFSET_X)',
+      '  offsetY: ' + g('s-mb') + '  (SHOWCASE_MASCOT_OFFSET_Y)',
+      '',
+      'CAPTION_OVERLAY (src/config.ts):',
+      '  leftPx: ' + g('s-cl') + ', topPx: ' + g('s-ct') + ', widthPx: ' + g('s-cw') + ', maxHeightPx: ' + g('s-cmh'),
+      '',
+      'CAPTION_STYLE (src/caption-overlay.ts):',
+      '  fontSizePx: ' + g('s-cfs') + ', lineHeight: ' + g('s-clh') + ', color: ' + g('s-ccolor', '#F8F6EF'),
+      '  textShadow: "0 ' + g('n-csh-y','3') + 'px ' + g('n-csh-b','10') + 'px rgba(0,0,0,' + g('n-csh-o','0.95') + ')"',
+      '',
+      'CAPTION_HIGHLIGHT (src/caption-overlay.ts / env):',
+      '  background: ' + g('s-hbg', '#FF0000') + '  (SHOWCASE_CAPTION_HIGHLIGHT_BG)',
+      '  text: ' + g('s-htx', '#FFFFFF') + '  (SHOWCASE_CAPTION_HIGHLIGHT_TEXT)',
+      '  radiusPx: ' + g('s-hr', '9') + ', padXPx: ' + g('s-hpx', '9') + ', padYPx: ' + g('s-hpy', '4'),
+      '',
+      'CALLOUT (src/config.ts):',
+      '  enabled: ' + ($('s-callout-enabled')?.checked ? 'true' : 'false') + ', bubbleWidthPx: ' + g('s-callout-bw', '370') + ', bubbleHeightPx: ' + g('s-callout-bh', '270'),
+      '  topOffsetPx: ' + g('s-callout-to', '210') + ', fontSizePx: ' + g('s-callout-fs', '34') + ', fill: "' + g('s-callout-fill', '#FFFDF7') + '"',
+      '',
+      'IMPACT_ACCENTS (src/config.ts):',
+      '  enabled: ' + ($('s-impact-enabled')?.checked ? 'true' : 'false') + ', strokeColor: "' + g('s-impact-color', '#FFE66D') + '", strokeWidthPx: ' + g('s-impact-sw', '5'),
+      '  maxBurstCount: ' + g('s-impact-maxbc', '6') + ', burstDurationMs: ' + g('s-impact-bdur', '360'),
+      '',
+      'Mascot shadow (CHARACTER.shadow): drop-shadow(0 ' + g('n-msh-y','26') + 'px ' + g('n-msh-b','26') + 'px rgba(0,0,0,' + g('n-msh-o','0.95') + '))',
+      'Card shadow (CARD_SHADOW): ' + (function(){ const i=parseFloat(g('n-csh-int','1'))||1, b=parseFloat(g('n-csh-blur','1'))||1; return '0 2px '+Math.round(6*b)+'px rgba(25,23,20,'+Math.min(0.95,0.14*i*10).toFixed(3)+'), 0 10px '+Math.round(22*b)+'px rgba(25,23,20,'+Math.min(0.95,0.12*i*10).toFixed(3)+'), 0 24px '+Math.round(45*b)+'px rgba(25,23,20,'+Math.min(0.95,0.18*i*10).toFixed(3)+'), 0 48px '+Math.round(90*b)+'px rgba(25,23,20,'+Math.min(0.95,0.14*i*10).toFixed(3)+')'; })(),
+      'Card radius: ' + g('s-crad', '60'),
+    ].join('\n');
+  }
+  function refreshCfg() {
+    try { $('cfgout').value = buildCfg(); }
+    catch (e) { $('cfgout').value = 'Error: ' + e.message; console.error(e); }
+  }
+  document.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('input', () => { setTimeout(refreshCfg, 50); }));
+  document.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('change', refreshCfg));
+  setTimeout(refreshCfg, 50);
+  setTimeout(refreshCfg, 300);
+  setTimeout(refreshCfg, 1200);
+
+  // On open, prefer the values committed in the codebase (the saved truth);
+  // fall back silently to the localStorage copy when the server is absent.
+  setTimeout(() => { window.__reloadFromCodebase(); }, 200);
+</script>
+</body>
+</html>
