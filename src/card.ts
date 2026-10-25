@@ -2,21 +2,25 @@ import type { CharacterPoseName, EnrichedRepo } from "./types.js";
 import {
   ACCENT_YELLOW,
   CALLOUT,
+  CALLOUT_PNG,
   CAPTION_PANEL_STYLE,
   CARD,
   CARD_BG,
   CARD_CHROME_HEIGHT,
   CARD_VIEWPORT_HEIGHT,
   CHARACTER,
+  IMPACT_ACCENTS,
   MASCOT_LAYOUT,
   STAGE_BG,
   VIEWPORT,
   captionOverlayGeometry,
+  getCalloutAssetProfile,
 } from "./config.js";
 import { CAPTION_STYLE, CAPTION_HIGHLIGHT } from "./caption-overlay.js";
 import {
   CALLOUT_PATH,
   CALLOUT_RAY_PATHS,
+  calloutTextBox,
   placeCallout,
 } from "./callout-overlay.js";
 import {
@@ -505,7 +509,9 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     },
     mascotPlacement
   );
-  const calloutLayout = placeCallout(headAnchor);
+  const calloutProfile = getCalloutAssetProfile(calloutImageUrl ?? CALLOUT_PNG);
+  const calloutLayout = placeCallout(headAnchor, CALLOUT, calloutProfile);
+  const safeTextBox = calloutTextBox(calloutLayout, calloutProfile);
   const captionGeometry = captionOverlayGeometry();
 
   return `<!DOCTYPE html>
@@ -585,13 +591,21 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     user-select: none; pointer-events: none;
   }
 
+  /* ---- impact accents: dynamic comic SVG strokes ---- */
+  .impact-layer {
+    position: absolute; inset: 0; width: ${VIEWPORT.width}px; height: ${VIEWPORT.height}px;
+    pointer-events: none; overflow: visible;
+  }
+  .impact-rear { z-index: 2; }
+  .impact-front { z-index: 4; }
+
   /* ---- callout bubble: stage-level, outside the clipped card ---- */
   .callout-overlay {
     position: absolute; z-index: 4;
     left: ${calloutLayout.left}px; top: ${calloutLayout.top}px;
     width: ${calloutLayout.width}px; height: ${calloutLayout.height}px;
     opacity: 0; visibility: hidden;
-    transform-origin: ${CALLOUT.tailXLocalPx}px 100%;
+    transform-origin: ${Math.round(calloutLayout.tailTipX - calloutLayout.left)}px ${Math.round(calloutLayout.tailTipY - calloutLayout.top)}px;
     pointer-events: none;
     will-change: transform, opacity;
   }
@@ -610,8 +624,10 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
   }
   .callout-text {
     position: absolute;
-    left: ${CALLOUT.textPadXPx}px; right: ${CALLOUT.textPadXPx}px;
-    top: 30px; height: ${CALLOUT.bodyHeightPx - 34}px;
+    left: ${Math.round(safeTextBox.left - calloutLayout.left)}px;
+    top: ${Math.round(safeTextBox.top - calloutLayout.top)}px;
+    width: ${Math.round(safeTextBox.width)}px;
+    height: ${Math.round(safeTextBox.height)}px;
     display: flex; align-items: center; justify-content: center;
     text-align: center; text-wrap: balance; overflow-wrap: break-word;
     color: ${CALLOUT.text};
@@ -788,9 +804,11 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       <div class="document" id="document">${documentMarkup}</div>
     </div>
   </article>
+  <svg id="impact-rear" class="impact-layer impact-rear" viewBox="0 0 ${VIEWPORT.width} ${VIEWPORT.height}" aria-hidden="true"></svg>
+  ${characterMarkup}
   <div class="callout-overlay" id="callout" aria-hidden="true">
     ${calloutImageUrl ? `<img class="callout-sticker" src="${escapeHtml(calloutImageUrl)}" alt="bubble" aria-hidden="true">` : ""}
-    <svg class="callout-shape"${calloutImageUrl ? ' style="display:none"' : ""} viewBox="0 0 ${CALLOUT.bubbleWidthPx} ${CALLOUT.bubbleHeightPx}" aria-hidden="true">
+    <svg class="callout-shape"${calloutImageUrl ? ' style="display:none"' : ""} viewBox="0 0 ${calloutLayout.width} ${calloutLayout.height}" aria-hidden="true">
       <path d="${CALLOUT_PATH}" fill="${CALLOUT.accent}" stroke="none" transform="translate(${CALLOUT.accentOffsetX} ${CALLOUT.accentOffsetY})"/>
       <path d="${CALLOUT_PATH}" fill="${CALLOUT.fill}" stroke="${CALLOUT.outline}" stroke-width="${CALLOUT.outlineWidthPx}" stroke-linejoin="round"/>
     </svg>
@@ -799,8 +817,8 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       ${CALLOUT_RAY_PATHS.map(path => `<path d="${path}"/>`).join("\n      ")}
     </svg>
   </div>
+  <svg id="impact-front" class="impact-layer impact-front" viewBox="0 0 ${VIEWPORT.width} ${VIEWPORT.height}" aria-hidden="true"></svg>
   <div class="caption-overlay" id="caption"></div>
-  ${characterMarkup}
 </div>
 <script>
   // Rendering hooks used by browser-capture.ts. Only the page image scrolls;
@@ -906,10 +924,37 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
         character = layers[0];
         character.style.opacity = String(pose.opacity);
       }
+      const x = (Number(pose.x) || 0) + (Number(pose.entranceX) || 0);
+      const y = (Number(pose.y) || 0) + (Number(pose.entranceY) || 0);
+      const scale = (Number(pose.scale) || 1) * (Number(pose.entranceScale) || 1);
+      const rot = Number(pose.rotationDeg) || 0;
+      const opacity = (pose.entranceOpacity !== undefined ? Number(pose.entranceOpacity) : 1) * (Number(pose.opacity) || 1);
+      character.style.opacity = String(opacity);
       character.style.transform =
-        'translate3d(' + pose.x + 'px,' + pose.y + 'px,0) ' +
-        'rotate(' + pose.rotationDeg + 'deg) ' +
-        'scale(' + pose.scale + ')';
+        'translate3d(' + x + 'px,' + y + 'px,0) ' +
+        'rotate(' + rot + 'deg) ' +
+        'scale(' + scale + ')';
+    },
+    setImpactState(bursts) {
+      const rear = document.getElementById('impact-rear');
+      const front = document.getElementById('impact-front');
+      if (!rear || !front) return;
+      let rearHtml = '';
+      let frontHtml = '';
+      for (const b of (bursts || [])) {
+        let paths = '';
+        for (const p of b.strokes) {
+          paths += '<path d="' + p.d + '" stroke="${IMPACT_ACCENTS.strokeColor}" stroke-width="${IMPACT_ACCENTS.strokeWidthPx}" stroke-linecap="round" fill="none" stroke-dasharray="' + p.strokeDasharray + '" stroke-dashoffset="' + p.strokeDashoffset + '" style="opacity:' + p.opacity + '"/>';
+        }
+        const g = '<g id="' + b.id + '" transform="translate(' + b.x + ',' + b.y + ') rotate(' + b.rotationDeg + ') scale(' + b.scale + ')" style="opacity:' + b.opacity + '">' + paths + '</g>';
+        if (b.layer === 'front-mascot') {
+          frontHtml += g;
+        } else {
+          rearHtml += g;
+        }
+      }
+      rear.innerHTML = rearHtml;
+      front.innerHTML = frontHtml;
     },
     async ready(timeoutMs) {
       const limit = Number(timeoutMs) || 8000;
@@ -962,6 +1007,8 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       const card = document.getElementById('card').getBoundingClientRect();
       const caption = document.getElementById('caption').getBoundingClientRect();
       const callout = document.getElementById('callout').getBoundingClientRect();
+      const calloutTextEl = document.getElementById('callout-text');
+      const calloutTextRect = calloutTextEl ? calloutTextEl.getBoundingClientRect() : null;
       const panel = document.querySelector('.caption-panel');
       const panelRect = panel ? panel.getBoundingClientRect() : null;
       const layers = Array.from(document.querySelectorAll('.character'));
@@ -982,6 +1029,10 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
           left: callout.left - stage.left, top: callout.top - stage.top,
           width: callout.width, height: callout.height,
         },
+        calloutText: calloutTextRect ? {
+          left: calloutTextRect.left - stage.left, top: calloutTextRect.top - stage.top,
+          width: calloutTextRect.width, height: calloutTextRect.height,
+        } : null,
         captionPanel: panelRect ? {
           left: panelRect.left - stage.left, top: panelRect.top - stage.top,
           width: panelRect.width, height: panelRect.height,
