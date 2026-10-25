@@ -155,9 +155,15 @@ describe("stationary card markup", () => {
         html.match(new RegExp(`\\.${selector}\\s*\\{[^}]*z-index:\\s*(\\d+)`, "s"))?.[1]
       );
     assert.equal(z("card"), 1);
+    assert.equal(z("impact-rear"), 2);
     assert.equal(z("character"), 2);
+    assert.equal(z("impact-front"), 4);
     assert.equal(z("callout-overlay"), 4);
     assert.equal(z("caption-overlay"), 5);
+    // Independent SVG containers exist for impact strokes around the presenter
+    assert.match(html, /<svg id="impact-rear" class="impact-layer impact-rear"/);
+    assert.match(html, /<svg id="impact-front" class="impact-layer impact-front"/);
+    assert.match(html, /setImpactState\(bursts\)/);
     // The bubble is placed from the mascot's head anchor, not an unrelated
     // hard-coded timeline coordinate: its authored box sits in the head band.
     const rule = html.match(/\.callout-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
