@@ -109,14 +109,17 @@ All behaviour is driven by environment variables (there is no second config file
 | `KOKORO_LANG` | `en-us` | Kokoro language code |
 | `KOKORO_MODEL` | `tools/kokoro/kokoro-v1.0.int8.onnx` | Kokoro model file |
 | `KOKORO_VOICES` | `tools/kokoro/voices-v1.0.bin` | Kokoro voices file |
-| `SHOWCASE_MASCOT_WIDTH_RATIO` | `0.46` | Presenter width as a fraction of the 1080 px canvas |
-| `SHOWCASE_MASCOT_OFFSET_X` | `-12` | Presenter `right` offset; negative extends past the canvas edge |
-| `SHOWCASE_MASCOT_OFFSET_Y` | `0` | Presenter `bottom` offset from the canvas bottom edge |
+| `SHOWCASE_MASCOT_WIDTH_RATIO` | `0.8731` | Presenter width as a fraction of the 1080 px canvas (943 px) |
+| `SHOWCASE_MASCOT_OFFSET_X` | `-60` | Presenter `right` CSS offset (negative extends past the canvas edge) |
+| `SHOWCASE_MASCOT_OFFSET_Y` | `-23` | Presenter `bottom` CSS offset |
 | `GITHUB_TOKEN` | (none) | Raises the GitHub API rate limit |
 | `CHROME_DEBUG_URL` | `http://127.0.0.1:9222` | Chrome DevTools endpoint |
 | `SHOWCASE_CHARACTER_PNG` | `assets/character.png` | Primary transparent presenter; `none` disables the layer |
 | `SHOWCASE_CHARACTER_POINT_PNG` | `assets/character.png` | Optional pointing pose; falls back to the primary cut-out |
 | `SHOWCASE_CHARACTER_CLOSE_PNG` | `assets/character-close.png` | Optional medium CTA pose |
+| `SHOWCASE_CALLOUT_PNG` | `assets/callout-bubble.png` | Speech bubble shell; transparent background with separate copy |
+| `SHOWCASE_SFX_MASCOT` | `1` | `0` disables the mascot slide-in entrance sound effect |
+| `SHOWCASE_SFX_CALLOUT` | `1` | `0` disables the callout bubble pop sound effect |
 
 The product rule is a hard maximum of 58 seconds.
 
@@ -199,16 +202,30 @@ The product rule is a hard maximum of 58 seconds.
   strong clause marks and wrap to at most two lines. No filled word boxes, no
   progress bar, no scrubber.
 - The presenter is a configurable mascot layer (`MASCOT_LAYOUT` in
-  `src/config.ts`), sized by **width ratio of the 1080 px canvas** (0.46 =
-  497 px) and anchored to the lower-right **canvas corner**, not the card. It
-  overlaps the card, may extend past the right and bottom canvas edges
-  (`allowOffscreen`; the viewport clip crops it at the canvas boundary, never
-  inside a small container), and a `keepFaceVisible` guard prevents extreme
-  sizes from pushing the head out of frame. Pose selection is narration-driven:
+  `src/config.ts`), sized by **width ratio of the 1080 px canvas** (0.8731 =
+  943 px) and anchored to the lower-right **canvas corner**, not the card. It
+  overlaps the card, enters from the bottom-right and settles smoothly within
+  the first 380 ms. Pose selection is narration-driven:
   `present` for the introduction, `point` when explaining a feature or install
   step, and `close` for the CTA. Framing and a small lean change with the role;
-  body bob and tilt follow the measured speech envelope. A missing asset
-  disables the layer without failing the run.
+  body bob and tilt follow the measured speech envelope.
+- **Animated Comic Speech Bubble Callouts**: Multi-cue callout system scheduled
+  chronologically across the timeline (`src/callout-overlay.ts`). Derives short,
+  concise, evidence-backed headlines from verified proposition roles (purpose,
+  mechanism, workflow/example, benefit). The bubble shell uses a transparent PNG
+  with separate rendered text. Bubble placement and safe text bounding box are
+  asset-aware (`CalloutAssetProfile`), precisely targeting the mascot's head
+  anchor across per-frame animated bobs and leans while respecting face/glasses
+  protection and caption collision bounds.
+- **Mascot Comic Impact Accents**: Dynamic yellow SVG strokes (`src/impact-accents.ts`)
+  authored with varied ray, spark and sweep shapes. Bursts are scheduled with
+  reproducible seeded jitter at semantically meaningful beats (idea presentation,
+  bubble entrance), rendering on independent rear and front SVG layers without
+  obscuring text or mascot facial features.
+- **Live Preview & Visual Tuning**: Launch `tools/preview-live.html` or run
+  `Save My Edits.cmd` to tweak mascot sizing, shadow, caption panel, callout
+  typography, timing, and impact strokes with one-click bidirectional save to
+  `src/config.ts`, `src/caption-overlay.ts`, and `src/card.ts`.
 - Scroll scheduling includes a travel-time pass: a narrated section whose
   speech hint arrives earlier than the speed ceiling permits is reached **late
   in full** rather than stopped halfway. The measured audio timeline is the
