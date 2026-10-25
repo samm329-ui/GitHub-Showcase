@@ -1,4 +1,5 @@
 import type {
+  CalloutRole,
   EnrichedRepo,
   FactLedger,
   NarrationPlan,
@@ -217,19 +218,34 @@ export function composeScript(
   const segments: NarrationSegment[] = selected.map((node, index) => {
     const next = selected[index + 1] ?? null;
     const text = phraseFor(node, name);
-    // Callout copy is derived from selected evidence after composition (purpose,
-    // key tradeoff/limitation, or key outcome), never from raw text at render time.
+    // Callout copy is derived from selected evidence after composition:
+    // purpose, mechanism, example, benefit/outcome, or key tradeoff.
     // `null` means no faithful short form exists, and no bubble is rendered.
-    const calloutEligible =
-      node.role === "purpose" || node.role === "tradeoff" || node.role === "benefit";
-    const calloutText = calloutEligible ? calloutTextFor(node.proposition) : null;
+    const calloutRole: CalloutRole | undefined =
+      node.role === "purpose" || node.role === "problem"
+        ? "purpose"
+        : node.role === "mechanism"
+        ? "mechanism"
+        : node.role === "example"
+        ? "example"
+        : node.role === "benefit" || node.role === "differentiator"
+        ? "benefit"
+        : node.role === "tradeoff"
+        ? "tradeoff"
+        : node.role === "installation"
+        ? "installation"
+        : undefined;
+    const calloutEligible = Boolean(calloutRole);
+    const calloutText = calloutEligible
+      ? calloutTextFor(node.proposition) ?? calloutTextFor(text)
+      : null;
     return {
       id: `seg-${String(index + 1).padStart(2, "0")}`,
       purpose: PURPOSE_FOR_ROLE[node.role],
       spokenText: toSpoken(text),
       captionText: text,
       factIds: node.evidence.map(reference => reference.factId),
-      ...(calloutText ? { calloutText } : {}),
+      ...(calloutText ? { calloutText, calloutRole, calloutImportance: node.importance } : {}),
       visualAnchor: anchorFor(node),
       // One schedule for audio and timeline: the pause AFTER this segment.
       // The final segment carries an explicit zero — no trailing silence.
