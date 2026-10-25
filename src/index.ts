@@ -47,16 +47,20 @@ import {
 } from "./voice.js";
 import { buildCaptions, buildScrollKeyframes, scrollCoverage } from "./timeline.js";
 import { buildCalloutCues } from "./callout-overlay.js";
+import { buildImpactBurstCues } from "./impact-accents.js";
 import { captionFitsPanel } from "./caption-overlay.js";
 import { measureCard } from "./browser-capture.js";
 import { renderVideo } from "./render.js";
 import {
   buildContactSheet,
   calloutChecks,
+  impactAccentsChecks,
   measureLoudness,
   overlayLayoutChecks,
+  soundEventsChecks,
   validateOutput,
 } from "./qa.js";
+import { mixAudioTracks, scheduleSoundEvents } from "./sfx.js";
 import { startAssetServer } from "./asset-server.js";
 import {
   buildSpeechEnvelope,
@@ -600,9 +604,28 @@ async function main(): Promise<void> {
       const captions = buildCaptions(plan.segments, timedChunks, {
         phonemeTimings: null,
       });
-      // One evidence-backed callout for the purpose beat, timed from the final
-      // measured audio chunk — never from an estimate or a fixed timestamp.
-      const callouts = buildCalloutCues(plan.segments, timedChunks, merged.durationMs);
+      const effectSeed = `${repo.full_name}-${runId}-v1`;
+      // Evidence-backed multi-callouts bound to the measured audio timeline
+      const callouts = buildCalloutCues(plan.segments, timedChunks, merged.durationMs, {
+        seed: effectSeed,
+      });
+      // Animated comic impact accents around the character
+      const impactBursts = buildImpactBurstCues(
+        plan.segments,
+        timedChunks,
+        callouts,
+        merged.durationMs,
+        { seed: effectSeed }
+      );
+      // Synchronized sound effect events (mascot slide-whoosh + callout pop)
+      const soundEvents = scheduleSoundEvents(callouts, merged.durationMs);
+      const mixedAudioWav = path.join(workDir, "narration-sfx.wav");
+      const finalAudioPath = await mixAudioTracks({
+        narrationPath: narrationWav,
+        soundEvents,
+        durationMs: merged.durationMs,
+        outputPath: mixedAudioWav,
+      });
       for (const phrase of captions) {
         if (!captionFitsPanel(phrase.text)) {
           log(`  caption warning: "${phrase.text}" needs more than two lines`);
@@ -622,6 +645,8 @@ async function main(): Promise<void> {
         chunks: timedChunks,
         captions,
         callouts,
+        impactBursts,
+        soundEvents,
         scroll: scrollKeyframes,
         anchors: storyCapture.anchors,
         documentHeight: measured.documentHeight,
@@ -643,16 +668,29 @@ async function main(): Promise<void> {
         callouts.length > 0
           ? `  ${callouts.length} callout(s): ` +
             callouts
-              .map(c => `"${c.text}" for ${c.segmentId} at ${c.startMs}-${c.endMs}ms`)
+              .map(c => `[${c.role ?? "idea"}] "${c.text}" for ${c.segmentId} at ${c.startMs}-${c.endMs}ms`)
               .join("; ")
-          : "  no callout: the purpose evidence had no faithful 3-7 word summary."
+          : "  no callout: no segment had a faithful 3-7 word summary."
+      );
+      log(`  ${impactBursts.length} comic impact burst(s) scheduled.`);
+      log(
+        soundEvents.length > 0
+          ? `  ${soundEvents.length} synchronized sound effect(s) scheduled: ` +
+            soundEvents
+              .map(s => `${s.kind ?? "sfx"} at ${s.startMs}ms`)
+              .join("; ")
+          : "  no sound effects scheduled."
       );
 
       /* ---------------- Stage 6-7: render + encode ------------- */
       currentStage = "render";
       history.setRunStage(runId, "render");
-      log(`Stage 6/9: Rendering ${audioSeconds.toFixed(2)}s of stationary-card frames...`);
+      const estTotalFrames = Math.round(audioSeconds * 30);
+      log(
+        `Stage 6/9: Rendering ${audioSeconds.toFixed(2)}s video (${estTotalFrames} frames at 30 fps)...`
+      );
       let lastReported = -1;
+      const renderStartTime = Date.now();
       const rendered = await renderVideo({
         repo,
         pageImageUrl,
@@ -662,17 +700,25 @@ async function main(): Promise<void> {
         speechEnvelope,
         captions,
         callouts,
+        impactBursts,
         calloutImageUrl,
         scrollKeyframes,
-        audioPath: narrationWav,
+        audioPath: finalAudioPath,
         audioDurationMs: merged.durationMs,
         outputPath: output,
         workDir,
         onProgress: (frame, total) => {
           const percent = Math.floor((frame / total) * 100);
-          if (percent !== lastReported && percent % 20 === 0) {
+          if (percent !== lastReported && (percent % 5 === 0 || frame === 1 || frame === total)) {
             lastReported = percent;
-            log(`  ${percent}% (${frame}/${total} frames)`);
+            const elapsedSec = (Date.now() - renderStartTime) / 1000;
+            const fps = frame > 0 && elapsedSec > 0 ? (frame / elapsedSec).toFixed(1) : "0.0";
+            const remaining = total - frame;
+            const etaSec = frame > 0 && elapsedSec > 0 ? Math.round(remaining / (frame / elapsedSec)) : 0;
+            const etaMin = Math.floor(etaSec / 60);
+            const etaRem = etaSec % 60;
+            const etaStr = etaMin > 0 ? `${etaMin}m ${etaRem}s` : `${etaRem}s`;
+            log(`  ${percent}% (${frame}/${total} frames) - ${fps} fps - ETA: ~${etaStr}`);
           }
         },
       });
@@ -698,6 +744,8 @@ async function main(): Promise<void> {
       // timing, copy and geometry are QA gates too — not just render options.
       const overlayChecks = [
         ...calloutChecks(callouts, merged.durationMs),
+        ...impactAccentsChecks(impactBursts, merged.durationMs),
+        ...soundEventsChecks(soundEvents, merged.durationMs),
         ...overlayLayoutChecks(),
       ];
       report.checks.push(...overlayChecks);
