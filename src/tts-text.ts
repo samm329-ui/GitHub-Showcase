@@ -86,9 +86,17 @@ function speakDates(text: string): string {
 function speakNumbers(text: string): string {
   return text
     .replace(
-      /\b(v)?(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?(?:[-+]([0-9A-Za-z][0-9A-Za-z.-]*))?\b/g,
-      (match, prefix: string | undefined, major: string, minor: string, patch?: string, suffix?: string) =>
-        speakVersion(match, prefix ?? "", major, minor, patch, suffix)
+      /(?:(--version|-v\b|version\s+v?|v\.)\s*)?(?:(\b|\B)(v)?(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?(?:[-+]([0-9A-Za-z][0-9A-Za-z.-]*))?\b)/gi,
+      (match, leadWord: string | undefined, boundary: string, prefix: string | undefined, major: string, minor: string, patch?: string, suffix?: string) => {
+        const hasLead = Boolean(leadWord && leadWord.trim());
+        const parts = [major, minor, patch].filter((part): part is string => Boolean(part));
+        const spoken = parts.map(numberWords).join(" point ");
+        const isThreePart = Boolean(patch);
+        const hasV = Boolean(prefix && prefix.toLowerCase() === "v");
+        const lead = hasLead || isThreePart || hasV ? "version " : "";
+        const tail = suffix ? ` ${suffix.replace(/[._-]+/g, " ")}` : "";
+        return `${lead}${spoken}${tail}`;
+      }
     )
     .replace(/\b(\d{1,4})\s*%/g, (_match, value: string) => `${numberWords(value)} percent`)
     .replace(/\b(\d{1,4})\b/g, (match, value: string) => numberWords(value));
@@ -130,6 +138,31 @@ function speakCommands(text: string): string {
 }
 
 /**
+ * Remove duplicate consecutive words or acronyms caused by symbols, punctuation,
+ * or Markdown cleaning (e.g. "API API", "version version", "admin admin").
+ */
+export function deduplicateSpokenWords(text: string): string {
+  // Deduplicate spelled out acronyms like 'A P I A P I'
+  let result = text.replace(/\b([A-Z](?:\s+[A-Z])+)\s+\1\b/g, "$1");
+  // Deduplicate spelled out acronym followed/preceded by word e.g. 'A P I api' or 'api A P I'
+  result = result.replace(/\b([A-Z](?:\s+[A-Z])+)\s+([a-zA-Z]+)\b/g, (m, acronym, word) => {
+    if (acronym.replace(/\s+/g, "").toLowerCase() === word.toLowerCase()) return acronym;
+    return m;
+  });
+  result = result.replace(/\b([a-zA-Z]+)\s+([A-Z](?:\s+[A-Z])+)\b/g, (m, word, acronym) => {
+    if (word.toLowerCase() === acronym.replace(/\s+/g, "").toLowerCase()) return acronym;
+    return m;
+  });
+  // Deduplicate identical words (case-insensitive) e.g. 'version version', 'admin admin', 'the the'
+  // Preserving "plus plus" for C plus plus
+  result = result.replace(/\b([a-zA-Z]{2,})\s+\1\b/gi, (m, word) => {
+    if (word.toLowerCase() === "plus") return m;
+    return word;
+  });
+  return result;
+}
+
+/**
  * Clean and normalise authored narration for Kokoro. Caption text must be
  * produced separately and never passed through this function.
  */
@@ -137,6 +170,16 @@ export function prepareTtsText(input: string): string {
   let text = input;
   // Emoji and pictographs are not speakable; drop them before any other work.
   text = text.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, " ");
+
+  // Drop parenthetical URL route paths like (/admin/) or (/api/v1/)
+  // which otherwise get stripped of slashes and cause duplicate speech ("API api v1", "admin admin").
+  text = text.replace(/\(\s*\/[a-zA-Z0-9_./-]+\s*\)/g, " ");
+
+  // Clean owner/repo where owner and repo are identical across slash (e.g. "Opendray/opendray" -> "Opendray")
+  text = text.replace(/\b([a-zA-Z0-9_-]+)\/(\1)\b/gi, "$1");
+
+  // Collapse duplicate words across slash or dash, e.g. "API/API" or "API-API"
+  text = text.replace(/\b([a-zA-Z0-9]+)[\s/\\-]+(\1)\b/gi, "$1");
 
   text = text
     // Fenced code, front matter and HTML are not speech.
@@ -164,11 +207,26 @@ export function prepareTtsText(input: string): string {
     .replace(/^\s*[-: ]+\s*$/gm, " ")
     // URLs and bare repository paths are not read aloud.
     .replace(/https?:\/\/\S+/gi, " ")
-    .replace(/\bwww\.\S+/gi, " ")
-    // A GitHub issue or PR number is meaningful; a bare hash is not.
-    .replace(/#(\d+)/g, "issue $1")
-    .replace(/[#~^]/g, " ")
-    // Keep apostrophes, hyphens and sentence punctuation; normalise the rest.
+    .replace(/\bwww\.\S+/gi, " ");
+
+  // Protect programming languages with symbols before general punctuation stripping
+  text = text.replace(/(?<![A-Za-z0-9])C#(?![\w#])/g, "C sharp");
+  text = text.replace(/(?<![A-Za-z0-9])C\+\+(?![\w+])/g, "C plus plus");
+
+  // Rank numbers, issue numbers and social hashtags:
+  // #1 tool / #1 on GitHub -> number one
+  text = text.replace(/(?<!\w)#1(?!\d)/g, "number one");
+  // #2 through #9
+  text = text.replace(/(?<!\w)#([2-9])(?!\d)/g, (_m, d: string) => `number ${numberWords(d)}`);
+  // GitHub issue / PR numbers (#123, #45)
+  text = text.replace(/(?<!\w)#(\d{2,})/g, (_m, d: string) => `issue ${numberWords(d)}`);
+  // Social / topic hashtags like #hashtag, #trending, #ai, #dev
+  text = text.replace(/(?<!\w)#([a-zA-Z][a-zA-Z0-9_-]*)/g, "hashtag $1");
+  // Clean any remaining bare hashes, tildes, carets
+  text = text.replace(/[#~^]/g, " ");
+
+  // Keep apostrophes, hyphens and sentence punctuation; normalise the rest.
+  text = text
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u2014\u2013]/g, ", ")
@@ -186,6 +244,12 @@ export function prepareTtsText(input: string): string {
   text = speakCommands(text);
   text = speakDates(text);
   text = speakNumbers(text);
+
+  // Pluses: 100+ -> one hundred plus, 50+ -> fifty plus
+  text = text.replace(/(\d+)\+/g, "$1 plus");
+
+  // CLI double dashes e.g. --version, --port, --help
+  text = text.replace(/--([a-zA-Z][a-zA-Z0-9_-]*)/g, "$1");
 
   text = text
     .replace(/\be\.g\./gi, "for example")
@@ -210,8 +274,10 @@ export function prepareTtsText(input: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  // The existing pronunciation dictionary is the single source of truth for
-  // names, acronyms and product terms. It is applied last so cleaning cannot
-  // break a multi-word alias.
-  return toSpoken(text);
+  // The pronunciation dictionary is the single source of truth for
+  // names, acronyms and product terms.
+  text = toSpoken(text);
+
+  // Deduplicate consecutive identical words or acronyms (e.g. "version version", "API API")
+  return deduplicateSpokenWords(text);
 }
