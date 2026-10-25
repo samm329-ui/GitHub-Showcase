@@ -113,21 +113,17 @@ describe("mascot placement", () => {
     const deadRightPx = (CHARACTER_ALPHA_BOUNDS.srcWidth - 1 - CHARACTER_ALPHA_BOUNDS.maxX) * scale;
     const deadBottomPx =
       (CHARACTER_ALPHA_BOUNDS.srcHeight - 1 - CHARACTER_ALPHA_BOUNDS.maxY) * scale;
-    assert.ok(
-      Math.abs(placement.clipRightPx - MASCOT_LAYOUT.offsetX) < 0.01,
-      "the visible right edge is clipped past the canvas by the configured amount"
-    );
-    assert.ok(
-      Math.abs(placement.clipBottomPx - MASCOT_LAYOUT.offsetY) < 0.01,
-      "the visible bottom edge is clipped past the canvas by the configured amount"
-    );
+    assert.equal(placement.rightPx, MASCOT_LAYOUT.offsetX);
+    assert.equal(placement.bottomPx, MASCOT_LAYOUT.offsetY);
     // The CSS values compensate for the transparent padding, so the *visible*
     // edge — not the PNG rectangle — crosses the frame.
     assert.ok(
-      Math.abs(placement.rightPx + placement.clipRightPx + deadRightPx) < 0.01
+      Math.abs(placement.clipRightPx - (-(placement.rightPx + deadRightPx))) < 0.01,
+      "the visible right edge is clipped past the canvas by the calculated amount"
     );
     assert.ok(
-      Math.abs(placement.bottomPx + placement.clipBottomPx + deadBottomPx) < 0.01
+      Math.abs(placement.clipBottomPx - (-(placement.bottomPx + deadBottomPx))) < 0.01,
+      "the visible bottom edge is clipped past the canvas by the calculated amount"
     );
   });
 
