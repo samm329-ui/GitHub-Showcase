@@ -36,6 +36,12 @@ describe("preview config writer", () => {
     assert.equal(config.cardRadius, 52);
     assert.equal(config.cardShadowIntensity, CARD_SHADOW_TUNING.intensity);
     assert.equal(config.cardShadowBlurScale, CARD_SHADOW_TUNING.blurScale);
+    assert.equal(config.calloutEnabled, true);
+    assert.equal(config.calloutBubbleWidth, 370);
+    assert.equal(config.calloutFontSize, 34);
+    assert.equal(config.impactEnabled, true);
+    assert.equal(config.impactStrokeColor, "#FFE66D");
+    assert.equal(config.impactStrokeWidth, 5);
   });
 
   test("the parsed highlight colours drive the rendered caption style", async () => {
@@ -77,6 +83,12 @@ describe("preview config writer", () => {
       cardShadowBlurScale: 1.5,
       enterMs: 170,
       exitYPx: -8,
+      calloutBubbleWidth: 390,
+      calloutFontSize: 36,
+      calloutFill: "#F0F0F0",
+      impactStrokeColor: "#FFCC00",
+      impactStrokeWidth: 6,
+      impactMaxBurstCount: 8,
     };
 
     const next = writePreviewConfig(sources, after);
