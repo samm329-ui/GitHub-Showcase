@@ -290,6 +290,8 @@ export type NarrationSegment = {
    * `factIds` are the audit trail for this copy.
    */
   calloutText?: string;
+  calloutRole?: CalloutRole;
+  calloutImportance?: number;
 };
 
 export type NarrationAngle =
@@ -417,8 +419,12 @@ export type Timeline = {
   anchors: MeasuredAnchor[];
   documentHeight: number;
   viewportHeight: number;
-  /** The exact callout cues used for frame capture (at most one in v1). */
+  /** The exact callout cues used for frame capture (non-overlapping, timeline-bound). */
   callouts?: CalloutCue[];
+  /** Animated comic impact bursts around the mascot. */
+  impactBursts?: ImpactBurstCue[];
+  /** Scheduled sound effect events synchronized with mascot and callouts. */
+  soundEvents?: SoundEvent[];
   /** Where the story was cropped, in displayed screenshot pixels. */
   story?: {
     startPx: number;
@@ -473,21 +479,33 @@ export type CharacterCue = {
 /* Callout bubble                                                      */
 /* ------------------------------------------------------------------ */
 
+export type CalloutRole =
+  | "purpose"
+  | "mechanism"
+  | "example"
+  | "benefit"
+  | "tradeoff"
+  | "installation";
+
 /**
  * One callout bubble event, bound to the measured audio timeline.
  *
- * The first implementation renders at most one per video: a short summary of
- * the project's purpose, attached to the mascot's head. `factIds` are the
- * evidence that supports the displayed copy.
+ * Renders concise, non-overlapping summaries of important narrative beats
+ * (purpose, mechanism, example, benefit, tradeoff), attached to the mascot's head.
+ * `factIds` are the audit trail supporting the displayed copy.
  */
 export type CalloutCue = {
   id: string;
   segmentId: string;
+  role?: CalloutRole;
   text: string;
   startMs: number;
   endMs: number;
   factIds: string[];
   anchor: "mascot-head";
+  importance?: number;
+  selectionScore?: number;
+  omissionAlternatives?: string[];
 };
 
 /** Deterministic per-frame visual state of a callout cue. */
@@ -500,6 +518,61 @@ export type CalloutState = {
   scale: number;
   raysOpacity: number;
 };
+
+export type CalloutAssetProfile = {
+  widthPx: number;
+  heightPx: number;
+  /** Normalized coordinates in the asset's actual image box (0..1). */
+  tailTip: { x: number; y: number };
+  /** Normalized safe rectangle for separate text (0..1). */
+  textSafeRect: { x: number; y: number; width: number; height: number };
+  containsEmbeddedRays: boolean;
+  containsEmbeddedArrow: boolean;
+};
+
+/* ------------------------------------------------------------------ */
+/* Mascot impact accents                                               */
+/* ------------------------------------------------------------------ */
+
+export type ImpactAnchor =
+  | "hair-left"
+  | "hair-right"
+  | "shoulder-left"
+  | "shoulder-right"
+  | "laptop-edge";
+
+export type ImpactVariant = "two-rays" | "three-rays" | "short-spark" | "sweep";
+
+export type ImpactLayer = "behind-mascot" | "front-mascot";
+
+export type ImpactBurstCue = {
+  id: string;
+  startMs: number;
+  endMs: number;
+  anchor: ImpactAnchor;
+  variant: ImpactVariant;
+  rotationDeg: number;
+  scale: number;
+  opacity: number;
+  layer: ImpactLayer;
+  relatedSegmentId?: string;
+  seed: number;
+};
+
+/* ------------------------------------------------------------------ */
+/* Sound effects (SFX)                                                */
+/* ------------------------------------------------------------------ */
+
+export type SoundEventKind = "mascot-entrance" | "callout-pop";
+
+export type SoundEvent = {
+  asset: string;
+  startMs: number;
+  gain: number;
+  kind?: SoundEventKind;
+  cueId?: string;
+};
+
 
 /* ------------------------------------------------------------------ */
 /* Stages & runs                                                       */
