@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { DiscoveryMode } from "./types.js";
+import type { CalloutAssetProfile, DiscoveryMode, ImpactAnchor } from "./types.js";
 
 export const ROOT = process.cwd();
 export const OUTPUT_DIR = process.env.SHOWCASE_OUTPUT_DIR
@@ -283,10 +283,68 @@ export function captionOverlayGeometry(
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Callout asset profiles                                              */
+/* ------------------------------------------------------------------ */
+
+function createAssetProfile(
+  width: number,
+  height: number,
+  tailTip: { x: number; y: number },
+  textSafeRect: { x: number; y: number; width: number; height: number },
+  containsEmbeddedRays: boolean,
+  containsEmbeddedArrow: boolean
+): CalloutAssetProfile {
+  return {
+    widthPx: width,
+    heightPx: height,
+    tailTip,
+    textSafeRect,
+    containsEmbeddedRays,
+    containsEmbeddedArrow,
+  };
+}
+
+export const DEFAULT_CALLOUT_PROFILE: CalloutAssetProfile = createAssetProfile(
+  1082,
+  789,
+  { x: 0.365, y: 0.944 },
+  { x: 0.14, y: 0.22, width: 0.72, height: 0.48 },
+  true,
+  true
+);
+
+export const STICKER_CALLOUT_PROFILE: CalloutAssetProfile = createAssetProfile(
+  1672,
+  941,
+  { x: 0.28, y: 0.92 },
+  { x: 0.12, y: 0.16, width: 0.76, height: 0.52 },
+  false,
+  false
+);
+
+export const FALLBACK_SVG_CALLOUT_PROFILE: CalloutAssetProfile = createAssetProfile(
+  360,
+  285,
+  { x: 82 / 360, y: (285 - 27) / 285 },
+  { x: 28 / 360, y: 30 / 285, width: (360 - 56) / 360, height: (176 - 34) / 285 },
+  false,
+  false
+);
+
+export function getCalloutAssetProfile(assetPath?: string | null): CalloutAssetProfile {
+  if (!assetPath) return FALLBACK_SVG_CALLOUT_PROFILE;
+  const basename = path.basename(assetPath).toLowerCase();
+  if (basename.includes("callout-bubble")) return DEFAULT_CALLOUT_PROFILE;
+  if (basename.includes("comic speech bubble")) return STICKER_CALLOUT_PROFILE;
+  return DEFAULT_CALLOUT_PROFILE;
+}
+
 /**
- * Callout bubble: a short, evidence-backed summary attached to the mascot's
- * head. Geometry is derived from `mascotHeadAnchor()` at render time; the
- * constants here are the authored shape, bounds and motion.
+ * Callout bubble: short, evidence-backed summaries attached to the mascot's
+ * head. Geometry is derived from the mascot's head anchor and active asset
+ * profile at render time; the constants here are the authored shape, bounds
+ * and motion.
  *
  * Motion is a pure function of media time (see `src/callout-overlay.ts`); there
  * are no CSS transitions and no browser timers, so a frame rendered out of
@@ -296,24 +354,23 @@ export const CALLOUT = {
   // Named `bubble*` deliberately: the live preview rewrites the caption's
   // `widthPx`, and two `widthPx` keys in this file would make that save
   // ambiguous (the writer refuses to guess).
-  bubbleWidthPx: 360,
-  bubbleHeightPx: 285,
+  enabled: true,
+  bubbleWidthPx: 370,
+  bubbleHeightPx: 270,
   /** Rounded cloud body height before the tail. */
   bodyHeightPx: 176,
   /**
    * Clamp bounds so the tail can track the face without leaving the canvas.
-   * The upper bound keeps the whole body inside the right margin. Calibrate
-   * the lower bound against a real reference render before tightening it: the
-   * tail must stay visibly attached to the measured head anchor.
+   * The upper bound keeps the whole body inside the right margin.
    */
-  leftMinPx: 620,
-  rightMarginPx: 36,
+  leftMinPx: 560,
+  rightMarginPx: 32,
   topOffsetPx: 210,
   topMinPx: 820,
   topMaxPx: 930,
-  /** Tail tip, in callout-local pixels. */
-  tailXLocalPx: 82,
-  tailInsetPx: 27,
+  /** Tail tip, in callout-local pixels (derived from asset profile). */
+  tailXLocalPx: 135,
+  tailInsetPx: 15,
   /** The tail aims this far right of the measured face centre. */
   faceOffsetPx: 25,
   /** Entrance / exit / ray timing, all in media milliseconds. */
@@ -328,26 +385,54 @@ export const CALLOUT = {
   startLeadMs: 100,
   endTailMs: 200,
   minStartMs: 380,
-  minVisibleMs: 900,
+  minVisibleMs: 1200,
+  preferredVisibleMs: 2200,
   minCueDurationMs: 400,
   maxVisibleMs: 3400,
+  interCalloutGapMs: 550,
+  maxCues: 5,
   /** Copy limits: a bubble is a summary, never a second subtitle track. */
   minWords: 3,
   maxWords: 7,
   maxLines: 2,
   /** Visual tokens. */
   fill: "#FFFDF7",
-  outline: INK,
+  outline: "#151619",
   outlineWidthPx: 5,
-  accent: ACCENT_YELLOW,
+  accent: "#FFE66D",
   accentOffsetX: 6,
   accentOffsetY: 8,
-  text: INK,
-  fontSizePx: 35,
+  text: "#151619",
+  fontSizePx: 34,
   fontWeight: 800,
-  lineHeight: 1.08,
+  lineHeight: 1.1,
   textPadXPx: 28,
   rayStrokePx: 6,
+} as const;
+
+/* ------------------------------------------------------------------ */
+/* Mascot impact accents                                               */
+/* ------------------------------------------------------------------ */
+
+export const IMPACT_ACCENTS = {
+  enabled: true,
+  strokeColor: "#FFE66D",
+  strokeWidthPx: 5,
+  peakOpacity: 0.88,
+  minBurstCount: 2,
+  maxBurstCount: 6,
+  minIntervalMs: 500,
+  jitterMs: 120,
+  burstDurationMs: 360,
+  lineStaggerMs: 45,
+  allowedAnchors: [
+    "hair-left",
+    "hair-right",
+    "shoulder-left",
+    "shoulder-right",
+    "laptop-edge",
+  ] as ImpactAnchor[],
+  variationMode: "seeded" as const,
 } as const;
 
 /**
@@ -501,6 +586,37 @@ export const CHARACTER = {
  * need an outline/shadow strong enough to survive both dark and light READMEs.
  */
 export const CHARACTER_ENVELOPE_RATE_HZ = 25;
+
+/* ------------------------------------------------------------------ */
+/* Sound Effects (SFX)                                                */
+/* ------------------------------------------------------------------ */
+
+export type SfxEffectConfig = {
+  enabled: boolean;
+  asset: string;
+  startOffsetMs: number;
+  gain: number;
+};
+
+export type SfxConfig = {
+  mascotEntrance: SfxEffectConfig;
+  calloutPop: SfxEffectConfig;
+};
+
+export const SFX_CONFIG: SfxConfig = {
+  mascotEntrance: {
+    enabled: process.env.SHOWCASE_SFX_MASCOT !== "0",
+    asset: path.join(ROOT, "assets", "sfx", "mascot-slide-whoosh.wav"),
+    startOffsetMs: 0,
+    gain: 0.18,
+  },
+  calloutPop: {
+    enabled: process.env.SHOWCASE_SFX_CALLOUT !== "0",
+    asset: path.join(ROOT, "assets", "sfx", "callout-pop.wav"),
+    startOffsetMs: 20,
+    gain: 0.14,
+  },
+};
 
 /* ------------------------------------------------------------------ */
 /* Storage                                                             */
