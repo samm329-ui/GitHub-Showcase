@@ -11,6 +11,7 @@ import type {
   CaptionPhrase,
   CharacterCue,
   EnrichedRepo,
+  ImpactBurstCue,
   ScrollKeyframe,
   SpeechEnvelope,
 } from "./types.js";
@@ -38,6 +39,8 @@ export type RenderVideoOptions = {
   captions: CaptionPhrase[];
   /** Callout cues written to timeline.json; passed straight through. */
   callouts?: CalloutCue[] | null;
+  /** Animated comic impact accents. */
+  impactBursts?: ImpactBurstCue[] | null;
   /** Loopback URL of the comic speech bubble sticker. */
   calloutImageUrl?: string | null;
   scrollKeyframes: ScrollKeyframe[];
@@ -68,6 +71,7 @@ export async function renderVideo(
     speechEnvelope: options.speechEnvelope,
     captions: options.captions,
     callouts: options.callouts,
+    impactBursts: options.impactBursts,
     calloutImageUrl: options.calloutImageUrl,
     scrollKeyframes: options.scrollKeyframes,
     durationMs: options.audioDurationMs,
