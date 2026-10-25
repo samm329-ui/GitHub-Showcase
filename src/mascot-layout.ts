@@ -1,3 +1,5 @@
+import type { ImpactAnchor } from "./types.js";
+
 /**
  * Mascot layout geometry (Visual Composition Pass).
  *
@@ -52,7 +54,7 @@ export type MascotPlacementInput = {
   /** Canvas size (the 1080x1920 output). */
   canvasWidth: number;
   canvasHeight: number;
-  /** Deliberate off-canvas clip of the *visible* edge, in canvas px. */
+  /** CSS right/bottom offset (negative = extends past canvas edge) or deliberate clip. */
   clipRightPx: number;
   clipBottomPx: number;
 };
@@ -79,9 +81,12 @@ function round2(value: number): number {
 }
 
 /**
- * Anchor the *visible* artwork to the canvas bottom-right with a deliberate
- * clip beyond each edge. The transparent padding never participates, so no
- * invisible margin shifts the character away from the corner.
+ * Anchor the visible artwork to the canvas bottom-right with exact CSS positioning.
+ *
+ * MASCOT_LAYOUT specifies CSS `offsetX` and `offsetY` as the authored CSS `right` and
+ * `bottom` offsets (negative = extends past edge). The transparent PNG padding is
+ * taken into account so visible clipping and anchors are strictly aligned with
+ * the actual rendered CSS element.
  */
 export function mascotPlacementCss(input: MascotPlacementInput): MascotPlacement {
   const { bounds, renderedWidthPx, canvasWidth, canvasHeight, clipRightPx, clipBottomPx } = input;
@@ -93,22 +98,23 @@ export function mascotPlacementCss(input: MascotPlacementInput): MascotPlacement
   const deadTopPx = bounds.minY * scale;
   const deadBottomPx = (bounds.srcHeight - 1 - bounds.maxY) * scale;
 
-  // Visible right edge = canvasWidth + clipRightPx  ->  img right edge is the
-  // visible edge plus the transparent dead space to its right.
-  const rightPx = -(clipRightPx + deadRightPx);
-  const bottomPx = -(clipBottomPx + deadBottomPx);
+  // If clipRightPx is negative or zero, it is the authored CSS `right` offset directly.
+  // If positive, it represents the visible edge clip beyond the canvas edge.
+  const rightPx = clipRightPx <= 0 ? clipRightPx : -(clipRightPx + deadRightPx);
+  const bottomPx = clipBottomPx <= 0 ? clipBottomPx : -(clipBottomPx + deadBottomPx);
+
+  const actualClipRightPx = -(rightPx + deadRightPx);
+  const actualClipBottomPx = -(bottomPx + deadBottomPx);
 
   return {
     widthPx: round2(renderedWidthPx),
-    renderedHeightPx,
+    renderedHeightPx: round2(renderedHeightPx),
     rightPx: round2(rightPx),
     bottomPx: round2(bottomPx),
     visibleWidthPx: round2(renderedWidthPx - deadLeftPx - deadRightPx),
     visibleHeightPx: round2(renderedHeightPx - deadTopPx - deadBottomPx),
-    // The anchor arithmetic places the visible edges exactly clipRightPx /
-    // clipBottomPx beyond the canvas edges, by construction.
-    clipRightPx: round2(clipRightPx),
-    clipBottomPx: round2(clipBottomPx),
+    clipRightPx: round2(actualClipRightPx),
+    clipBottomPx: round2(actualClipBottomPx),
   };
 }
 
@@ -122,10 +128,24 @@ export type MascotHeadAnchor = {
 /** Horizontal centre of the face within the visible artwork (0..1). */
 const FACE_X_RATIO = 0.55;
 
+/** Normalized anchors on the character artwork (0..1 coordinates in PNG). */
+export const MASCOT_NORMALIZED_POINTS = {
+  headTop: { x: 0.52, y: 0.005 },
+  faceCenter: { x: 0.549, y: 0.22 },
+  anchors: {
+    "hair-left": { x: 0.28, y: 0.12 },
+    "hair-right": { x: 0.72, y: 0.09 },
+    "shoulder-left": { x: 0.16, y: 0.55 },
+    "shoulder-right": { x: 0.86, y: 0.52 },
+    "laptop-edge": { x: 0.48, y: 0.78 },
+  } as Record<ImpactAnchor, { x: number; y: number }>,
+  protectedFaceRect: { x: 0.42, y: 0.16, width: 0.26, height: 0.26 },
+} as const;
+
 /**
  * Locate the mascot's head on the canvas. Only the top hair line and the face
  * centre are needed, and both derive from the visible bounds plus the exact
- * placement — the same frame always yields the same anchor.
+ * CSS placement — the same frame always yields the same anchor.
  */
 export function mascotHeadAnchor(
   input: MascotPlacementInput,
@@ -147,18 +167,127 @@ export function mascotHeadAnchor(
   };
 }
 
+export type MascotPoseInput = {
+  x: number;
+  y: number;
+  rotationDeg: number;
+  scale: number;
+  entranceX?: number;
+  entranceY?: number;
+  entranceScale?: number;
+};
+
+export type MascotFrameGeometry = {
+  imageRect: { left: number; top: number; width: number; height: number };
+  visibleRect: { left: number; top: number; width: number; height: number };
+  headAnchor: MascotHeadAnchor;
+  transformedHeadAnchor: MascotHeadAnchor;
+  impactAnchors: Record<ImpactAnchor, { x: number; y: number }>;
+  protectedFaceRect: { left: number; top: number; width: number; height: number };
+};
+
+export function transformPoint(
+  x: number,
+  y: number,
+  originX: number,
+  originY: number,
+  pose?: MascotPoseInput
+): { x: number; y: number } {
+  if (!pose) return { x, y };
+  const rad = (pose.rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const scale = pose.scale * (pose.entranceScale ?? 1);
+  const dx = x - originX;
+  const dy = y - originY;
+  const rx = (dx * cos - dy * sin) * scale;
+  const ry = (dx * sin + dy * cos) * scale;
+  const totalX = pose.x + (pose.entranceX ?? 0);
+  const totalY = pose.y + (pose.entranceY ?? 0);
+  return {
+    x: round2(originX + rx + totalX),
+    y: round2(originY + ry + totalY),
+  };
+}
+
+export function getMascotFrameGeometry(
+  input: MascotPlacementInput,
+  placement: MascotPlacement,
+  pose?: MascotPoseInput
+): MascotFrameGeometry {
+  const { canvasWidth, canvasHeight, bounds } = input;
+  const imageLeft = canvasWidth - placement.rightPx - placement.widthPx;
+  const imageTop = canvasHeight - placement.bottomPx - placement.renderedHeightPx;
+  const imageRect = {
+    left: round2(imageLeft),
+    top: round2(imageTop),
+    width: round2(placement.widthPx),
+    height: round2(placement.renderedHeightPx),
+  };
+
+  const scale = placement.widthPx / bounds.srcWidth;
+  const deadLeftPx = bounds.minX * scale;
+  const deadTopPx = bounds.minY * scale;
+
+  const visibleRect = {
+    left: round2(imageLeft + deadLeftPx),
+    top: round2(imageTop + deadTopPx),
+    width: placement.visibleWidthPx,
+    height: placement.visibleHeightPx,
+  };
+
+  const baseHead = mascotHeadAnchor(input, placement);
+
+  // CSS transform origin: 50% 100%
+  const originX = imageLeft + placement.widthPx * 0.5;
+  const originY = imageTop + placement.renderedHeightPx;
+
+  const transformedHeadPoint = transformPoint(baseHead.faceCenterX, baseHead.headTopY, originX, originY, pose);
+  const transformedHeadAnchor: MascotHeadAnchor = {
+    headTopY: transformedHeadPoint.y,
+    faceCenterX: transformedHeadPoint.x,
+  };
+
+  const impactAnchors = {} as Record<ImpactAnchor, { x: number; y: number }>;
+  for (const [key, pt] of Object.entries(MASCOT_NORMALIZED_POINTS.anchors) as [ImpactAnchor, { x: number; y: number }][]) {
+    const rawX = imageLeft + pt.x * placement.widthPx;
+    const rawY = imageTop + pt.y * placement.renderedHeightPx;
+    impactAnchors[key] = transformPoint(rawX, rawY, originX, originY, pose);
+  }
+
+  const faceBox = MASCOT_NORMALIZED_POINTS.protectedFaceRect;
+  const faceRawX = imageLeft + faceBox.x * placement.widthPx;
+  const faceRawY = imageTop + faceBox.y * placement.renderedHeightPx;
+  const faceRawW = faceBox.width * placement.widthPx;
+  const faceRawH = faceBox.height * placement.renderedHeightPx;
+  const faceTopLeft = transformPoint(faceRawX, faceRawY, originX, originY, pose);
+
+  const effScale = pose ? pose.scale * (pose.entranceScale ?? 1) : 1;
+  const protectedFaceRect = {
+    left: faceTopLeft.x,
+    top: faceTopLeft.y,
+    width: round2(faceRawW * effScale),
+    height: round2(faceRawH * effScale),
+  };
+
+  return {
+    imageRect,
+    visibleRect,
+    headAnchor: baseHead,
+    transformedHeadAnchor,
+    impactAnchors,
+    protectedFaceRect,
+  };
+}
+
 export type CalloutZone = {
   /** Bottom offset of the caption block, as a fraction of the viewport height. */
   bottomRatio: number;
 };
 
 /**
- * Legacy caption-zone helper: places a *caption block* a fixed gap above the
- * head-top line. This is not the speech bubble — the white callout is a
- * separate stage-level layer rendered from `src/callout-overlay.ts` and its
- * `placeCallout()`, which consumes the same `mascotHeadAnchor()`. Kept for
- * backwards compatibility with the caption layout maths.
- * Deterministic and frame-order independent.
+ * Legacy caption-zone helper: places a caption block a fixed gap above the
+ * head-top line.
  */
 export function speechCalloutZone(options: {
   headTopY: number;
@@ -173,3 +302,4 @@ export function speechCalloutZone(options: {
     bottomRatio: bottomOffsetPx / options.viewportHeightPx,
   };
 }
+
