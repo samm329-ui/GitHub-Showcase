@@ -8,15 +8,16 @@
     --stage-bg: #F2EFE9; --card-bg: #0D1117; --surface-2: #161B22; --border: #30363D;
     --text-primary: #F0F6FC; --text-secondary: #8B949E; --github-blue: #58A6FF;
     --caption-font: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --caption-left: 228px; --caption-top: 1300px; --caption-width: 680px; --caption-maxh: 325px; --caption-bottom: auto; --caption-scale: 1;
-    --caption-fontsize: 64px; --caption-lineheight: 1.26; --caption-color: #F8F6EF;
-    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -0.6px;
-    --hl-bg: #FF0000; --hl-text: #FFFFFF; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
+    --caption-left: 205px; --caption-top: 1590px; --caption-width: 680px; --caption-maxh: 325px; --caption-bottom: auto; --caption-scale: 1;
+    --caption-fontsize: 50px; --caption-lineheight: 1.08; --caption-color: #F8F6EF;
+    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -1.3px;
+    --hl-bg: #FFE66D; --hl-text: #151619; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
     --hl-transition: 70ms;
-    --mascot-width: 943px; --mascot-right: -25px; --mascot-bottom: -44px;
-    --mascot-shadow: drop-shadow(0 26px 26px rgba(0,0,0,0.95));
-    --card-shadow: 0 2px 3px rgba(25,23,20,0.070), 0 10px 11px rgba(25,23,20,0.060), 0 24px 23px rgba(25,23,20,0.090), 0 48px 45px rgba(25,23,20,0.070);
+    --mascot-width: 636px; --mascot-right: -62.48px; --mascot-bottom: 249.52px;
+    --mascot-shadow: drop-shadow(0 24px 54px rgba(0,0,0,1));
+    --card-shadow: 0 2px 5px rgba(25,23,20,0.420), 0 10px 19px rgba(25,23,20,0.360), 0 24px 38px rgba(25,23,20,0.540), 0 48px 77px rgba(25,23,20,0.420);
     --card-radius: 60px;
+    --card-left: 135px; --card-top: 126px; --card-w: 810px; --card-h: 1668px;
     --ent-dur: 160ms; --ent-y: 12px; --ent-scale: 0.98;
     --exit-dur: 120ms; --exit-y: -6px;
   }
@@ -26,7 +27,7 @@
   .stage-wrap { transform: scale(0.45); transform-origin: top center; flex-shrink: 0; margin-bottom: 20px; }
   .stage { position: relative; width: 1080px; height: 1920px; background: var(--stage-bg); box-shadow: 0 0 60px rgba(0,0,0,0.6); }
 
-  .card { position: absolute; left: 135px; top: 126px; width: 810px; height: 1668px;
+  .card { position: absolute; left: var(--card-left); top: var(--card-top); width: var(--card-w); height: var(--card-h);
     background: var(--card-bg); border: 1px solid rgba(255,255,255,0.14);
     border-radius: var(--card-radius); box-shadow: var(--card-shadow);
     overflow: hidden; display: flex; flex-direction: column; color: var(--text-primary); z-index: 1; }
@@ -44,7 +45,7 @@
 
   .caption-overlay { position: absolute; z-index: 5; left: var(--caption-left); top: var(--caption-top);
     bottom: var(--caption-bottom, auto);
-    width: var(--caption-width); max-height: var(--caption-maxh); overflow: hidden; pointer-events: none;
+    width: var(--caption-width); max-height: var(--caption-maxh); overflow: visible; pointer-events: none;
     transform: scale(var(--caption-scale, 1));
     transform-origin: 0 0;
     color: var(--caption-color); font-size: var(--caption-fontsize); font-weight: var(--caption-fw, 800);
@@ -56,6 +57,13 @@
     transition: opacity var(--ent-dur) ease-out, transform var(--ent-dur) ease-out; }
   .caption-group.hidden { opacity: 0; transform: translate3d(0,var(--ent-y),0) scale(var(--ent-scale)); }
   .caption-group.exiting { opacity: 0; transform: translate3d(0,var(--exit-y),0) scale(1); transition: opacity var(--exit-dur) ease-in, transform var(--exit-dur) ease-in; }
+  /* The dark backing plate mirrors src/config.ts CAPTION_PANEL_STYLE (incl. the
+     trimmed vertical padding) so the preview shows the rendered position. */
+  .caption-panel { position: relative; width: 100%;
+    background: rgba(23,25,29,0.92); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 26px; padding: 10px 24px;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.25); overflow: hidden; }
+  .caption-lines { position: relative; z-index: 1; text-align: center; }
   .caption-highlight { position: absolute; z-index: 0; background: var(--hl-bg);
     border-radius: var(--hl-radius); pointer-events: none; opacity: 1;
     padding: var(--hl-pad-y) var(--hl-pad-x); box-sizing: content-box;
@@ -69,7 +77,7 @@
     transition: transform 380ms cubic-bezier(0,0,0.2,1), opacity 380ms ease; }
   .character.char-hidden { opacity: 0; transform: translate3d(140px,420px,0) scale(1); }
 
-  .callout-overlay { position: absolute; z-index: 4; left: var(--callout-left, 620px); top: calc(var(--callout-top-min, 820px) + var(--callout-top-offset, 210px));
+  .callout-overlay { position: absolute; z-index: 4; left: var(--callout-left, 716px); top: var(--callout-top, 873px);
     width: var(--callout-width, 370px); height: var(--callout-height, 270px); pointer-events: none;
     transform-origin: 36.5% 94.4%;
     transition: transform var(--callout-ent-dur, 200ms) cubic-bezier(0,0,0.2,1), opacity var(--callout-ent-dur, 200ms) ease; }
@@ -136,9 +144,13 @@
 
   <div class="caption-overlay" id="caption">
     <div class="caption-group" id="cgroup">
-      <div class="caption-highlight" id="chl"></div>
-      <div class="caption-line"><span class="w" data-i="0">An</span> <span class="w" data-i="1">Android</span> <span class="w" data-i="2">client</span> <span class="w" data-i="3">for</span></div>
-      <div class="caption-line"><span class="w active" data-i="4">Hermes</span> <span class="w" data-i="5">Agent</span> <span class="w" data-i="6">on</span> <span class="w" data-i="7">your</span> <span class="w" data-i="8">phone.</span></div>
+      <div class="caption-panel">
+        <div class="caption-highlight" id="chl"></div>
+        <div class="caption-lines">
+          <div class="caption-line"><span class="w" data-i="0">An</span> <span class="w" data-i="1">Android</span> <span class="w" data-i="2">client</span> <span class="w" data-i="3">for</span></div>
+          <div class="caption-line"><span class="w active" data-i="4">Hermes</span> <span class="w" data-i="5">Agent</span> <span class="w" data-i="6">on</span> <span class="w" data-i="7">your</span> <span class="w" data-i="8">phone.</span></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -175,21 +187,24 @@
       <button id="load-url">Load URL</button>
       <button id="load-default">Load default (assets/character.png)</button>
     </div>
+    <label>Saved asset (written to src/config.ts)<input type="text" id="s-masset" value="character.png" readonly></label>
     <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading…</div>
+    <div class="note">“Pick PNG file” copies the image into <code>assets/mascot-custom.png</code>; Save writes that filename into <code>src/config.ts</code>, so rendered videos use your character for every pose.</div>
   </section>
 
   <section>
     <h4>Mascot placement</h4>
-    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="400" max="980" value="943" id="s-mw"><input type="number" id="n-mw" value="943"></div>
-    <div class="ctrl"><span style="width:90px">right offset</span><input type="range" min="-60" max="60" value="-25" id="s-mr"><input type="number" id="n-mr" value="-25"></div>
-    <div class="ctrl"><span style="width:90px">bottom offset</span><input type="range" min="-1920" max="1920" value="-44" id="s-mb"><input type="number" id="n-mb" value="-44"></div>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="400" max="980" value="636" id="s-mw"><input type="number" id="n-mw" value="636"></div>
+    <div class="ctrl"><span style="width:90px">right offset</span><input type="range" min="-60" max="60" value="-60" id="s-mr"><input type="number" id="n-mr" value="-60"></div>
+    <div class="ctrl"><span style="width:90px">bottom offset</span><input type="range" min="-1920" max="1920" value="252" id="s-mb"><input type="number" id="n-mb" value="252"></div>
+    <div class="note">Signed offsets: <b>positive lifts the mascot inside the frame</b>, negative lets it extend past the edge (clipped by the canvas).</div>
   </section>
 
   <section>
     <h4>Mascot shadow (drop-shadow)</h4>
-    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-40" max="100" value="26" id="s-msh-y"><input type="number" id="n-msh-y" value="26"></div>
-    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="150" value="26" id="s-msh-b"><input type="number" id="n-msh-b" value="26"></div>
-    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="0.95" id="s-msh-o"><input type="number" id="n-msh-o" value="0.95" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-40" max="100" value="24" id="s-msh-y"><input type="number" id="n-msh-y" value="24"></div>
+    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="150" value="54" id="s-msh-b"><input type="number" id="n-msh-b" value="54"></div>
+    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="1" id="s-msh-o"><input type="number" id="n-msh-o" value="1" step="0.01"></div>
   </section>
 
   <section>
@@ -203,22 +218,22 @@
       </div>
     </label>
     <label>Bubble text<input type="text" id="s-callout-text" value="Turns long videos into short clips!"></label>
-    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="260" max="500" value="370" id="s-callout-bw"><input type="number" id="n-callout-bw" value="370"></div>
-    <div class="ctrl"><span style="width:90px">height</span><input type="range" min="180" max="400" value="270" id="s-callout-bh"><input type="number" id="n-callout-bh" value="270"></div>
-    <div class="ctrl"><span style="width:90px">top offset</span><input type="range" min="0" max="1920" value="210" id="s-callout-to"><input type="number" id="n-callout-to" value="210"></div>
-    <div class="ctrl"><span style="width:90px">face offset</span><input type="range" min="-100" max="100" value="25" id="s-callout-fo"><input type="number" id="n-callout-fo" value="25"></div>
-    <div class="ctrl"><span style="width:90px">left min</span><input type="range" min="0" max="1080" value="560" id="s-callout-lmin"><input type="number" id="n-callout-lmin" value="560"></div>
-    <div class="ctrl"><span style="width:90px">right margin</span><input type="range" min="0" max="100" value="32" id="s-callout-rm"><input type="number" id="n-callout-rm" value="32"></div>
-    <div class="ctrl"><span style="width:90px">top min</span><input type="range" min="0" max="1920" value="820" id="s-callout-tmin"><input type="number" id="n-callout-tmin" value="820"></div>
-    <div class="ctrl"><span style="width:90px">top max</span><input type="range" min="800" max="1200" value="930" id="s-callout-tmax"><input type="number" id="n-callout-tmax" value="930"></div>
-    <div class="ctrl"><span style="width:90px">font size</span><input type="range" min="20" max="50" value="34" id="s-callout-fs"><input type="number" id="n-callout-fs" value="34"></div>
-    <div class="ctrl"><span style="width:90px">font weight</span><input type="range" min="400" max="900" step="100" value="800" id="s-callout-fw"><input type="number" id="n-callout-fw" value="800" step="100"></div>
-    <div class="ctrl"><span style="width:90px">line height</span><input type="range" min="0.8" max="1.5" step="0.05" value="1.1" id="s-callout-lh"><input type="number" id="n-callout-lh" value="1.1" step="0.05"></div>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="260" max="500" value="340" id="s-callout-bw"><input type="number" id="n-callout-bw" value="340"></div>
+    <div class="ctrl"><span style="width:90px">height</span><input type="range" min="180" max="400" value="400" id="s-callout-bh"><input type="number" id="n-callout-bh" value="400"></div>
+    <div class="ctrl"><span style="width:90px">top offset</span><input type="range" min="0" max="1920" value="215" id="s-callout-to"><input type="number" id="n-callout-to" value="215"></div>
+    <div class="ctrl"><span style="width:90px">face offset</span><input type="range" min="-100" max="100" value="100" id="s-callout-fo"><input type="number" id="n-callout-fo" value="100"></div>
+    <div class="ctrl"><span style="width:90px">left min</span><input type="range" min="0" max="1080" value="640" id="s-callout-lmin"><input type="number" id="n-callout-lmin" value="640"></div>
+    <div class="ctrl"><span style="width:90px">right margin</span><input type="range" min="0" max="100" value="24" id="s-callout-rm"><input type="number" id="n-callout-rm" value="24"></div>
+    <div class="ctrl"><span style="width:90px">top min</span><input type="range" min="0" max="1920" value="60" id="s-callout-tmin"><input type="number" id="n-callout-tmin" value="60"></div>
+    <div class="ctrl"><span style="width:90px">top max</span><input type="range" min="800" max="1920" value="1520" id="s-callout-tmax"><input type="number" id="n-callout-tmax" value="1520"></div>
+    <div class="ctrl"><span style="width:90px">font size</span><input type="range" min="20" max="50" value="31" id="s-callout-fs"><input type="number" id="n-callout-fs" value="31"></div>
+    <div class="ctrl"><span style="width:90px">font weight</span><input type="range" min="400" max="900" step="100" value="900" id="s-callout-fw"><input type="number" id="n-callout-fw" value="900" step="100"></div>
+    <div class="ctrl"><span style="width:90px">line height</span><input type="range" min="0.8" max="1.5" step="0.05" value="1" id="s-callout-lh"><input type="number" id="n-callout-lh" value="1" step="0.05"></div>
     <label>fill color<input type="color" value="#FFFDF7" id="s-callout-fill"></label>
     <label>outline color<input type="color" value="#151619" id="s-callout-outline"></label>
     <div class="ctrl"><span style="width:90px">outline width</span><input type="range" min="1" max="12" value="5" id="s-callout-ow"><input type="number" id="n-callout-ow" value="5"></div>
     <label>accent color<input type="color" value="#FFE66D" id="s-callout-accent"></label>
-    <div class="ctrl"><span style="width:90px">accent off X</span><input type="range" min="-20" max="20" value="6" id="s-callout-aox"><input type="number" id="n-callout-aox" value="6"></div>
+    <div class="ctrl"><span style="width:90px">accent off X</span><input type="range" min="-20" max="20" value="-3" id="s-callout-aox"><input type="number" id="n-callout-aox" value="-3"></div>
     <div class="ctrl"><span style="width:90px">accent off Y</span><input type="range" min="-20" max="20" value="8" id="s-callout-aoy"><input type="number" id="n-callout-aoy" value="8"></div>
     <label>text color<input type="color" value="#151619" id="s-callout-tc"></label>
     <div class="ctrl"><span style="width:90px">ent dur</span><input type="range" min="80" max="400" value="200" id="s-callout-entms"><input type="number" id="n-callout-entms" value="200"></div>
@@ -259,8 +274,8 @@
 
   <section>
     <h4>Caption position &amp; size (px)</h4>
-    <div class="ctrl"><span style="width:90px">left</span><input type="range" min="0" max="1080" value="228" id="s-cl"><input type="number" id="n-cl" value="228"></div>
-    <div class="ctrl"><span style="width:90px">top</span><input type="range" min="0" max="1920" value="1300" id="s-ct"><input type="number" id="n-ct" value="1300"></div>
+    <div class="ctrl"><span style="width:90px">left</span><input type="range" min="0" max="1080" value="205" id="s-cl"><input type="number" id="n-cl" value="205"></div>
+    <div class="ctrl"><span style="width:90px">top</span><input type="range" min="0" max="1920" value="1590" id="s-ct"><input type="number" id="n-ct" value="1590"></div>
     <div class="ctrl"><span style="width:90px">bottom</span><input type="range" min="0" max="1920" value="0" id="s-cb"><input type="number" id="n-cb" value="0"></div>
     <div class="ctrl"><span style="width:90px">width</span><input type="range" min="240" max="1080" value="680" id="s-cw"><input type="number" id="n-cw" value="680"></div>
     <div class="ctrl"><span style="width:90px">max-height</span><input type="range" min="60" max="500" value="325" id="s-cmh"><input type="number" id="n-cmh" value="325"></div>
@@ -280,24 +295,27 @@
       </select>
     </label>
     <div class="ctrl"><span style="width:90px">font-weight</span><input type="range" min="400" max="900" step="100" value="900" id="s-cfw"><input type="number" id="n-cfw" value="900" step="100"></div>
-    <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="64" id="s-cfs"><input type="number" id="n-cfs" value="64"></div>
-    <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="1.26" id="s-clh"><input type="number" id="n-clh" value="1.26" step="0.01"></div>
-    <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-0.6" id="s-cls"><input type="number" id="n-cls" value="-0.6" step="0.1"></div>
+    <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="50" id="s-cfs"><input type="number" id="n-cfs" value="50"></div>
+    <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="1.08" id="s-clh"><input type="number" id="n-clh" value="1.08" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-1.3" id="s-cls"><input type="number" id="n-cls" value="-1.3" step="0.1"></div>
     <label>text color<input type="color" value="#F8F6EF" id="s-ccolor"></label>
   </section>
 
   <section>
     <h4>Highlight box (active word) — auto-tracks the word</h4>
-    <label>background<input type="color" value="#FF0000" id="s-hbg"></label>
-    <label>text<input type="color" value="#FFFFFF" id="s-htx"></label>
+    <label>background<input type="color" value="#FFE66D" id="s-hbg"></label>
+    <label>text<input type="color" value="#151619" id="s-htx"></label>
     <div class="note">Box size, radius and padding are derived automatically from the caption's font size, line-height and word positions. No manual controls needed.</div>
   </section>
 
   <section>
     <h4>Card</h4>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="360" max="1000" value="810" id="s-cardw"><input type="number" id="n-cardw" value="810"></div>
+    <div class="ctrl"><span style="width:90px">height</span><input type="range" min="560" max="1860" value="1668" id="s-cardh"><input type="number" id="n-cardh" value="1668"></div>
     <div class="ctrl"><span style="width:90px">radius</span><input type="range" min="0" max="60" value="60" id="s-crad"><input type="number" id="n-crad" value="60"></div>
-    <div class="ctrl"><span style="width:90px">shadow intensity</span><input type="range" min="0" max="2" step="0.05" value="0.05" id="s-csh-int"><input type="number" id="n-csh-int" value="0.05" step="0.05"></div>
-    <div class="ctrl"><span style="width:90px">shadow blur scale</span><input type="range" min="0.5" max="2" step="0.05" value="0.5" id="s-csh-blur"><input type="number" id="n-csh-blur" value="0.5" step="0.05"></div>
+    <div class="ctrl"><span style="width:90px">shadow intensity</span><input type="range" min="0" max="2" step="0.05" value="0.3" id="s-csh-int"><input type="number" id="n-csh-int" value="0.3" step="0.05"></div>
+    <div class="ctrl"><span style="width:90px">shadow blur scale</span><input type="range" min="0.5" max="2" step="0.05" value="0.85" id="s-csh-blur"><input type="number" id="n-csh-blur" value="0.85" step="0.05"></div>
+    <div class="note">Height resizes the card's length; the card stays centred on the stage (left/top are recomputed on save).</div>
   </section>
 
   <section>
@@ -375,6 +393,7 @@
   /* even if anything later in this file throws.                          */
   /* ------------------------------------------------------------------ */
   const FIELD_MAP = {
+    mascotAsset: 's-masset',
     mascotWidthPx: 's-mw', mascotRight: 's-mr', mascotBottom: 's-mb',
     mascotShadowOffsetY: 's-msh-y', mascotShadowBlur: 's-msh-b', mascotShadowOpacity: 's-msh-o',
     captionLeft: 's-cl', captionTop: 's-ct', captionBottom: 's-cb', captionWidth: 's-cw', captionMaxHeight: 's-cmh', captionScale: 's-cscale',
@@ -382,6 +401,7 @@
     captionLineHeight: 's-clh', captionLetterSpacing: 's-cls', captionColor: 's-ccolor',
     captionShadowOffsetY: 's-csh-y', captionShadowBlur: 's-csh-b', captionShadowOpacity: 's-csh-o',
     highlightBackground: 's-hbg', highlightText: 's-htx',
+    cardWidth: 's-cardw', cardHeight: 's-cardh',
     cardRadius: 's-crad', cardShadowIntensity: 's-csh-int', cardShadowBlurScale: 's-csh-blur',
     enterMs: 's-entdur', enterYPx: 's-enty', enterScale: 's-entsc',
     exitMs: 's-exitdur', exitYPx: 's-exity',
@@ -430,7 +450,7 @@
   const TEXT_FIELDS = new Set([
     'captionFontFamily', 'captionColor', 'highlightBackground', 'highlightText',
     'calloutFill', 'calloutOutline', 'calloutAccent', 'calloutTextColor',
-    'impactStrokeColor'
+    'impactStrokeColor', 'mascotAsset'
   ]);
   const BOOLEAN_FIELDS = new Set(['calloutEnabled', 'impactEnabled']);
   // The preview shows the exit offset the way CSS applies it (negative = up),
@@ -480,6 +500,8 @@
       if (paired && String(paired.value) !== String(controlValue)) paired.value = controlValue;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
+    // The mascot <img> follows the saved asset filename.
+    if (cfg.mascotAsset) setMascotSrc(mascotAssetUrl(cfg.mascotAsset));
   }
 
   const MODEL = window.ShowcaseConfigModel || null;
@@ -751,9 +773,29 @@
     n.addEventListener('input', () => sync(n.value));
     sync(s.value);
   }
-  pair('s-mw','n-mw','--mascot-width','px');
-  pair('s-mr','n-mr','--mascot-right','px');
-  pair('s-mb','n-mb','--mascot-bottom','px');
+  // Mirror src/mascot-layout.ts: right/bottom are SIGNED offsets of the
+  // visible artwork from each canvas edge — positive lifts the mascot inside
+  // the frame, negative lets it extend past the edge. The dead padding is
+  // character.png's measured 5px per side, subtracted so the *visible* edge
+  // (not the image rectangle) lands on the slider's value.
+  function applyMascotPlacement() {
+    const w = parseFloat($('s-mw').value || 636);
+    const dead = 5 * (w / 1284);
+    const right = parseFloat($('s-mr').value || 0);
+    const bottom = parseFloat($('s-mb').value || 0);
+    setVar('--mascot-width', w + 'px');
+    setVar('--mascot-right', (right - dead) + 'px');
+    setVar('--mascot-bottom', (bottom - dead) + 'px');
+  }
+  ['s-mw','n-mw','s-mr','n-mr','s-mb','n-mb'].forEach(id => {
+    const el = $(id); if (!el) return;
+    el.addEventListener('input', () => {
+      const sib = $(id.startsWith('n-') ? 's-' + id.slice(2) : 'n-' + id.slice(2));
+      if (sib) sib.value = el.value;
+      applyMascotPlacement();
+    });
+  });
+  applyMascotPlacement();
   pair('s-cl','n-cl','--caption-left','px');
   pair('s-ct','n-ct','--caption-top','px');
   pair('s-cw','n-cw','--caption-width','px');
@@ -808,6 +850,66 @@
   pair('s-callout-maxvis','n-callout-maxvis','--callout-max-vis','ms');
   pair('s-callout-gap','n-callout-gap','--callout-gap','ms');
   pair('s-callout-mc','n-callout-mc','--callout-max-cues','');
+
+  // Card geometry: width/height are authored; left/top are re-centred on the
+  // 1080x1920 stage exactly the way tools/config-model.js re-centres them on
+  // save, so the preview never shows a position the render won't produce.
+  function applyCardGeometry() {
+    const w = parseFloat($('s-cardw').value || 810);
+    const h = parseFloat($('s-cardh').value || 1668);
+    setVar('--card-w', w + 'px');
+    setVar('--card-h', h + 'px');
+    setVar('--card-left', Math.round((1080 - w) / 2) + 'px');
+    setVar('--card-top', Math.round((1920 - h) / 2) + 'px');
+  }
+  ['s-cardw','n-cardw','s-cardh','n-cardh'].forEach(id => {
+    const el = $(id); if (!el) return;
+    el.addEventListener('input', () => {
+      const sib = $(id.startsWith('n-') ? 's-' + id.slice(2) : 'n-' + id.slice(2));
+      if (sib) sib.value = el.value;
+      applyCardGeometry();
+    });
+  });
+  applyCardGeometry();
+
+  // Mirror src/callout-overlay.ts placeCallout(): anchor the mock bubble to
+  // the mascot's *measured* head so the preview shows the position the render
+  // will produce when the mascot moves around the frame.
+  function updateCalloutPlacement() {
+    const stage = document.querySelector('.stage');
+    const mascot = $('mascot');
+    const callout = $('callout');
+    if (!stage || !mascot || !callout) return;
+    const s = stage.getBoundingClientRect();
+    const r = mascot.getBoundingClientRect();
+    if (!s.width || !r.width || !r.height) return;
+    const scale = s.width / 1080;
+    const renderedW = r.width / scale;
+    const renderedH = r.height / scale;
+    // Visible bounds of character.png (6px transparent padding per side).
+    const visibleLeft = (r.left - s.left) / scale + (6 / 1284) * renderedW;
+    const visibleTop = (r.top - s.top) / scale + (6 / 1182) * renderedH;
+    const visibleW = (renderedW * (1278 - 6 + 1)) / 1284;
+    const faceX = visibleLeft + 0.55 * visibleW;
+    const g = (id, fallback) => parseFloat(($(id) && $(id).value) || fallback);
+    const bw = g('s-callout-bw', 340);
+    const tailX = Math.round(bw * 0.365); // DEFAULT_CALLOUT_PROFILE.tailTip.x
+    const left = Math.min(
+      1080 - g('s-callout-rm', 24) - bw,
+      Math.max(g('s-callout-lmin', 640), faceX + g('s-callout-fo', 100) - tailX)
+    );
+    const top = Math.min(
+      g('s-callout-tmax', 1520),
+      Math.max(g('s-callout-tmin', 60), visibleTop - g('s-callout-to', 215))
+    );
+    setVar('--callout-left', left + 'px');
+    setVar('--callout-top', top + 'px');
+  }
+  document.querySelectorAll('input,select,textarea').forEach(el =>
+    el.addEventListener('input', () => updateCalloutPlacement())
+  );
+  if ($('mascot')) $('mascot').addEventListener('load', updateCalloutPlacement);
+  updateCalloutPlacement();
   // callout color inputs
   $('s-callout-fill').addEventListener('input', e => setVar('--callout-fill', e.target.value));
   $('s-callout-outline').addEventListener('input', e => setVar('--callout-outline', e.target.value));
@@ -913,8 +1015,11 @@
 
   $('s-safe').addEventListener('change', e => $('safezone').classList.toggle('on', e.target.checked));
 
-  // mascot image
+  // mascot image — a picked PNG is copied into assets/ and saved as the
+  // default character, so rendered videos use it too (not just this page).
   const mascotEl2 = $('mascot');
+  const MASCOT_UPLOAD_NAME = 'mascot-custom.png';
+  function mascotAssetUrl(name) { return '../assets/' + encodeURIComponent(name); }
   function setMascotSrc(src) {
     const st = $('mascot-status');
     if (st) st.textContent = 'mascot status: loading…';
@@ -923,10 +1028,47 @@
     mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED — click "Pick PNG file" to load your character'; };
     mascotEl2.src = src;
   }
-  $('mascot-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) setMascotSrc(URL.createObjectURL(f)); });
-  $('load-url').addEventListener('click', () => { const u = $('mascot-url').value.trim(); if (u) setMascotSrc(u); });
-  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/character.png'; setMascotSrc('../assets/character.png'); });
-  setMascotSrc('../assets/character.png');
+  function setMascotAsset(name, displaySrc) {
+    if ($('s-masset')) $('s-masset').value = name;
+    setMascotSrc(displaySrc || mascotAssetUrl(name));
+  }
+  $('mascot-file').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const st = $('mascot-status');
+    if (st) st.textContent = 'mascot status: uploading…';
+    // 1. The helper server stores the PNG in assets/ and reports the path.
+    try {
+      const data = await apiFetch('/api/mascot', { method: 'POST', body: f });
+      setMascotAsset(data.asset.split('/').pop(), data.url);
+      return;
+    } catch (serverError) { /* fall through to the folder */ }
+    // 2. No server: copy the PNG straight into the connected project folder.
+    try {
+      const handle = await ensureFolder();
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const dir = await handle.getDirectoryHandle('assets', { create: true });
+      const fh = await dir.getFileHandle(MASCOT_UPLOAD_NAME, { create: true });
+      const writable = await fh.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      setMascotAsset(MASCOT_UPLOAD_NAME);
+      return;
+    } catch (folderError) { /* preview-only below */ }
+    // 3. Preview-only: show the picked file; Save cannot persist it.
+    setMascotSrc(URL.createObjectURL(f));
+    if (st) st.textContent = 'mascot status: shown in preview only — the file could not be copied into the project (open the Save My Edits launcher and reload)';
+  });
+  $('load-url').addEventListener('click', () => {
+    const u = $('mascot-url').value.trim(); if (!u) return;
+    // A file inside assets/ becomes the saved default; anything else is a
+    // preview-only URL (the render pipeline serves assets/ files only).
+    const match = u.match(/assets\/([^/?#]+\.png)$/i);
+    if (match) { setMascotAsset(decodeURIComponent(match[1]), u); return; }
+    setMascotSrc(u);
+    if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL — renders only use files inside assets/';
+  });
+  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/character.png'; setMascotAsset('character.png'); });
+  setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'character.png'));
 
   // moving highlight
   const words = Array.from(document.querySelectorAll('.w'));
@@ -936,11 +1078,17 @@
   function positionHighlight(i) {
     const w = words[i % words.length]; if (!w) return;
     const r = w.getBoundingClientRect();
-    const g = $('cgroup').getBoundingClientRect();
+    // The pill is absolutely positioned inside the panel, so word rectangles
+    // are measured against the panel's *padding box* — the same coordinate
+    // basis src/card.ts uses in the real render.
+    const panel = document.querySelector('.caption-panel');
+    const pr = panel.getBoundingClientRect();
+    const originX = pr.left + panel.clientLeft;
+    const originY = pr.top + panel.clientTop;
     const padX = parseFloat(getComputedStyle(root).getPropertyValue('--hl-pad-x')) || 9;
     const padY = parseFloat(getComputedStyle(root).getPropertyValue('--hl-pad-y')) || 4;
-    hl.style.left = (r.left - g.left - padX) + 'px';
-    hl.style.top = (r.top - g.top - padY) + 'px';
+    hl.style.left = (r.left - originX - padX) + 'px';
+    hl.style.top = (r.top - originY - padY) + 'px';
     hl.style.width = (r.width + padX * 2) + 'px';
     hl.style.height = (r.height + padY * 2) + 'px';
   }
