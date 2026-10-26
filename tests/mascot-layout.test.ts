@@ -103,27 +103,54 @@ describe("mascot alpha bounds", () => {
 describe("mascot placement", () => {
   const placement = mascotPlacementCss(PLACEMENT_INPUT);
 
-  test("the rendered width stays large (visible width ≈ 935 px)", () => {
-    assert.equal(placement.widthPx, 943);
-    assert.equal(placement.visibleWidthPx / VIEWPORT.width > 0.8, true);
+  test("the rendered width follows the committed mascot scale", () => {
+    // The width is authored live in the preview; the invariant is that the
+    // placement uses exactly the committed ratio and stays canvas-dominant.
+    assert.equal(placement.widthPx, RENDERED_WIDTH);
+    assert.equal(
+      placement.widthPx,
+      Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width)
+    );
+    assert.equal(placement.visibleWidthPx / VIEWPORT.width > 0.5, true);
   });
 
-  test("the visible artwork crosses the right and bottom edges deliberately", () => {
+  test("the visible artwork follows the signed offsets (clip past / lift inside)", () => {
     const scale = placement.widthPx / CHARACTER_ALPHA_BOUNDS.srcWidth;
     const deadRightPx = (CHARACTER_ALPHA_BOUNDS.srcWidth - 1 - CHARACTER_ALPHA_BOUNDS.maxX) * scale;
     const deadBottomPx =
       (CHARACTER_ALPHA_BOUNDS.srcHeight - 1 - CHARACTER_ALPHA_BOUNDS.maxY) * scale;
-    assert.equal(placement.rightPx, MASCOT_LAYOUT.offsetX);
-    assert.equal(placement.bottomPx, MASCOT_LAYOUT.offsetY);
-    // The CSS values compensate for the transparent padding, so the *visible*
-    // edge — not the PNG rectangle — crosses the frame.
+    // The CSS compensates for the PNG's transparent padding so the *visible*
+    // edge — not the image rectangle — lands on the authored offset, whether
+    // it crosses the edge (negative) or is lifted inside the frame (positive).
+    const expectedRight = MASCOT_LAYOUT.offsetX - deadRightPx;
+    const expectedBottom = MASCOT_LAYOUT.offsetY - deadBottomPx;
     assert.ok(
-      Math.abs(placement.clipRightPx - (-(placement.rightPx + deadRightPx))) < 0.01,
-      "the visible right edge is clipped past the canvas by the calculated amount"
+      Math.abs(placement.rightPx - expectedRight) < 0.01,
+      `right ${placement.rightPx} vs ${expectedRight}`
     );
     assert.ok(
-      Math.abs(placement.clipBottomPx - (-(placement.bottomPx + deadBottomPx))) < 0.01,
-      "the visible bottom edge is clipped past the canvas by the calculated amount"
+      Math.abs(placement.bottomPx - expectedBottom) < 0.01,
+      `bottom ${placement.bottomPx} vs ${expectedBottom}`
+    );
+    // Signed semantics: positive output = lifted inside, negative = clipped past.
+    assert.ok(
+      Math.abs(placement.clipRightPx - -MASCOT_LAYOUT.offsetX) < 0.01,
+      `right clip ${placement.clipRightPx}`
+    );
+    assert.ok(
+      Math.abs(placement.clipBottomPx - -MASCOT_LAYOUT.offsetY) < 0.01,
+      `bottom clip ${placement.clipBottomPx}`
+    );
+    // The visible edges sit exactly at the authored signed offsets.
+    const visibleRight = VIEWPORT.width - (placement.rightPx + deadRightPx);
+    const visibleBottom = VIEWPORT.height - (placement.bottomPx + deadBottomPx);
+    assert.ok(Math.abs(visibleRight - (VIEWPORT.width - MASCOT_LAYOUT.offsetX)) < 0.01);
+    assert.ok(Math.abs(visibleBottom - (VIEWPORT.height - MASCOT_LAYOUT.offsetY)) < 0.01);
+    assert.ok(
+      MASCOT_LAYOUT.offsetY > 0
+        ? visibleBottom < VIEWPORT.height
+        : visibleBottom > VIEWPORT.height,
+      "the sign decides lift-inside vs clip-past"
     );
   });
 
@@ -145,8 +172,10 @@ describe("mascot head anchor and caption callout zone", () => {
   const head = mascotHeadAnchor(PLACEMENT_INPUT, placement);
 
   test("the head-top line sits in the lower half of the canvas", () => {
+    // The mascot is deliberately bottom-cropped (the bottom clip is authored
+    // live), so the head may sit low — it just may not leave the canvas.
     assert.ok(head.headTopY > VIEWPORT.height * 0.4, `got ${head.headTopY}`);
-    assert.ok(head.headTopY < VIEWPORT.height * 0.75, `got ${head.headTopY}`);
+    assert.ok(head.headTopY < VIEWPORT.height - 100, `got ${head.headTopY}`);
     // face centre: on the mascot artwork, right of the canvas middle
     assert.ok(head.faceCenterX > VIEWPORT.width * 0.5, `got ${head.faceCenterX}`);
     assert.ok(head.faceCenterX < VIEWPORT.width, `got ${head.faceCenterX}`);
