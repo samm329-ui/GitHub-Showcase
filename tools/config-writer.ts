@@ -25,7 +25,9 @@ import "./config-model.js";
 
 /** Every value the live preview can author. */
 export type PreviewConfig = {
-  /** Rendered mascot width in canvas px (0.8731 * 1080 ≈ 943). */
+  /** Mascot artwork filename inside `assets/` (uploaded or already present). */
+  mascotAsset: string;
+  /** Rendered mascot width in canvas px. */
   mascotWidthPx: number;
   /** CSS `right` offset in canvas px (negative = past the edge). */
   mascotRight: number;
@@ -49,6 +51,10 @@ export type PreviewConfig = {
   captionShadowOpacity: number;
   highlightBackground: string;
   highlightText: string;
+  /** Card width in canvas px; `left` is re-centred on save. */
+  cardWidth: number;
+  /** Card height in canvas px; `top` is re-centred on save. */
+  cardHeight: number;
   cardRadius: number;
   cardShadowIntensity: number;
   cardShadowBlurScale: number;
