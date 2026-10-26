@@ -92,6 +92,55 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/** Raw binary reader for image uploads (a mascot PNG is megabytes, not KB). */
+async function readBinaryBody(
+  req: http.IncomingMessage,
+  limitBytes: number
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer;
+    size += buffer.length;
+    if (size > limitBytes) throw new Error("image too large");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Store the picked mascot as the one stable upload filename.
+ *
+ * A fixed name (`assets/mascot-custom.png`) keeps the saved config stable —
+ * every pick overwrites the same file, so old uploads never pile up and the
+ * rendered pipeline always finds the exact file the preview is showing.
+ */
+const MASCOT_UPLOAD_NAME = "mascot-custom.png";
+const MASCOT_UPLOAD_MAX_BYTES = 30 * 1024 * 1024;
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+async function handleMascotUpload(
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  try {
+    const body = await readBinaryBody(req, MASCOT_UPLOAD_MAX_BYTES);
+    if (body.length < 8 || !body.subarray(0, 4).equals(PNG_MAGIC)) {
+      sendJson(res, 400, { ok: false, error: "expected a PNG image" });
+      return;
+    }
+    const file = path.join(ROOT, "assets", MASCOT_UPLOAD_NAME);
+    await fs.writeFile(file, body);
+    sendJson(res, 200, {
+      ok: true,
+      asset: `assets/${MASCOT_UPLOAD_NAME}`,
+      url: `/assets/${MASCOT_UPLOAD_NAME}`,
+    });
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: (error as Error).message });
+  }
+}
+
 async function handleConfig(res: http.ServerResponse): Promise<void> {
   try {
     sendJson(res, 200, { ok: true, config: await readPreviewConfig(ROOT) });
@@ -165,6 +214,10 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === "POST" && urlPath === "/api/save") {
     void handleSave(req, res);
+    return;
+  }
+  if (req.method === "POST" && urlPath === "/api/mascot") {
+    void handleMascotUpload(req, res);
     return;
   }
   if ((req.method === "GET" || req.method === "HEAD") && urlPath === "/") {
