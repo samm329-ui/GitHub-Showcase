@@ -254,11 +254,18 @@ describe("callout layout", () => {
   });
 
   test("asset-aware placement scales height and uses PNG-specific tail coordinates", () => {
+    // The bubble width is authored live in the preview, so the test follows
+    // the committed value instead of snapshotting a tunable number.
     const pngLayout = placeCallout(head, CALLOUT, DEFAULT_CALLOUT_PROFILE);
-    assert.equal(pngLayout.width, 370);
-    assert.equal(pngLayout.height, Math.round(370 * (789 / 1082)));
+    assert.equal(pngLayout.width, CALLOUT.bubbleWidthPx);
+    assert.equal(
+      pngLayout.height,
+      Math.round(CALLOUT.bubbleWidthPx * (789 / 1082))
+    );
     // Tail tip uses normalized ~0.365 of width
-    const expectedTailLocal = Math.round(370 * DEFAULT_CALLOUT_PROFILE.tailTip.x);
+    const expectedTailLocal = Math.round(
+      CALLOUT.bubbleWidthPx * DEFAULT_CALLOUT_PROFILE.tailTip.x
+    );
     assert.ok(Math.abs(pngLayout.tailTipX - (pngLayout.left + expectedTailLocal)) < 0.01);
 
     const svgLayout = placeCallout(head, { ...CALLOUT, bubbleWidthPx: 360 }, FALLBACK_SVG_CALLOUT_PROFILE);
