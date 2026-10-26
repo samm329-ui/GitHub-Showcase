@@ -186,6 +186,11 @@ export const CARD_BG = "#0D1117";
 export const ACCENT_YELLOW = "#FFE66D";
 /** Near-black used for callout text and the active karaoke word. */
 export const INK = "#151619";
+/**
+ * Card geometry. The live preview rewrites `width`/`height` as one anchored
+ * block and re-centres `left`/`top` on the 1080x1920 stage in the same write,
+ * so the card can never end up off-centre or half-updated.
+ */
 export const CARD = {
   width: 810,
   height: 1668,
@@ -220,7 +225,8 @@ export const CAPTION_PANEL_STYLE = {
   border: "1px solid rgba(255,255,255,0.12)",
   radiusPx: 26,
   padXPx: 24,
-  padYPx: 16,
+  /** Vertical padding is trimmed before touching the font size (tuning pass). */
+  padYPx: 10,
   shadow: "0 14px 32px rgba(0,0,0,0.25)",
   maxLines: 2,
 } as const;
@@ -252,28 +258,59 @@ export type CaptionOverlayGeometry = {
 };
 
 /**
+ * One environment override, validated and clamped to the canvas.
+ *
+ * When the variable is absent (the normal path) the committed value passes
+ * through untouched, so the geometry authored in the live preview renders at
+ * exactly the position that was saved. The clamp only guards bad shell input.
+ */
+function envOverridePx(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  committed: number,
+  min: number,
+  max: number
+): number {
+  const raw = env[key];
+  if (raw === undefined) return committed;
+  return clampNumber(readNumber(raw, committed), min, max);
+}
+
+/**
  * Committed caption geometry with validated, canvas-clamped environment
  * overrides. Every override is parsed by `readNumber` (finite and positive)
  * and then clamped so an overlay can never be pushed outside the 1080x1920
- * canvas, even by a bad shell variable.
+ * canvas, even by a bad shell variable. The committed values themselves are
+ * never clamped: `maxHeightPx` is a cap on panel growth, not the panel's real
+ * height, so using it to bound `topPx` would silently drag a saved caption
+ * upward in the render while the preview showed the saved position.
  */
 export function captionOverlayGeometry(
   env: NodeJS.ProcessEnv = process.env
 ): CaptionOverlayGeometry {
-  const leftPx = clampNumber(
-    readNumber(env.SHOWCASE_CAPTION_LEFT_PX, CAPTION_OVERLAY.leftPx),
+  const leftPx = envOverridePx(
+    env,
+    "SHOWCASE_CAPTION_LEFT_PX",
+    CAPTION_OVERLAY.leftPx,
     0,
     VIEWPORT.width - 240
   );
-  const widthPx = clampNumber(
-    readNumber(env.SHOWCASE_CAPTION_WIDTH_PX, CAPTION_OVERLAY.widthPx),
+  const widthPx = envOverridePx(
+    env,
+    "SHOWCASE_CAPTION_WIDTH_PX",
+    CAPTION_OVERLAY.widthPx,
     240,
     VIEWPORT.width - leftPx
   );
-  const topPx = clampNumber(
-    readNumber(env.SHOWCASE_CAPTION_TOP_PX, CAPTION_OVERLAY.topPx),
+  const topPx = envOverridePx(
+    env,
+    "SHOWCASE_CAPTION_TOP_PX",
+    CAPTION_OVERLAY.topPx,
     0,
-    VIEWPORT.height - CAPTION_OVERLAY.maxHeightPx - 20
+    // A panel needs breathing room to stay visible; 120px is the smallest
+    // two-line panel that still reads, so an override can reach lower than
+    // the old maxHeight-based bound without leaving the canvas.
+    VIEWPORT.height - 120
   );
   return {
     leftPx: Math.round(leftPx),
@@ -355,28 +392,43 @@ export const CALLOUT = {
   // `widthPx`, and two `widthPx` keys in this file would make that save
   // ambiguous (the writer refuses to guess).
   enabled: true,
-  bubbleWidthPx: 378,
+  /** ~90% of the previous width so the bubble stops covering the page. */
+  bubbleWidthPx: 340,
   bubbleHeightPx: 400,
   /** Rounded cloud body height before the tail. */
   bodyHeightPx: 176,
   /**
    * Clamp bounds so the tail can track the face without leaving the canvas.
-   * The upper bound keeps the whole body inside the right margin.
+   * `leftMinPx` sits below the right bound so the right margin — not the
+   * minimum — decides the horizontal pin, keeping the bubble tucked toward
+   * the mascot. The top band follows the measured head-top line: the body
+   * stays above the head while the tail reaches down toward the glasses.
    */
-  leftMinPx: 723,
-  rightMarginPx: 32,
-  topOffsetPx: 0,
-  topMinPx: 817,
-  topMaxPx: 800,
+  leftMinPx: 630,
+  rightMarginPx: 0,
+  /**
+   * Head-relative drop from the measured head-top line. The window
+   * [bodyHeightPx, height - tailInset] keeps the body above the head while
+   * the tail reaches down toward the glasses, whatever the mascot scale.
+   */
+  topOffsetPx: 215,
+  /**
+   * Clamp band for the head-anchored top. It spans the canvas (minus the
+   * bubble's own height) because the mascot itself can be lifted anywhere
+   * over the frame by `MASCOT_LAYOUT.offsetY`; the anchor, not this band,
+   * decides the position in the normal case.
+   */
+  topMinPx: 0,
+  topMaxPx: 871,
   /** Tail tip, in callout-local pixels (derived from asset profile). */
   tailXLocalPx: 135,
   tailInsetPx: 15,
   /** The tail aims this far right of the measured face centre. */
   faceOffsetPx: 100,
   /** Entrance / exit / ray timing, all in media milliseconds. */
-  enterMs: 206,
+  enterMs: 200,
   rayMs: 140,
-  exitMs: 182,
+  exitMs: 180,
   enterYPx: 12,
   exitYPx: 6,
   enterScale: 0.96,
@@ -479,6 +531,16 @@ export const MOBILE_PAGE = {
 /* Character layer                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Default mascot artwork, as a filename inside `assets/`.
+ *
+ * This is the one value the live preview rewrites when you pick a new
+ * character image (`tools/preview-live.html` → Save), so the rendered
+ * pipeline — including the pose fallbacks below — follows the choice.
+ * `SHOWCASE_CHARACTER_PNG` still wins when set.
+ */
+export const CHARACTER_PNG_FILENAME = "mascot-custom.png";
+
 function readCharacterPath(): string | null {
   const raw = process.env.SHOWCASE_CHARACTER_PNG;
   if (raw !== undefined) {
@@ -486,17 +548,17 @@ function readCharacterPath(): string | null {
     if (trimmed === "" || trimmed.toLowerCase() === "none") return null;
     return path.resolve(ROOT, trimmed);
   }
-  return path.join(ROOT, "assets", "character.png");
+  return path.join(ROOT, "assets", CHARACTER_PNG_FILENAME);
 }
 
-function readOptionalCharacterPath(envKey: string, fallback: string): string | null {
+function readOptionalCharacterPath(envKey: string): string | null {
   const raw = process.env[envKey];
   if (raw !== undefined) {
     const trimmed = raw.trim();
     if (trimmed === "" || trimmed.toLowerCase() === "none") return null;
     return path.resolve(ROOT, trimmed);
   }
-  return path.join(ROOT, fallback);
+  return null;
 }
 
 /** `null` disables the character layer entirely. */
@@ -520,14 +582,16 @@ function readCalloutPath(): string | null {
 export const CALLOUT_PNG = readCalloutPath();
 
 /**
- * Optional presenter poses. The renderer falls back to `CHARACTER_PNG` for any
- * pose that is missing, so a single cut-out still works. Supply separate
- * transparent artwork through the environment for true hand/arm gestures.
+ * Optional presenter poses. Any pose without dedicated artwork falls back to
+ * `CHARACTER_PNG` — the chosen default mascot — so swapping the character in
+ * the live preview replaces every pose, not just the standing one. Supply
+ * separate transparent artwork through the environment for true hand/arm
+ * gestures.
  */
 export const CHARACTER_POSE_PNGS = {
   present: CHARACTER_PNG,
-  point: readOptionalCharacterPath("SHOWCASE_CHARACTER_POINT_PNG", "assets/character.png"),
-  close: readOptionalCharacterPath("SHOWCASE_CHARACTER_CLOSE_PNG", "assets/character-close.png"),
+  point: readOptionalCharacterPath("SHOWCASE_CHARACTER_POINT_PNG") ?? CHARACTER_PNG,
+  close: readOptionalCharacterPath("SHOWCASE_CHARACTER_CLOSE_PNG") ?? CHARACTER_PNG,
 } as const;
 
 /**
@@ -536,20 +600,20 @@ export const CHARACTER_POSE_PNGS = {
  * lower-right corner of the stage — not the card — so it fills the marked
  * presentation area.
  *
- * Anchoring is alpha-aware: `offsetX` / `offsetY` are the *deliberate clip* in
- * canvas px of the visible artwork beyond the right/bottom canvas edge (the
- * transparent PNG padding is subtracted first by `src/mascot-layout.ts`), so
- * invisible PNG margins never push the character off the corner. The
- * 1080x1920 viewport clips the overflow — "extends partially past the frame"
- * by design, never by accident.
+ * Anchoring is alpha-aware: `offsetX` / `offsetY` are signed offsets in canvas
+ * px of the *visible artwork* from the right/bottom edge — positive lifts the
+ * mascot inside the frame so the sliders can move it up and down anywhere over
+ * the stage, negative lets it extend past the edge where the 1080x1920
+ * viewport clips it. The transparent PNG padding is subtracted first by
+ * `src/mascot-layout.ts`, so invisible margins never shift the visible edge.
  */
 export type MascotLayout = {
   anchor: "bottom-right";
   /** Fraction of the 1080 px canvas width, applied to the PNG rectangle. */
   widthRatio: number;
-  /** CSS `right` offset in canvas px (negative = extends past edge). */
+  /** Signed visible offset from the right edge (+ = inside, − = past edge). */
   offsetX: number;
-  /** CSS `bottom` offset in canvas px (negative = extends past edge). */
+  /** Signed visible offset from the bottom edge (+ = lifted up, − = past edge). */
   offsetY: number;
   /** Guarantee the head stays inside the canvas (guards against extreme sizes). */
   keepFaceVisible: boolean;
@@ -557,9 +621,11 @@ export type MascotLayout = {
 
 export const MASCOT_LAYOUT: MascotLayout = {
   anchor: "bottom-right",
-  // CSS right/bottom offsets (negative = extends past canvas edge).
-  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.6204),
-  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, 28),
+  // Signed visible offsets from the bottom-right edge (see MascotLayout).
+  // 0.5889 ≈ the previous 0.6204 scaled by the 0.95 tuning pass (636 px wide;
+  // chosen so widthRatio round-trips through the integer pixel width).
+  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.5889),
+  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -60),
   offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 252),
   keepFaceVisible: true,
 };
