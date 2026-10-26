@@ -20,6 +20,7 @@ import {
   CAPTION_OVERLAY,
   CAPTION_PANEL_STYLE,
   INK,
+  VIEWPORT,
   captionOverlayGeometry,
 } from "../src/config.js";
 
@@ -102,18 +103,27 @@ describe("caption panel", () => {
     assert.equal(CAPTION_PANEL_STYLE.maxLines, 2);
     assert.match(CAPTION_PANEL_STYLE.background, /^rgba\(23,25,29,/);
     assert.ok(CAPTION_PANEL_STYLE.radiusPx >= 20);
+    // Tuning pass: vertical padding is trimmed before the font size is.
+    assert.ok(CAPTION_PANEL_STYLE.padYPx <= 12);
     assert.equal(CAPTION_HIGHLIGHT.radiusPx, 9);
-    assert.equal(CAPTION_OVERLAY.topPx, 1510);
-    assert.equal(CAPTION_OVERLAY.widthPx, 680);
+    // The panel stays inside the canvas at its committed placement.
+    assert.ok(CAPTION_OVERLAY.topPx + CAPTION_OVERLAY.maxHeightPx <= VIEWPORT.height);
+    assert.ok(CAPTION_OVERLAY.leftPx + CAPTION_OVERLAY.widthPx <= VIEWPORT.width);
   });
 
-  test("geometry overrides are validated and clamped to the canvas", () => {
+  test("the committed geometry renders exactly where the preview saved it", () => {
+    // Regression: the committed values used to be clamped as if they were
+    // overrides, so a saved caption (e.g. top 1590) rendered higher than the
+    // position the live preview showed.
     assert.deepEqual(captionOverlayGeometry({} as NodeJS.ProcessEnv), {
-      leftPx: 200,
-      topPx: 1510,
-      widthPx: 680,
-      maxHeightPx: 190,
+      leftPx: CAPTION_OVERLAY.leftPx,
+      topPx: CAPTION_OVERLAY.topPx,
+      widthPx: CAPTION_OVERLAY.widthPx,
+      maxHeightPx: CAPTION_OVERLAY.maxHeightPx,
     });
+  });
+
+  test("environment overrides are validated and clamped to the canvas", () => {
     const wide = captionOverlayGeometry({
       SHOWCASE_CAPTION_LEFT_PX: "700",
       SHOWCASE_CAPTION_WIDTH_PX: "900",
@@ -121,14 +131,14 @@ describe("caption panel", () => {
     } as NodeJS.ProcessEnv);
     assert.equal(wide.leftPx, 700);
     assert.equal(wide.widthPx, 380, "width is clamped to the remaining canvas");
-    assert.equal(wide.topPx, 1710, "top is clamped above the bottom margin");
+    assert.equal(wide.topPx, VIEWPORT.height - 120, "top is clamped above the bottom margin");
     // Bad or zero values fall back to the committed geometry instead of NaN.
     const fallback = captionOverlayGeometry({
       SHOWCASE_CAPTION_LEFT_PX: "nope",
       SHOWCASE_CAPTION_TOP_PX: "0",
     } as NodeJS.ProcessEnv);
-    assert.equal(fallback.leftPx, 200);
-    assert.equal(fallback.topPx, 1510);
+    assert.equal(fallback.leftPx, CAPTION_OVERLAY.leftPx);
+    assert.equal(fallback.topPx, CAPTION_OVERLAY.topPx);
   });
 
   test("the frame html contains the panel, the pill and the words once", () => {
