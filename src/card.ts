@@ -483,21 +483,25 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     })
     .join("\n  ");
 
-  const mascotWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
-  const mascotRight = MASCOT_LAYOUT.offsetX;
-  const mascotBottom = MASCOT_LAYOUT.offsetY;
-
-  // Callout placement reads the same alpha-aware mascot placement and head
-  // anchor the character layer uses, so the bubble can never drift away from
-  // the head it is meant to belong to.
+  // The character CSS is emitted from the same alpha-aware placement the
+  // callout anchor and impact accents use, so the on-screen mascot and its
+  // measured head can never disagree (a positive offset is the deliberate
+  // clip past the canvas edge; a negative one is the raw CSS offset).
   const mascotPlacement = mascotPlacementCss({
     bounds: CHARACTER_ALPHA_BOUNDS,
-    renderedWidthPx: mascotWidthPx,
+    renderedWidthPx: Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width),
     canvasWidth: VIEWPORT.width,
     canvasHeight: VIEWPORT.height,
     clipRightPx: MASCOT_LAYOUT.offsetX,
     clipBottomPx: MASCOT_LAYOUT.offsetY,
   });
+  const mascotWidthPx = mascotPlacement.widthPx;
+  const mascotRight = mascotPlacement.rightPx;
+  const mascotBottom = mascotPlacement.bottomPx;
+
+  // Callout placement reads the same alpha-aware mascot placement and head
+  // anchor the character layer uses, so the bubble can never drift away from
+  // the head it is meant to belong to.
   const headAnchor = mascotHeadAnchor(
     {
       bounds: CHARACTER_ALPHA_BOUNDS,
@@ -508,8 +512,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
       clipBottomPx: MASCOT_LAYOUT.offsetY,
     },
     mascotPlacement
-  );
-  const calloutProfile = getCalloutAssetProfile(calloutImageUrl ?? CALLOUT_PNG);
+  );  const calloutProfile = getCalloutAssetProfile(calloutImageUrl ?? CALLOUT_PNG);
   const calloutLayout = placeCallout(headAnchor, CALLOUT, calloutProfile);
   const safeTextBox = calloutTextBox(calloutLayout, calloutProfile);
   const captionGeometry = captionOverlayGeometry();
