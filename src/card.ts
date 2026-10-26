@@ -92,7 +92,7 @@ export type CardShadowTuning = {
 };
 
 export const CARD_SHADOW_TUNING: CardShadowTuning = {
-  intensity: 0.85,
+  intensity: 0.3,
   blurScale: 0.85,
 };
 
