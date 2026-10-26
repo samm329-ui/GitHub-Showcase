@@ -8,16 +8,20 @@ import { createCanvas, loadImage } from "canvas";
 import { promisify } from "node:util";
 import {
   CALLOUT,
+  CALLOUT_PNG,
   CARD,
   CARD_CHROME_HEIGHT,
+  CAPTION_PANEL_STYLE,
   FPS,
   IMPACT_ACCENTS,
   MASCOT_LAYOUT,
   MAX_DURATION_SECONDS,
   VIEWPORT,
   captionOverlayGeometry,
+  getCalloutAssetProfile,
 } from "./config.js";
-import { calloutFitsBubble } from "./callout-overlay.js";
+import { CAPTION_STYLE } from "./caption-overlay.js";
+import { calloutFitsBubble, placeCallout } from "./callout-overlay.js";
 import {
   CHARACTER_ALPHA_BOUNDS,
   mascotHeadAnchor,
@@ -371,6 +375,17 @@ function protectedFaceRegion(): {
   right: number;
   bottom: number;
 } {
+  const { head, placement } = mascotGeometry();
+  return {
+    left: head.faceCenterX - placement.visibleWidthPx * 0.16,
+    top: head.headTopY,
+    right: head.faceCenterX + placement.visibleWidthPx * 0.16,
+    bottom: head.headTopY + placement.visibleHeightPx * 0.3,
+  };
+}
+
+/** The committed mascot placement and its measured head anchor. */
+function mascotGeometry() {
   const input = {
     bounds: CHARACTER_ALPHA_BOUNDS,
     renderedWidthPx: Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width),
@@ -381,26 +396,35 @@ function protectedFaceRegion(): {
   };
   const placement = mascotPlacementCss(input);
   const head = mascotHeadAnchor(input, placement);
-  return {
-    left: head.faceCenterX - placement.visibleWidthPx * 0.16,
-    top: head.headTopY,
-    right: head.faceCenterX + placement.visibleWidthPx * 0.16,
-    bottom: head.headTopY + placement.visibleHeightPx * 0.3,
-  };
+  return { input, placement, head };
 }
 
 /**
  * Static geometry validation for the two overlay layers: inside the canvas,
  * inside the bottom safe zone, and clear of the mascot's face/glasses.
+ *
+ * Both rectangles are the *real authored* ones — the callout is anchored to
+ * the measured head (never its clamp band's extremes) and the caption panel
+ * uses its tallest possible content height (`maxLines` lines of the committed
+ * style), because `maxHeightPx` is only a stop-valve, not the rendered height.
  */
 export function overlayLayoutChecks(): QaCheck[] {
   const caption = captionOverlayGeometry();
   const face = protectedFaceRegion();
-  const captionBottom = caption.topPx + caption.maxHeightPx;
-  const calloutLeft = CALLOUT.leftMinPx;
-  const calloutRight = VIEWPORT.width - CALLOUT.rightMarginPx;
-  const calloutTop = CALLOUT.topMinPx;
-  const calloutBottom = CALLOUT.topMaxPx + CALLOUT.bubbleHeightPx;
+  const captionPanelHeightPx =
+    CAPTION_PANEL_STYLE.maxLines *
+      CAPTION_STYLE.fontSizePx *
+      CAPTION_STYLE.lineHeight +
+    CAPTION_PANEL_STYLE.padYPx * 2 +
+    2;
+  const captionBottom = caption.topPx + captionPanelHeightPx;
+
+  const { head } = mascotGeometry();
+  const calloutLayout = placeCallout(head, CALLOUT, getCalloutAssetProfile(CALLOUT_PNG));
+  const calloutLeft = calloutLayout.left;
+  const calloutRight = calloutLayout.left + calloutLayout.width;
+  const calloutTop = calloutLayout.top;
+  const calloutBottom = calloutLayout.top + calloutLayout.height;
 
   return [
     {
