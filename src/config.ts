@@ -191,7 +191,7 @@ export const CARD = {
   height: 1668,
   left: 135,
   top: 126,
-  radius: 52,
+  radius: 60,
   border: "1px solid rgba(255,255,255,0.14)",
 } as const;
 
@@ -234,10 +234,10 @@ export const CAPTION_PANEL_STYLE = {
  * layers validated environment overrides on top for device testing.
  */
 export const CAPTION_OVERLAY = {
-  leftPx: 200,
-  topPx: 1510,
+  leftPx: 205,
+  topPx: 1590,
   widthPx: 680,
-  maxHeightPx: 190,
+  maxHeightPx: 325,
 } as const;
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -355,28 +355,28 @@ export const CALLOUT = {
   // `widthPx`, and two `widthPx` keys in this file would make that save
   // ambiguous (the writer refuses to guess).
   enabled: true,
-  bubbleWidthPx: 370,
-  bubbleHeightPx: 270,
+  bubbleWidthPx: 378,
+  bubbleHeightPx: 400,
   /** Rounded cloud body height before the tail. */
   bodyHeightPx: 176,
   /**
    * Clamp bounds so the tail can track the face without leaving the canvas.
    * The upper bound keeps the whole body inside the right margin.
    */
-  leftMinPx: 560,
+  leftMinPx: 723,
   rightMarginPx: 32,
-  topOffsetPx: 210,
-  topMinPx: 820,
-  topMaxPx: 930,
+  topOffsetPx: 0,
+  topMinPx: 817,
+  topMaxPx: 800,
   /** Tail tip, in callout-local pixels (derived from asset profile). */
   tailXLocalPx: 135,
   tailInsetPx: 15,
   /** The tail aims this far right of the measured face centre. */
-  faceOffsetPx: 25,
+  faceOffsetPx: 100,
   /** Entrance / exit / ray timing, all in media milliseconds. */
-  enterMs: 200,
+  enterMs: 206,
   rayMs: 140,
-  exitMs: 180,
+  exitMs: 182,
   enterYPx: 12,
   exitYPx: 6,
   enterScale: 0.96,
@@ -400,12 +400,12 @@ export const CALLOUT = {
   outline: "#151619",
   outlineWidthPx: 5,
   accent: "#FFE66D",
-  accentOffsetX: 6,
+  accentOffsetX: -3,
   accentOffsetY: 8,
   text: "#151619",
-  fontSizePx: 34,
-  fontWeight: 800,
-  lineHeight: 1.1,
+  fontSizePx: 31,
+  fontWeight: 900,
+  lineHeight: 1,
   textPadXPx: 28,
   rayStrokePx: 6,
 } as const;
@@ -558,9 +558,9 @@ export type MascotLayout = {
 export const MASCOT_LAYOUT: MascotLayout = {
   anchor: "bottom-right",
   // CSS right/bottom offsets (negative = extends past canvas edge).
-  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.8731),
-  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -60),
-  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, -23),
+  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.6204),
+  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, 28),
+  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 252),
   keepFaceVisible: true,
 };
 
@@ -573,7 +573,7 @@ export const CHARACTER = {
   /** Alpha-mask shadow: drop-shadow follows the cut-out silhouette, never a
    * rectangle, and always renders *behind* the artwork. Soft, dark, offset
    * downward; the blur scales with the rendered mascot size. */
-  shadow: "drop-shadow(0 10px 54px rgba(0,0,0,1))",
+  shadow: "drop-shadow(0 24px 54px rgba(0,0,0,1))",
   idleBobPx: 2,
   speechBobPx: 6,
   tiltDeg: 1.1,
