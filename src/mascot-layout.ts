@@ -54,7 +54,11 @@ export type MascotPlacementInput = {
   /** Canvas size (the 1080x1920 output). */
   canvasWidth: number;
   canvasHeight: number;
-  /** CSS right/bottom offset (negative = extends past canvas edge) or deliberate clip. */
+  /**
+   * Signed offset of the *visible artwork* from the right/bottom canvas edge,
+   * in canvas px: positive = lifted inside the frame, negative = extends past
+   * the edge (and is clipped by the canvas).
+   */
   clipRightPx: number;
   clipBottomPx: number;
 };
@@ -71,7 +75,8 @@ export type MascotPlacement = {
   /** Visible artwork size after clipping. */
   visibleWidthPx: number;
   visibleHeightPx: number;
-  /** How much *visible* artwork is clipped by each canvas edge. */
+  /** How far the *visible* artwork crosses each edge: positive = clipped past
+   *  the edge, negative = lifted inside the frame. */
   clipRightPx: number;
   clipBottomPx: number;
 };
@@ -81,12 +86,16 @@ function round2(value: number): number {
 }
 
 /**
- * Anchor the visible artwork to the canvas bottom-right with exact CSS positioning.
+ * Anchor the visible artwork to a signed offset from the canvas edges with
+ * exact CSS positioning.
  *
- * MASCOT_LAYOUT specifies CSS `offsetX` and `offsetY` as the authored CSS `right` and
- * `bottom` offsets (negative = extends past edge). The transparent PNG padding is
- * taken into account so visible clipping and anchors are strictly aligned with
- * the actual rendered CSS element.
+ * MASCOT_LAYOUT's `offsetX` / `offsetY` are signed offsets of the VISIBLE
+ * artwork from the right/bottom edge: positive lifts the character inside the
+ * frame (the slider can raise it anywhere over the canvas), negative lets it
+ * extend past the edge where the viewport clips it. The transparent PNG
+ * padding is subtracted first, so it is the visible edge — not the image
+ * rectangle — that lands on the requested offset, and the anchor math can
+ * never disagree with the CSS the renderer emits.
  */
 export function mascotPlacementCss(input: MascotPlacementInput): MascotPlacement {
   const { bounds, renderedWidthPx, canvasWidth, canvasHeight, clipRightPx, clipBottomPx } = input;
@@ -98,10 +107,11 @@ export function mascotPlacementCss(input: MascotPlacementInput): MascotPlacement
   const deadTopPx = bounds.minY * scale;
   const deadBottomPx = (bounds.srcHeight - 1 - bounds.maxY) * scale;
 
-  // If clipRightPx is negative or zero, it is the authored CSS `right` offset directly.
-  // If positive, it represents the visible edge clip beyond the canvas edge.
-  const rightPx = clipRightPx <= 0 ? clipRightPx : -(clipRightPx + deadRightPx);
-  const bottomPx = clipBottomPx <= 0 ? clipBottomPx : -(clipBottomPx + deadBottomPx);
+  // Signed visible offset → raw CSS offset: shift the image rectangle by the
+  // transparent padding so the *visible* edge sits exactly `clip*Px` from the
+  // canvas edge (positive = inside, negative = past the edge).
+  const rightPx = clipRightPx - deadRightPx;
+  const bottomPx = clipBottomPx - deadBottomPx;
 
   const actualClipRightPx = -(rightPx + deadRightPx);
   const actualClipBottomPx = -(bottomPx + deadBottomPx);
