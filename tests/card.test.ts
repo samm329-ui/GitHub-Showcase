@@ -8,13 +8,20 @@ import {
 } from "../src/card.js";
 import { clampScroll, isScrollable, scrollBounds, targetForAnchor } from "../src/scroll.js";
 import {
+  CALLOUT,
   CARD,
   CARD_CHROME_HEIGHT,
   CARD_BG,
   CARD_VIEWPORT_HEIGHT,
+  CAPTION_OVERLAY,
+  MASCOT_LAYOUT,
   STAGE_BG,
   VIEWPORT,
 } from "../src/config.js";
+import {
+  CHARACTER_ALPHA_BOUNDS,
+  mascotPlacementCss,
+} from "../src/mascot-layout.js";
 import { enriched } from "./helpers.js";
 
 describe("composition geometry", () => {
@@ -36,7 +43,9 @@ describe("composition geometry", () => {
   test("the card uses the required colours and radius", () => {
     assert.equal(STAGE_BG, "#F2EFE9");
     assert.equal(CARD_BG, "#0D1117");
-    assert.equal(CARD.radius, 52);
+    // The radius is authored live in the preview, so assert the invariant
+    // (a sane corner radius) instead of a snapshot that goes stale on save.
+    assert.ok(CARD.radius >= 0 && CARD.radius <= 80, `radius ${CARD.radius}`);
   });
 
   test("the shadow is neutral and diffuse", () => {
@@ -118,11 +127,16 @@ describe("stationary card markup", () => {
   });
 
   test("captions sit in a fixed dark panel in the lower third", () => {
+    // The placement is authored live in the preview, so the test follows the
+    // committed CAPTION_OVERLAY instead of snapshotting tunable numbers.
     const rule = html.match(/\.caption-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
-    assert.match(rule, /left:\s*200px/);
-    assert.match(rule, /top:\s*1510px/);
-    assert.match(rule, /width:\s*680px/);
-    assert.match(rule, /max-height:\s*190px/);
+    assert.match(rule, new RegExp(`left:\\s*${CAPTION_OVERLAY.leftPx}px`));
+    assert.match(rule, new RegExp(`top:\\s*${CAPTION_OVERLAY.topPx}px`));
+    assert.match(rule, new RegExp(`width:\\s*${CAPTION_OVERLAY.widthPx}px`));
+    assert.match(
+      rule,
+      new RegExp(`max-height:\\s*${CAPTION_OVERLAY.maxHeightPx}px`)
+    );
     // The shadow must not be clipped by the positioning root.
     assert.match(rule, /overflow:\s*visible/);
     // The animated per-frame wrapper is part of the composition.
@@ -143,7 +157,12 @@ describe("stationary card markup", () => {
     const accentAt = html.indexOf('fill="#FFE66D"');
     const whiteAt = html.indexOf('fill="#FFFDF7"');
     assert.ok(accentAt > 0 && whiteAt > accentAt, "accent behind the white bubble");
-    assert.match(html, /transform="translate\(6 8\)"/);
+    assert.match(
+      html,
+      new RegExp(
+        `transform="translate\\(${CALLOUT.accentOffsetX} ${CALLOUT.accentOffsetY}\\)"`
+      )
+    );
     // Rays are a separate, initially hidden accent element.
     assert.match(html, /<svg class="callout-rays" id="callout-rays"/);
     assert.match(html, /\.callout-rays\s*\{[^}]*opacity:\s*0/s);
@@ -169,9 +188,18 @@ describe("stationary card markup", () => {
     const rule = html.match(/\.callout-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
     const left = Number(rule.match(/left:\s*([\d.]+)px/)?.[1]);
     const top = Number(rule.match(/top:\s*([\d.]+)px/)?.[1]);
-    assert.ok(left >= 560 && left <= 684, `callout left ${left}`);
-    assert.ok(top >= 820 && top <= 930, `callout top ${top}`);
-    assert.ok(left + 360 <= 1080, "the bubble body stays inside the canvas");
+    assert.ok(
+      left >= CALLOUT.leftMinPx && left <= VIEWPORT.width - CALLOUT.rightMarginPx,
+      `callout left ${left}`
+    );
+    assert.ok(
+      top >= CALLOUT.topMinPx && top <= CALLOUT.topMaxPx,
+      `callout top ${top}`
+    );
+    assert.ok(
+      left + CALLOUT.bubbleWidthPx <= VIEWPORT.width,
+      "the bubble body stays inside the canvas"
+    );
   });
 
   test("no caption panel exists until a phrase is active", () => {
@@ -220,12 +248,32 @@ describe("stationary card markup", () => {
         { pose: "close", url: "http://127.0.0.1/close.png" },
       ],
     });
-    // 0.8731 * 1080 canvas width ≈ 943px rendered; visible artwork ≈ 935px.
-    assert.match(withPoses, /\.character\s*\{[^}]*width:\s*943px/s);
-    // Canvas-corner anchoring: the offsets are authored directly in the live
-    // preview (negative = the rectangle starts past the canvas edge).
-    assert.match(withPoses, /\.character\s*\{[^}]*right:\s*-60px/s);
-    assert.match(withPoses, /\.character\s*\{[^}]*bottom:\s*-23px/s);
+    // The rendered width and CSS offsets follow the committed mascot layout,
+    // resolved through the same alpha-aware placement the anchors use.
+    const renderedWidthPx = Math.round(MASCOT_LAYOUT.widthRatio * VIEWPORT.width);
+    const placement = mascotPlacementCss({
+      bounds: CHARACTER_ALPHA_BOUNDS,
+      renderedWidthPx,
+      canvasWidth: VIEWPORT.width,
+      canvasHeight: VIEWPORT.height,
+      clipRightPx: MASCOT_LAYOUT.offsetX,
+      clipBottomPx: MASCOT_LAYOUT.offsetY,
+    });
+    assert.match(
+      withPoses,
+      new RegExp(`\\.character\\s*\\{[^}]*width:\\s*${renderedWidthPx}px`)
+    );
+    // Canvas-corner anchoring: a negative offset is the raw CSS offset, a
+    // positive one is the deliberate clip past the edge (padding subtracted).
+    assert.match(
+      withPoses,
+      new RegExp(`\\.character\\s*\\{[^}]*right:\\s*${placement.rightPx}px`)
+    );
+    assert.match(
+      withPoses,
+      new RegExp(`\\.character\\s*\\{[^}]*bottom:\\s*${placement.bottomPx}px`),
+      "the character CSS must match the anchor math exactly"
+    );
     // keepFaceVisible guard.
     assert.match(withPoses, /\.character\s*\{[^}]*max-height:\s*1920px/s);
     // The shadow derives from the alpha mask: drop-shadow, never a rectangle,
