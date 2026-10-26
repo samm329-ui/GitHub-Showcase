@@ -34,9 +34,30 @@
   };
 
   var VIEWPORT_WIDTH_PX = 1080;
+  var VIEWPORT_HEIGHT_PX = 1920;
 
   function num(value) {
     return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
+  }
+
+  /** Clamp a card dimension into a range that always keeps the card on-canvas. */
+  function clampInt(value, min, max, fallback) {
+    var parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(parsed)));
+  }
+
+  /**
+   * A mascot asset must be a bare filename: no directories, no quotes, nothing
+   * that could break out of the generated `path.join(ROOT, "assets", "...")`.
+   */
+  function sanitizeAssetFilename(value) {
+    var name = String(value || "")
+      .split(/[\\/]/)
+      .pop()
+      .replace(/["'<>:|?*\u0000-\u001f]/g, "")
+      .trim();
+    return name || "character.png";
   }
 
   function hex(value) {
@@ -138,6 +159,32 @@
     configTs = sub(configTs, /radius: -?[\d.]+,/, function () {
       return "radius: " + num(config.cardRadius) + ",";
     }, "CARD.radius");
+
+    /* --------------- Mascot artwork + card geometry (src/config.ts) ---------- */
+    configTs = sub(
+      configTs,
+      /export const CHARACTER_PNG_FILENAME = "[^"]*";/,
+      function () {
+        return "export const CHARACTER_PNG_FILENAME = " +
+          JSON.stringify(sanitizeAssetFilename(config.mascotAsset)) + ";";
+      },
+      "CHARACTER_PNG_FILENAME"
+    );
+    // One anchored rewrite for the whole geometry block: width/height are the
+    // authored values, left/top are re-centred on the stage in the same write
+    // so a resize can never leave the card off-centre or half-updated.
+    var cardWidth = clampInt(config.cardWidth, 360, 1000, 810);
+    var cardHeight = clampInt(config.cardHeight, 560, 1860, 1668);
+    var cardLeft = Math.round((VIEWPORT_WIDTH_PX - cardWidth) / 2);
+    var cardTop = Math.round((VIEWPORT_HEIGHT_PX - cardHeight) / 2);
+    configTs = sub(
+      configTs,
+      /(export const CARD = \{[\s\S]*?\n\s*width: )-?[\d.]+([\s\S]*?\n\s*height: )-?[\d.]+([\s\S]*?\n\s*left: )-?[\d.]+([\s\S]*?\n\s*top: )-?[\d.]+(,)/,
+      function (all, w, h, l, t) {
+        return w + cardWidth + h + cardHeight + l + cardLeft + t + cardTop + ",";
+      },
+      "CARD geometry"
+    );
     configTs = sub(
       configTs,
       /shadow: "drop-shadow\(0\s+-?[\d.]+px\s+-?[\d.]+px\s+rgba\(0,\s*0,\s*0,\s*[\d.]+\)\)",/,
@@ -370,18 +417,31 @@
       /shadow: "drop-shadow\(0\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+rgba\(0,\s*0,\s*0,\s*([\d.]+)\)\)",/
     );
     if (!mascotShadow) throw new Error("config-writer: could not read CHARACTER.shadow");
+    var cardWidth = readNumber(
+      configTs,
+      /export const CARD = \{[\s\S]*?\n\s*width: (-?[\d.]+),/,
+      "CARD.width"
+    );
+    var cardHeight = readNumber(
+      configTs,
+      /export const CARD = \{[\s\S]*?\n\s*width: -?[\d.]+,[\s\S]*?\n\s*height: (-?[\d.]+),/,
+      "CARD.height"
+    );
     var captionShadow = captionOverlayTs.match(
       /textShadow: "0 (-?[\d.]+)px (-?[\d.]+)px rgba\(0,0,0,([\d.]+)\)",/
     );
     if (!captionShadow) throw new Error("config-writer: could not read CAPTION_STYLE.textShadow");
 
     return {
+      mascotAsset: readString(configTs, /export const CHARACTER_PNG_FILENAME = "([^"]*)";/, "CHARACTER_PNG_FILENAME"),
       mascotWidthPx: Math.round(widthRatio * VIEWPORT_WIDTH_PX),
       mascotRight: readNumber(configTs, /offsetX: readNumber\(process\.env\.SHOWCASE_MASCOT_OFFSET_X, (-?[\d.]+)\)/, "MASCOT_LAYOUT.offsetX"),
       mascotBottom: readNumber(configTs, /offsetY: readNumber\(process\.env\.SHOWCASE_MASCOT_OFFSET_Y, (-?[\d.]+)\)/, "MASCOT_LAYOUT.offsetY"),
       mascotShadowOffsetY: Number(mascotShadow[1]),
       mascotShadowBlur: Number(mascotShadow[2]),
       mascotShadowOpacity: Number(mascotShadow[3]),
+      cardWidth: cardWidth,
+      cardHeight: cardHeight,
       captionLeft: readNumber(configTs, /leftPx: (-?[\d.]+),/, "CAPTION_OVERLAY.leftPx"),
       captionTop: readNumber(configTs, /topPx: (-?[\d.]+),/, "CAPTION_OVERLAY.topPx"),
       captionWidth: readNumber(configTs, /widthPx: (-?[\d.]+),/, "CAPTION_OVERLAY.widthPx"),
@@ -478,6 +538,7 @@
   return {
     CONFIG_PATHS: CONFIG_PATHS,
     VIEWPORT_WIDTH_PX: VIEWPORT_WIDTH_PX,
+    VIEWPORT_HEIGHT_PX: VIEWPORT_HEIGHT_PX,
     writePreviewConfig: writePreviewConfig,
     parsePreviewConfig: parsePreviewConfig,
     configDiff: configDiff,
