@@ -74,8 +74,7 @@ export function splitPhrases(text: string): string[] {
 
   // Fold very short fragments into a neighbour so a caption never flashes a
   // single word for a fraction of a second.
-  const merged: string[] = [];
-  for (const phrase of phrases) {
+  const merged: string[] = [];  for (const phrase of phrases) {
     const previous = merged[merged.length - 1];
     if (previous && previous.split(/\s+/).length < 3) {
       merged[merged.length - 1] = `${previous} ${phrase}`;
@@ -109,7 +108,18 @@ export function splitPhrases(text: string): string[] {
     }
   }
 
-  return folded;
+  // Break any remaining mega-token (a path, a module id) with zero-width
+  // spaces so the caption can wrap it instead of overflowing the panel.
+  return folded.map(breakLongTokens);
+}
+
+const ZWSP = "\u200B";
+
+/** Insert zero-width spaces every ~12 characters inside very long tokens. */
+export function breakLongTokens(phrase: string): string {
+  return phrase.replace(/\S{14,}/g, token =>
+    token.replace(/(.{12})/g, `$1${ZWSP}`)
+  );
 }
 
 /** Weight a phrase by syllable estimate plus punctuation pauses. */
