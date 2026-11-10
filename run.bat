@@ -39,6 +39,8 @@ set "ARGS=%*"
 if exist ".env" (
   for /f "usebackq eol=# tokens=1* delims==" %%A in (".env") do (
     if /I "%%A"=="GITHUB_TOKEN" set "GITHUB_TOKEN=%%B"
+    if /I "%%A"=="GROQ_API_KEY" set "GROQ_API_KEY=%%B"
+    if /I "%%A"=="GROQ_MODEL" set "GROQ_MODEL=%%B"
   )
 )
 
