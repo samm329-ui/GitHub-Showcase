@@ -1,3 +1,4 @@
+import "./load-env.js";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
@@ -8,7 +9,6 @@ import {
   MIN_SCORE,
   MODE_ROTATION,
   OUTPUT_DIR,
-  TARGET_DURATION_SECONDS,
   TEMP_DIR,
   FPS,
   VIEWPORT,
@@ -20,6 +20,10 @@ import {
   CARD_VIEWPORT_HEIGHT,
   CHARACTER_POSE_PNGS,
   CALLOUT_PNG,
+  SHOWCASE_SCRIPTER,
+  SCRIPTABILITY_GATE,
+  GROQ_MODEL,
+  resolveTargetSeconds,
 } from "./config.js";
 import { TOPIC_ROTATION as TOPICS } from "./github.js";
 import {
@@ -36,6 +40,7 @@ import {
 import { HistoryStore, canonicalFullName } from "./history.js";
 import { buildFactLedger } from "./facts.js";
 import { composeScript } from "./script-composer.js";
+import { composeLlmScript } from "./llm-script.js";
 import { evaluateScriptability } from "./scriptability.js";
 import { evaluateScriptQuality } from "./script-quality.js";
 import { validateScript } from "./narration.js";
@@ -187,11 +192,20 @@ async function selectCandidate(
     // verdict in Stage 3 with the missing-evidence report.
     const scriptability = evaluateScriptability(enriched, buildFactLedger(enriched));
     if (!scriptability.ok) {
+      if (SCRIPTABILITY_GATE) {
+        log(
+          `  rejected ${enriched.full_name}: not scriptable ` +
+            `(${scriptability.missing.join("; ")}).`
+        );
+        continue;
+      }
+      // Default: scriptability is a signal, not a verdict. The Groq writer
+      // can work with thin evidence or honestly omit what it cannot support.
       log(
-        `  rejected ${enriched.full_name}: not scriptable ` +
-          `(${scriptability.missing.join("; ")}).`
+        `  scriptability ${Math.round(scriptability.score * 100)}/100 ` +
+          `(below threshold; recorded, not blocking)` +
+          (scriptability.missing.length ? `: ${scriptability.missing.join("; ")}` : "")
       );
-      continue;
     }
 
     const snapshots = history.snapshotsFor(enriched.nodeId);
@@ -227,7 +241,8 @@ async function selectCandidate(
     console.log(
       `  ${candidate.totalScore.toString().padStart(3)}  ${candidate.fullName.padEnd(38)} ${flag}` +
         `  ${candidate.breakdown.usefulness}u/${candidate.breakdown.documentation}d/` +
-        `${candidate.breakdown.maintenance}m/${candidate.breakdown.adoption}a/${candidate.breakdown.momentum}t`
+        `${candidate.breakdown.maintenance}m/${candidate.breakdown.adoption.toFixed(1)}a/${candidate.breakdown.momentum}t/` +
+        `${candidate.breakdown.priority}p`
     );
     if (candidate.reasons.length) console.log(`        why: ${candidate.reasons.join("; ")}`);
     if (candidate.warnings.length) console.log(`        warn: ${candidate.warnings.join("; ")}`);
@@ -259,6 +274,19 @@ async function main(): Promise<void> {
   const repoArg = repoIndex >= 0 ? args[repoIndex + 1] : undefined;
   const modeArgIndex = args.indexOf("--mode");
   const modeArg = modeArgIndex >= 0 ? (args[modeArgIndex + 1] as DiscoveryMode) : undefined;
+  const lengthArgIndex = args.indexOf("--length");
+  const lengthArg = lengthArgIndex >= 0 ? Number(args[lengthArgIndex + 1]) : undefined;
+  if (lengthArgIndex >= 0 && !Number.isFinite(lengthArg)) {
+    console.error(`--length expects a number of seconds, got "${args[lengthArgIndex + 1]}"`);
+    process.exitCode = 1;
+    return;
+  }
+  const targetSeconds = resolveTargetSeconds(lengthArg);
+  if (lengthArgIndex >= 0 && targetSeconds !== Math.round(lengthArg!)) {
+    console.error(
+      `--length ${lengthArg}s is outside the supported range; using ${targetSeconds}s instead.`
+    );
+  }
   const dryRun = args.includes("--dry-run");
 
   if (!discoverMode && !repoArg) {
@@ -267,6 +295,9 @@ async function main(): Promise<void> {
     console.log("  npm run start -- --repo owner/repo");
     console.log("  npm run start -- --discover [--mode practical|popular|underdog|emerging|topic]");
     console.log("  npm run start -- --discover --dry-run   (select and report, do not render)");
+    console.log("  npm run start -- --repo owner/repo --length 45   (target seconds, 18-58)");
+    console.log("");
+    console.log("Narration is written by Groq (GROQ_API_KEY in .env). Set SHOWCASE_SCRIPTER=rule for the legacy writer.");
     process.exitCode = 1;
     return;
   }
@@ -377,60 +408,99 @@ async function main(): Promise<void> {
     await writeJson(path.join(runDir, "facts.json"), ledger);
     log(`Stage 2/9: Extracted ${ledger.facts.length} verifiable facts.`);
 
-    /* ---------------- Stage 3: scriptability + composed narration - */
+    /* ---------------- Stage 3: scriptability + narration -------- */
     currentStage = "narration";
     history.setRunStage(runId, "narration");
 
-    // Scriptability gate, again on the *final* ledger (discovery checked a
-    // pre-snapshot one). Discovery skips these; a manual --repo selection
-    // gets the honest missing-evidence report instead of a fabricated script.
+    // Scriptability is computed and recorded for both writers. With the
+    // default settings it never blocks; SHOWCASE_SCRIPTABILITY_GATE=1
+    // restores the old hard-gate behaviour. A manual --repo selection
+    // always gets the missing-evidence report when the gate is on.
     const scriptability = evaluateScriptability(repo, ledger);
     await writeJson(path.join(runDir, "scriptability.json"), scriptability);
     if (!scriptability.ok) {
-      throw new Error(
-        `Repository is not scriptable:\n  - ${scriptability.missing.join("\n  - ")}`
+      if (SCRIPTABILITY_GATE) {
+        throw new Error(
+          `Repository is not scriptable:\n  - ${scriptability.missing.join("\n  - ")}`
+        );
+      }
+      log(
+        `  scriptability ${Math.round(scriptability.score * 100)}/100 ` +
+          `(below threshold; recorded, not blocking).`
       );
     }
 
-    // One composition: the graph path becomes the narration plan exactly once.
-    const composed = composeScript(ledger, repo, {
-      targetDurationSeconds: TARGET_DURATION_SECONDS,
-      voiceId: TTS_VOICE,
-      speed: TTS_SPEED,
-    });
-    const plan: NarrationPlan = composed.plan;
-    await writeJson(path.join(runDir, "explanation-plan.json"), composed.explanation);
-    await writeJson(path.join(runDir, "narration.json"), plan);
-
-    // Both gates evaluate this same plan — the one TTS will speak below.
-    const validation = validateScript(plan, ledger);
-    const quality = evaluateScriptQuality(plan, ledger);
-    await writeJson(path.join(runDir, "script-quality.json"), quality);
-    if (validation.narrative) {
-      await writeJson(path.join(runDir, "narration-structure.json"), {
-        script: validation.narrative,
+    let plan: NarrationPlan;
+    let useCaseCovered: boolean;
+    if (SHOWCASE_SCRIPTER === "llm") {
+      log(
+        `Stage 3/9: Groq is writing the narration (model=${GROQ_MODEL}, target ${targetSeconds}s)...`
+      );
+      const llm = await composeLlmScript(repo, ledger, {
+        targetDurationSeconds: targetSeconds,
+        voiceId: TTS_VOICE,
+        speed: TTS_SPEED,
+        log,
       });
-    }
-    for (const warning of [...validation.warnings, ...quality.warnings]) {
-      log(`  script warning: ${warning}`);
-    }
-    if (!validation.ok) {
-      throw new Error(`Script validation failed:\n  - ${validation.errors.join("\n  - ")}`);
-    }
-    if (!quality.ok) {
-      throw new Error(
-        `Script quality gate failed:\n  - ${quality.hardFailures.join("\n  - ")}`
+      plan = llm.plan;
+      useCaseCovered = plan.segments.some(segment => segment.purpose === "demo");
+      await writeJson(path.join(runDir, "llm-prompt.json"), llm.prompt);
+      await writeJson(path.join(runDir, "llm-response.json"), {
+        model: llm.model,
+        usage: llm.usage,
+        retries: llm.retries,
+        completions: llm.completions,
+      });
+      await writeJson(path.join(runDir, "llm-script.json"), plan);
+      await writeJson(path.join(runDir, "narration.json"), plan);
+      for (const warning of llm.warnings) log(`  llm warning: ${warning}`);
+      log(
+        `Stage 3/9: "${plan.styleVariant}" (${plan.angle}, attempt ${reserved?.attempt_count ?? 0}) — ` +
+          `${plan.segments.length} segments, ${plan.estimatedWords} words, ` +
+          `target ${targetSeconds}s (~${(plan.estimatedWords / 155) * 60 | 0}s estimated).`
+      );
+    } else {
+      // One composition: the graph path becomes the narration plan exactly once.
+      const composed = composeScript(ledger, repo, {
+        targetDurationSeconds: targetSeconds,
+        voiceId: TTS_VOICE,
+        speed: TTS_SPEED,
+      });
+      plan = composed.plan;
+      await writeJson(path.join(runDir, "explanation-plan.json"), composed.explanation);
+      await writeJson(path.join(runDir, "narration.json"), plan);
+
+      // Both gates evaluate this same plan — the one TTS will speak below.
+      const validation = validateScript(plan, ledger);
+      const quality = evaluateScriptQuality(plan, ledger);
+      await writeJson(path.join(runDir, "script-quality.json"), quality);
+      if (validation.narrative) {
+        await writeJson(path.join(runDir, "narration-structure.json"), {
+          script: validation.narrative,
+        });
+      }
+      for (const warning of [...validation.warnings, ...quality.warnings]) {
+        log(`  script warning: ${warning}`);
+      }
+      if (!validation.ok) {
+        throw new Error(`Script validation failed:\n  - ${validation.errors.join("\n  - ")}`);
+      }
+      if (!quality.ok) {
+        throw new Error(
+          `Script quality gate failed:\n  - ${quality.hardFailures.join("\n  - ")}`
+        );
+      }
+      for (const omission of composed.omissions) {
+        log(`  omitted ${omission.id}: ${omission.reason}`);
+      }
+      useCaseCovered = Boolean(validation.narrative?.useCase);
+      log(
+        `Stage 3/9: "${plan.styleVariant}" (${plan.angle}, attempt ${reserved?.attempt_count ?? 0}) — ` +
+          `${plan.segments.length} segments, ${validation.words} words, ` +
+          `~${validation.estimatedSeconds.toFixed(1)}s estimated, quality ${quality.score}/100.`
       );
     }
-    for (const omission of composed.omissions) {
-      log(`  omitted ${omission.id}: ${omission.reason}`);
-    }
-    log(
-      `Stage 3/9: "${plan.styleVariant}" (${plan.angle}, attempt ${reserved?.attempt_count ?? 0}) — ` +
-        `${plan.segments.length} segments, ${validation.words} words, ` +
-        `~${validation.estimatedSeconds.toFixed(1)}s estimated, quality ${quality.score}/100.`
-    );
-    if (validation.narrative?.useCase) {
+    if (useCaseCovered) {
       log(`  use case covered via ${plan.angle}; metadata is secondary.`);
     }
     console.log("\nNarration:");
