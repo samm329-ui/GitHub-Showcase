@@ -7,13 +7,13 @@
   :root {
     --stage-bg: #F2EFE9; --card-bg: #0D1117; --surface-2: #161B22; --border: #30363D;
     --text-primary: #F0F6FC; --text-secondary: #8B949E; --github-blue: #58A6FF;
-    --caption-font: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --caption-left: 205px; --caption-top: 1590px; --caption-width: 680px; --caption-maxh: 325px; --caption-bottom: auto; --caption-scale: 1;
-    --caption-fontsize: 50px; --caption-lineheight: 1.08; --caption-color: #F8F6EF;
-    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -1.3px;
-    --hl-bg: #FFE66D; --hl-text: #151619; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
+    --caption-font: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    --caption-left: 205px; --caption-top: 1388px; --caption-width: 680px; --caption-maxh: 331px;
+    --caption-fontsize: 45px; --caption-lineheight: 0.94; --caption-color: #F8F6EF;
+    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -1.1px;
+    --hl-bg: #FFD500; --hl-text: #FFFFFF; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
     --hl-transition: 70ms;
-    --mascot-width: 636px; --mascot-right: -62.48px; --mascot-bottom: 249.52px;
+    --mascot-width: 681px; --mascot-right: -62.65px; --mascot-bottom: 459.35px;
     --mascot-shadow: drop-shadow(0 24px 54px rgba(0,0,0,1));
     --card-shadow: 0 2px 5px rgba(25,23,20,0.420), 0 10px 19px rgba(25,23,20,0.360), 0 24px 38px rgba(25,23,20,0.540), 0 48px 77px rgba(25,23,20,0.420);
     --card-radius: 60px;
@@ -44,15 +44,12 @@
   .document ul { margin: 8px 0 8px 20px; }
 
   .caption-overlay { position: absolute; z-index: 5; left: var(--caption-left); top: var(--caption-top);
-    bottom: var(--caption-bottom, auto);
     width: var(--caption-width); max-height: var(--caption-maxh); overflow: visible; pointer-events: none;
-    transform: scale(var(--caption-scale, 1));
-    transform-origin: 0 0;
-    color: var(--caption-color); font-size: var(--caption-fontsize); font-weight: var(--caption-fw, 800);
+    color: var(--caption-color); font-size: var(--caption-fontsize); font-weight: var(--caption-fw, 900);
     line-height: var(--caption-lineheight); letter-spacing: var(--caption-ls);
     text-shadow: var(--caption-shadow); text-wrap: balance; overflow-wrap: break-word;
     font-family: var(--caption-font); }
-  .caption-line { display: block; }
+  .caption-line { display: block; overflow-wrap: anywhere; word-break: break-word; }
   .caption-group { position: relative; display: block; transform-origin: 50% 100%;
     transition: opacity var(--ent-dur) ease-out, transform var(--ent-dur) ease-out; }
   .caption-group.hidden { opacity: 0; transform: translate3d(0,var(--ent-y),0) scale(var(--ent-scale)); }
@@ -77,8 +74,8 @@
     transition: transform 380ms cubic-bezier(0,0,0.2,1), opacity 380ms ease; }
   .character.char-hidden { opacity: 0; transform: translate3d(140px,420px,0) scale(1); }
 
-  .callout-overlay { position: absolute; z-index: 4; left: var(--callout-left, 716px); top: var(--callout-top, 873px);
-    width: var(--callout-width, 370px); height: var(--callout-height, 270px); pointer-events: none;
+  .callout-overlay { position: absolute; z-index: 4; left: var(--callout-left, 723px); top: var(--callout-top, 713px);
+    width: var(--callout-width, 357px); height: var(--callout-height, 400px); pointer-events: none;
     transform-origin: 36.5% 94.4%;
     transition: transform var(--callout-ent-dur, 200ms) cubic-bezier(0,0,0.2,1), opacity var(--callout-ent-dur, 200ms) ease; }
   .callout-overlay.callout-hidden { opacity: 0; transform: translate3d(0, var(--callout-ent-y, 12px), 0) scale(var(--callout-ent-scale, 0.96)); }
@@ -89,13 +86,34 @@
     color: var(--callout-tc, #151619); font-size: var(--callout-fontsize, 34px); font-weight: var(--callout-fontweight, 800);
     line-height: var(--callout-lineheight, 1.1); letter-spacing: -0.6px; z-index: 2; }
 
+  /* Instagram Reels safe zones (1080x1920): keep text/UI clear of the
+     platform's overlay chrome — top logo/camera row, right action rail
+     (avatar/heart/comment/share/bookmark) and the bottom caption + username
+     bar (name, caption, audio attribution). */
   .safe-zone { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
   .safe-zone.on { display: block; }
-  .safe-zone .sz { position: absolute; border: 2px dashed rgba(255,0,0,0.5); }
-  .safe-top { top: 0; left: 0; right: 0; height: 269px; }
-  .safe-bottom { bottom: 0; left: 0; right: 0; height: 672px; }
-  .safe-left { top: 0; bottom: 0; left: 0; width: 65px; }
-  .safe-right { top: 0; bottom: 0; right: 0; width: 65px; }
+  .safe-zone .sz { position: absolute; border: 2px dashed rgba(255,69,58,0.75); background: rgba(255,69,58,0.06); }
+  .safe-zone .sz span { position: absolute; top: 6px; left: 10px; font: 700 15px/1 system-ui; color: rgba(255,69,58,0.9); letter-spacing: .5px; }
+  .safe-top { top: 0; left: 0; right: 0; height: 150px; }
+  .safe-bottom { bottom: 0; left: 0; right: 0; height: 335px; }
+  .safe-left { top: 0; bottom: 0; left: 0; width: 54px; }
+  .safe-right { top: 0; bottom: 0; right: 0; width: 88px; }
+
+  /* Mock Instagram chrome: what actually covers the frame on Reels. Toggle
+     this on to see exactly what the viewer's overlay will hide. */
+  .ig-chrome { position: absolute; inset: 0; z-index: 15; pointer-events: none; display: none; font-family: system-ui, sans-serif; }
+  .ig-chrome.on { display: block; }
+  .ig-toprow { position: absolute; top: 0; left: 0; right: 0; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
+  .ig-toprow .ig-brand { color: #fff; font: 700 30px/1 system-ui; text-shadow: 0 1px 2px rgba(0,0,0,.6); letter-spacing: .2px; }
+  .ig-toprow .ig-cam { color: #fff; font-size: 34px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  .ig-rail { position: absolute; right: 14px; bottom: 360px; display: flex; flex-direction: column; gap: 34px; align-items: center; }
+  .ig-rail .ig-avatar { width: 58px; height: 58px; border-radius: 50%; border: 3px solid #fff; background: linear-gradient(135deg,#f58529,#dd2a7b); }
+  .ig-rail .ig-ic { color: #fff; font-size: 38px; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  .ig-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 335px; padding: 12px 100px 60px 22px; text-shadow: 0 1px 3px rgba(0,0,0,.75); }
+  .ig-toprow, .ig-bottom { background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.42) 55%, rgba(0,0,0,.62) 100%); }
+  .ig-bottom .ig-name { color: #fff; font-weight: 700; font-size: 26px; }
+  .ig-bottom .ig-caption { color: rgba(255,255,255,.92); font-size: 23px; line-height: 1.25; margin-top: 6px; }
+  .ig-bottom .ig-audio { color: #fff; font-size: 22px; margin-top: 10px; opacity: .95; }
 
   .panel { position: fixed; top: 10px; right: 10px; width: 400px; z-index: 100;
     background: rgba(0,0,0,0.93); color: #fff; padding: 14px; border-radius: 10px;
@@ -155,7 +173,7 @@
   </div>
 
   <svg id="impact-rear" class="impact-layer" viewBox="0 0 1080 1920" style="position:absolute; inset:0; width:1080px; height:1920px; pointer-events:none; z-index:2;"></svg>
-  <img class="character" id="mascot" src="../assets/character.png" alt="mascot" onerror="this.style.opacity='0.9'; this.style.background='rgba(255,0,0,0.35)'">
+  <img class="character" id="mascot" src="../assets/mascot-custom.png" alt="mascot" onerror="this.style.opacity='0.9'; this.style.background='rgba(255,0,0,0.35)'">
   <div class="callout-overlay" id="callout">
     <img class="callout-sticker" src="../assets/callout-bubble.png" onerror="this.src='../assets/Comic%20Speech%20Bubble%20Sticker.png'" alt="callout bubble">
     <div class="callout-text" id="callout-text">Turns long videos<br>into short clips!</div>
@@ -169,34 +187,53 @@
   </div>
 
   <div class="safe-zone" id="safezone">
-    <div class="sz safe-top"></div><div class="sz safe-bottom"></div>
-    <div class="sz safe-left"></div><div class="sz safe-right"></div>
+    <div class="sz safe-top"><span>IG TOP</span></div>
+    <div class="sz safe-bottom"><span>IG BOTTOM</span></div>
+    <div class="sz safe-left"><span>IG</span></div>
+    <div class="sz safe-right"><span>IG</span></div>
+  </div>
+
+  <div class="ig-chrome" id="igchrome">
+    <div class="ig-toprow"><span class="ig-brand">Reels</span><span class="ig-cam">&#9636;</span></div>
+    <div class="ig-rail">
+      <div class="ig-avatar"></div>
+      <div class="ig-ic">&#10084;</div>
+      <div class="ig-ic">&#128172;</div>
+      <div class="ig-ic">&#10148;</div>
+      <div class="ig-ic">&#9734;</div>
+      <div class="ig-ic">&hellip;</div>
+    </div>
+    <div class="ig-bottom">
+      <div class="ig-name">github_showcase</div>
+      <div class="ig-caption">This repository just changed how I build AI agents — watch this</div>
+      <div class="ig-audio">&#9835; original audio — github_showcase</div>
+    </div>
   </div>
 </div>
 </div>
 
 <div class="panel">
   <h3>Full Composition Preview</h3>
-  <div class="note">No render needed. Edit numbers directly or drag sliders. Values sync both ways.</div>
+  <div class="note">Edit numbers directly or drag sliders — every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>src/config.ts</code>, <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>.</div>
 
   <section>
     <h4>Mascot image (character)</h4>
     <label>Pick PNG file<input type="file" id="mascot-file" accept="image/png"></label>
-    <label>Or URL<input type="text" id="mascot-url" value="../assets/character.png"></label>
+    <label>Or URL<input type="text" id="mascot-url" value="../assets/mascot-custom.png"></label>
     <div class="row">
       <button id="load-url">Load URL</button>
-      <button id="load-default">Load default (assets/character.png)</button>
+      <button id="load-default">Load committed default (assets/mascot-custom.png)</button>
     </div>
-    <label>Saved asset (written to src/config.ts)<input type="text" id="s-masset" value="character.png" readonly></label>
+    <label>Saved asset (written to src/config.ts)<input type="text" id="s-masset" value="mascot-custom.png" readonly></label>
     <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading…</div>
     <div class="note">“Pick PNG file” copies the image into <code>assets/mascot-custom.png</code>; Save writes that filename into <code>src/config.ts</code>, so rendered videos use your character for every pose.</div>
   </section>
 
   <section>
     <h4>Mascot placement</h4>
-    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="400" max="980" value="636" id="s-mw"><input type="number" id="n-mw" value="636"></div>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="400" max="980" value="681" id="s-mw"><input type="number" id="n-mw" value="681"></div>
     <div class="ctrl"><span style="width:90px">right offset</span><input type="range" min="-60" max="60" value="-60" id="s-mr"><input type="number" id="n-mr" value="-60"></div>
-    <div class="ctrl"><span style="width:90px">bottom offset</span><input type="range" min="-1920" max="1920" value="252" id="s-mb"><input type="number" id="n-mb" value="252"></div>
+    <div class="ctrl"><span style="width:90px">bottom offset</span><input type="range" min="-1920" max="1920" value="462" id="s-mb"><input type="number" id="n-mb" value="462"></div>
     <div class="note">Signed offsets: <b>positive lifts the mascot inside the frame</b>, negative lets it extend past the edge (clipped by the canvas).</div>
   </section>
 
@@ -218,24 +255,24 @@
       </div>
     </label>
     <label>Bubble text<input type="text" id="s-callout-text" value="Turns long videos into short clips!"></label>
-    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="260" max="500" value="340" id="s-callout-bw"><input type="number" id="n-callout-bw" value="340"></div>
+    <div class="ctrl"><span style="width:90px">width</span><input type="range" min="260" max="500" value="357" id="s-callout-bw"><input type="number" id="n-callout-bw" value="357"></div>
     <div class="ctrl"><span style="width:90px">height</span><input type="range" min="180" max="400" value="400" id="s-callout-bh"><input type="number" id="n-callout-bh" value="400"></div>
-    <div class="ctrl"><span style="width:90px">top offset</span><input type="range" min="0" max="1920" value="215" id="s-callout-to"><input type="number" id="n-callout-to" value="215"></div>
+    <div class="ctrl"><span style="width:90px">top offset</span><input type="range" min="0" max="1920" value="17" id="s-callout-to"><input type="number" id="n-callout-to" value="17"></div>
     <div class="ctrl"><span style="width:90px">face offset</span><input type="range" min="-100" max="100" value="100" id="s-callout-fo"><input type="number" id="n-callout-fo" value="100"></div>
-    <div class="ctrl"><span style="width:90px">left min</span><input type="range" min="0" max="1080" value="640" id="s-callout-lmin"><input type="number" id="n-callout-lmin" value="640"></div>
-    <div class="ctrl"><span style="width:90px">right margin</span><input type="range" min="0" max="100" value="24" id="s-callout-rm"><input type="number" id="n-callout-rm" value="24"></div>
-    <div class="ctrl"><span style="width:90px">top min</span><input type="range" min="0" max="1920" value="60" id="s-callout-tmin"><input type="number" id="n-callout-tmin" value="60"></div>
-    <div class="ctrl"><span style="width:90px">top max</span><input type="range" min="800" max="1920" value="1520" id="s-callout-tmax"><input type="number" id="n-callout-tmax" value="1520"></div>
+    <div class="ctrl"><span style="width:90px">left min</span><input type="range" min="0" max="1080" value="630" id="s-callout-lmin"><input type="number" id="n-callout-lmin" value="630"></div>
+    <div class="ctrl"><span style="width:90px">right margin</span><input type="range" min="0" max="100" value="0" id="s-callout-rm"><input type="number" id="n-callout-rm" value="0"></div>
+    <div class="ctrl"><span style="width:90px">top min</span><input type="range" min="0" max="1920" value="0" id="s-callout-tmin"><input type="number" id="n-callout-tmin" value="0"></div>
+    <div class="ctrl"><span style="width:90px">top max</span><input type="range" min="800" max="1920" value="871" id="s-callout-tmax"><input type="number" id="n-callout-tmax" value="871"></div>
     <div class="ctrl"><span style="width:90px">font size</span><input type="range" min="20" max="50" value="31" id="s-callout-fs"><input type="number" id="n-callout-fs" value="31"></div>
-    <div class="ctrl"><span style="width:90px">font weight</span><input type="range" min="400" max="900" step="100" value="900" id="s-callout-fw"><input type="number" id="n-callout-fw" value="900" step="100"></div>
+    <div class="ctrl"><span style="width:90px">font weight</span><input type="range" min="400" max="900" step="100" value="800" id="s-callout-fw"><input type="number" id="n-callout-fw" value="800" step="100"></div>
     <div class="ctrl"><span style="width:90px">line height</span><input type="range" min="0.8" max="1.5" step="0.05" value="1" id="s-callout-lh"><input type="number" id="n-callout-lh" value="1" step="0.05"></div>
-    <label>fill color<input type="color" value="#FFFDF7" id="s-callout-fill"></label>
-    <label>outline color<input type="color" value="#151619" id="s-callout-outline"></label>
+    <label>fill color<input type="color" value="#161513" id="s-callout-fill"></label>
+    <label>outline color<input type="color" value="#FFFFFF" id="s-callout-outline"></label>
     <div class="ctrl"><span style="width:90px">outline width</span><input type="range" min="1" max="12" value="5" id="s-callout-ow"><input type="number" id="n-callout-ow" value="5"></div>
     <label>accent color<input type="color" value="#FFE66D" id="s-callout-accent"></label>
     <div class="ctrl"><span style="width:90px">accent off X</span><input type="range" min="-20" max="20" value="-3" id="s-callout-aox"><input type="number" id="n-callout-aox" value="-3"></div>
     <div class="ctrl"><span style="width:90px">accent off Y</span><input type="range" min="-20" max="20" value="8" id="s-callout-aoy"><input type="number" id="n-callout-aoy" value="8"></div>
-    <label>text color<input type="color" value="#151619" id="s-callout-tc"></label>
+    <label>text color<input type="color" value="#1A1A1A" id="s-callout-tc"></label>
     <div class="ctrl"><span style="width:90px">ent dur</span><input type="range" min="80" max="400" value="200" id="s-callout-entms"><input type="number" id="n-callout-entms" value="200"></div>
     <div class="ctrl"><span style="width:90px">exit dur</span><input type="range" min="60" max="350" value="180" id="s-callout-exitms"><input type="number" id="n-callout-exitms" value="180"></div>
     <div class="ctrl"><span style="width:90px">ent Y</span><input type="range" min="0" max="30" value="12" id="s-callout-enty"><input type="number" id="n-callout-enty" value="12"></div>
@@ -275,11 +312,20 @@
   <section>
     <h4>Caption position &amp; size (px)</h4>
     <div class="ctrl"><span style="width:90px">left</span><input type="range" min="0" max="1080" value="205" id="s-cl"><input type="number" id="n-cl" value="205"></div>
-    <div class="ctrl"><span style="width:90px">top</span><input type="range" min="0" max="1920" value="1590" id="s-ct"><input type="number" id="n-ct" value="1590"></div>
-    <div class="ctrl"><span style="width:90px">bottom</span><input type="range" min="0" max="1920" value="0" id="s-cb"><input type="number" id="n-cb" value="0"></div>
+    <div class="ctrl"><span style="width:90px">top</span><input type="range" min="0" max="1920" value="1388" id="s-ct"><input type="number" id="n-ct" value="1388"></div>
     <div class="ctrl"><span style="width:90px">width</span><input type="range" min="240" max="1080" value="680" id="s-cw"><input type="number" id="n-cw" value="680"></div>
-    <div class="ctrl"><span style="width:90px">max-height</span><input type="range" min="60" max="500" value="325" id="s-cmh"><input type="number" id="n-cmh" value="325"></div>
-    <div class="ctrl"><span style="width:90px">scale</span><input type="range" min="0.5" max="2" step="0.1" value="1" id="s-cscale"><input type="number" id="n-cscale" value="1" step="0.1"></div>
+    <div class="ctrl"><span style="width:90px">max-height</span><input type="range" min="60" max="500" value="331" id="s-cmh"><input type="number" id="n-cmh" value="331"></div>
+  </section>
+
+  <section>
+    <h4>Instagram Reels safe zones</h4>
+    <div class="note">Reels covers the frame with: <b>top</b> logo/camera row, <b>right</b> action rail (avatar, like, comment, share, bookmark), <b>bottom</b> caption + username + audio bar. The mascot, speech bubble and caption panel are positioned as <b>one group</b> — lifted so the subtitles never hide behind the bottom bar.</div>
+    <div class="row">
+      <button type="button" id="btn-ig-safe">Safe for Reels (default)</button>
+      <button type="button" id="btn-ig-old">Edge (old look)</button>
+    </div>
+    <label><input type="checkbox" id="s-igmock"> Show mock Instagram chrome (avatar, like, caption bar)</label>
+    <label><input type="checkbox" id="s-safe"> Show Instagram safe zones</label>
   </section>
 
   <section>
@@ -289,22 +335,22 @@
         <option value="'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">Inter / Segoe UI</option>
         <option value="'Poppins', 'Segoe UI', sans-serif">Poppins</option>
         <option value="'Montserrat', 'Segoe UI', sans-serif">Montserrat</option>
-        <option value="'Roboto', 'Helvetica Neue', Arial, sans-serif">Roboto</option>
+        <option value="'Roboto', 'Helvetica Neue', Arial, sans-serif" selected>Roboto</option>
         <option value="'Georgia', 'Times New Roman', serif">Georgia (serif)</option>
         <option value="'Cascadia Code', Consolas, monospace">Cascadia (mono)</option>
       </select>
     </label>
     <div class="ctrl"><span style="width:90px">font-weight</span><input type="range" min="400" max="900" step="100" value="900" id="s-cfw"><input type="number" id="n-cfw" value="900" step="100"></div>
-    <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="50" id="s-cfs"><input type="number" id="n-cfs" value="50"></div>
-    <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="1.08" id="s-clh"><input type="number" id="n-clh" value="1.08" step="0.01"></div>
-    <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-1.3" id="s-cls"><input type="number" id="n-cls" value="-1.3" step="0.1"></div>
+    <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="45" id="s-cfs"><input type="number" id="n-cfs" value="45"></div>
+    <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="0.94" id="s-clh"><input type="number" id="n-clh" value="0.94" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-1.1" id="s-cls"><input type="number" id="n-cls" value="-1.1" step="0.1"></div>
     <label>text color<input type="color" value="#F8F6EF" id="s-ccolor"></label>
   </section>
 
   <section>
     <h4>Highlight box (active word) — auto-tracks the word</h4>
-    <label>background<input type="color" value="#FFE66D" id="s-hbg"></label>
-    <label>text<input type="color" value="#151619" id="s-htx"></label>
+    <label>background<input type="color" value="#FFD500" id="s-hbg"></label>
+    <label>text<input type="color" value="#FFFFFF" id="s-htx"></label>
     <div class="note">Box size, radius and padding are derived automatically from the caption's font size, line-height and word positions. No manual controls needed.</div>
   </section>
 
@@ -328,7 +374,6 @@
   </section>
 
   <section>
-    <label><input type="checkbox" id="s-safe"> Show Instagram safe zones</label>
     <label><input type="checkbox" id="s-guides"> Show layout &amp; collision guides</label>
     <label><input type="checkbox" id="s-hlmove" checked> Animate highlight</label>
     <div class="row">
@@ -344,9 +389,10 @@
       <button id="savecfg" class="primary" onclick="window.__saveToCodebase && window.__saveToCodebase()">Save (one click)</button>
     </div>
     <div class="note" id="save-status">
-      Writes every value below straight into <code>src/config.ts</code>,
-      <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>.
-      Open the <strong>Save My Edits</strong> launcher to save with zero setup.
+      Writes every value on this page straight into <code>src/config.ts</code>,
+      <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>. The box below
+      shows the exact JSON that gets sent — nothing hidden, nothing reordered.
+      <code>Save My Edits.vbs</code> / <code>Save My Edits.cmd</code> start the helper for you.
     </div>
     <div class="row">
       <button id="reloadcfg" onclick="window.__reloadFromCodebase && window.__reloadFromCodebase()">Reload from codebase</button>
@@ -365,9 +411,11 @@
   </section>
 
   <div class="note">
-    One-click save: open this page with the <strong>Save My Edits</strong> launcher in the
-    project folder — Save writes the values into the files below. If the helper is not
-    running, Save writes to your folder directly (the browser asks once).<br>
+    <strong>One-click save, three ways</strong> (all equivalent — pick whichever works):
+    <code>Save My Edits.vbs</code> or <code>Save My Edits.cmd</code> start the helper and open this
+    page (double-click in the project folder) · or run <code>npm run preview:launch</code> /
+    <code>npm run preview:live</code> · or serve this file from any static server and Save writes
+    to your project folder (browser asks once).<br>
     Config paths: <code>src/config.ts</code> (MASCOT_LAYOUT, CAPTION_OVERLAY, CARD) ·
     <code>src/caption-overlay.ts</code> (CAPTION_STYLE, CAPTION_HIGHLIGHT, CAPTION_MOTION) ·
     <code>src/card.ts</code> (CARD_SHADOW_TUNING).<br>
@@ -396,7 +444,7 @@
     mascotAsset: 's-masset',
     mascotWidthPx: 's-mw', mascotRight: 's-mr', mascotBottom: 's-mb',
     mascotShadowOffsetY: 's-msh-y', mascotShadowBlur: 's-msh-b', mascotShadowOpacity: 's-msh-o',
-    captionLeft: 's-cl', captionTop: 's-ct', captionBottom: 's-cb', captionWidth: 's-cw', captionMaxHeight: 's-cmh', captionScale: 's-cscale',
+    captionLeft: 's-cl', captionTop: 's-ct', captionWidth: 's-cw', captionMaxHeight: 's-cmh',
     captionFontFamily: 's-cfont', captionFontWeight: 's-cfw', captionFontSize: 's-cfs',
     captionLineHeight: 's-clh', captionLetterSpacing: 's-cls', captionColor: 's-ccolor',
     captionShadowOffsetY: 's-csh-y', captionShadowBlur: 's-csh-b', captionShadowOpacity: 's-csh-o',
@@ -779,7 +827,7 @@
   // character.png's measured 5px per side, subtracted so the *visible* edge
   // (not the image rectangle) lands on the slider's value.
   function applyMascotPlacement() {
-    const w = parseFloat($('s-mw').value || 636);
+    const w = parseFloat($('s-mw').value || 681);
     const dead = 5 * (w / 1284);
     const right = parseFloat($('s-mr').value || 0);
     const bottom = parseFloat($('s-mb').value || 0);
@@ -800,26 +848,9 @@
   pair('s-ct','n-ct','--caption-top','px');
   pair('s-cw','n-cw','--caption-width','px');
   pair('s-cmh','n-cmh','--caption-maxh','px');
-  pair('s-cscale','n-cscale','--caption-scale','');
-  // Bottom slider: convenience control that positions from the bottom edge
-  // by computing the equivalent top value (avoids CSS top/bottom conflict)
-  function applyCaptionBottom() {
-    const b = parseFloat($('s-cb').value || 0);
-    const mh = parseFloat($('s-cmh').value || 325);
-    const top = Math.max(0, 1920 - b - mh);
-    $('s-ct').value = top; $('n-ct').value = top;
-    setVar('--caption-top', top + 'px');
-    setVar('--caption-bottom', 'auto');
-  }
-  $('s-cb').addEventListener('input', applyCaptionBottom);
-  $('n-cb').addEventListener('input', applyCaptionBottom);
   pair('s-cfs','n-cfs','--caption-fontsize','px');
   pair('s-clh','n-clh','--caption-lineheight','');
   pair('s-cls','n-cls','--caption-ls','px');
-  pair('s-hr','n-hr','--hl-radius','px');
-  pair('s-hpx','n-hpx','--hl-pad-x','px');
-  pair('s-hpy','n-hpy','--hl-pad-y','px');
-  pair('s-htt','n-htt','--hl-transition','ms');
   pair('s-entdur','n-entdur','--ent-dur','ms');
   pair('s-enty','n-enty','--ent-y','px');
   pair('s-entsc','n-entsc','--ent-scale','');
@@ -886,21 +917,21 @@
     const scale = s.width / 1080;
     const renderedW = r.width / scale;
     const renderedH = r.height / scale;
-    // Visible bounds of character.png (6px transparent padding per side).
-    const visibleLeft = (r.left - s.left) / scale + (6 / 1284) * renderedW;
-    const visibleTop = (r.top - s.top) / scale + (6 / 1182) * renderedH;
-    const visibleW = (renderedW * (1278 - 6 + 1)) / 1284;
+    // Visible bounds of the artwork (transparent padding is uniform).
+    const visibleLeft = (r.left - s.left) / scale + (5 / 1284) * renderedW;
+    const visibleTop = (r.top - s.top) / scale + (5 / 1182) * renderedH;
+    const visibleW = (renderedW * (1284 - 5 + 1)) / 1284;
     const faceX = visibleLeft + 0.55 * visibleW;
     const g = (id, fallback) => parseFloat(($(id) && $(id).value) || fallback);
-    const bw = g('s-callout-bw', 340);
+    const bw = g('s-callout-bw', 357);
     const tailX = Math.round(bw * 0.365); // DEFAULT_CALLOUT_PROFILE.tailTip.x
     const left = Math.min(
-      1080 - g('s-callout-rm', 24) - bw,
-      Math.max(g('s-callout-lmin', 640), faceX + g('s-callout-fo', 100) - tailX)
+      1080 - g('s-callout-rm', 0) - bw,
+      Math.max(g('s-callout-lmin', 630), faceX + g('s-callout-fo', 100) - tailX)
     );
     const top = Math.min(
-      g('s-callout-tmax', 1520),
-      Math.max(g('s-callout-tmin', 60), visibleTop - g('s-callout-to', 215))
+      g('s-callout-tmax', 871),
+      Math.max(g('s-callout-tmin', 0), visibleTop - g('s-callout-to', 17))
     );
     setVar('--callout-left', left + 'px');
     setVar('--callout-top', top + 'px');
@@ -927,7 +958,6 @@
 
   // text/color/shadow/filter inputs
   function txt(id, varName) { const el=$(id); if(!el) return; const up=()=>setVar(varName, el.value); el.addEventListener('input', up); up(); }
-  txt('s-ccolor','--caption-color'); // color input → setVar with #hex (no suffix) but setVar needs property name
   // color inputs set --caption-color etc directly via style
   $('s-ccolor').addEventListener('input', e => setVar('--caption-color', e.target.value));
   function rebuildCaptionShadow() {
@@ -1014,6 +1044,23 @@
   rebuildMascotShadow();
 
   $('s-safe').addEventListener('change', e => $('safezone').classList.toggle('on', e.target.checked));
+  $('s-igmock').addEventListener('change', e => $('igchrome').classList.toggle('on', e.target.checked));
+  // Instagram Reels presets: set the mascot/caption pair to the safe group
+  // position, or to the old edge-of-screen look for comparison.
+  const setPairValue = (sliderId, value) => {
+    const slider = $(sliderId);
+    if (!slider) return;
+    slider.value = String(value);
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  $('btn-ig-safe')?.addEventListener('click', () => {
+    setPairValue('s-mb', 462);
+    setPairValue('s-ct', 1388);
+  });
+  $('btn-ig-old')?.addEventListener('click', () => {
+    setPairValue('s-mb', 304);
+    setPairValue('s-ct', 1546);
+  });
 
   // mascot image — a picked PNG is copied into assets/ and saved as the
   // default character, so rendered videos use it too (not just this page).
@@ -1067,8 +1114,8 @@
     setMascotSrc(u);
     if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL — renders only use files inside assets/';
   });
-  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/character.png'; setMascotAsset('character.png'); });
-  setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'character.png'));
+  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/mascot-custom.png'; setMascotAsset('mascot-custom.png'); });
+  setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'mascot-custom.png'));
 
   // moving highlight
   const words = Array.from(document.querySelectorAll('.w'));
@@ -1237,39 +1284,9 @@
   // restore on load (after a tick so initial wiring is done)
   setTimeout(loadState, 100);
 
-  // copy config
+  /* The textarea shows exactly what Save sends: the collected config as JSON. */
   function buildCfg() {
-    const g = (id, fallback='') => { const el = $(id); return el ? el.value : fallback; };
-    return [
-      'MASCOT_LAYOUT (src/config.ts):',
-      '  widthRatio: ' + (parseFloat(g('s-mw'))/1080).toFixed(4) + '  (SHOWCASE_MASCOT_WIDTH_RATIO)',
-      '  offsetX: ' + g('s-mr') + '  (SHOWCASE_MASCOT_OFFSET_X)',
-      '  offsetY: ' + g('s-mb') + '  (SHOWCASE_MASCOT_OFFSET_Y)',
-      '',
-      'CAPTION_OVERLAY (src/config.ts):',
-      '  leftPx: ' + g('s-cl') + ', topPx: ' + g('s-ct') + ', widthPx: ' + g('s-cw') + ', maxHeightPx: ' + g('s-cmh') + ', bottomPx: ' + g('s-cb') + ', scale: ' + g('s-cscale'),
-      '',
-      'CAPTION_STYLE (src/caption-overlay.ts):',
-      '  fontSizePx: ' + g('s-cfs') + ', lineHeight: ' + g('s-clh') + ', color: ' + g('s-ccolor', '#F8F6EF'),
-      '  textShadow: "0 ' + g('n-csh-y','3') + 'px ' + g('n-csh-b','10') + 'px rgba(0,0,0,' + g('n-csh-o','0.95') + ')"',
-      '',
-      'CAPTION_HIGHLIGHT (src/caption-overlay.ts / env):',
-      '  background: ' + g('s-hbg', '#FF0000') + '  (SHOWCASE_CAPTION_HIGHLIGHT_BG)',
-      '  text: ' + g('s-htx', '#FFFFFF') + '  (SHOWCASE_CAPTION_HIGHLIGHT_TEXT)',
-      '  radiusPx: ' + g('s-hr', '9') + ', padXPx: ' + g('s-hpx', '9') + ', padYPx: ' + g('s-hpy', '4'),
-      '',
-      'CALLOUT (src/config.ts):',
-      '  enabled: ' + ($('s-callout-enabled')?.checked ? 'true' : 'false') + ', bubbleWidthPx: ' + g('s-callout-bw', '370') + ', bubbleHeightPx: ' + g('s-callout-bh', '270'),
-      '  topOffsetPx: ' + g('s-callout-to', '210') + ', fontSizePx: ' + g('s-callout-fs', '34') + ', fill: "' + g('s-callout-fill', '#FFFDF7') + '"',
-      '',
-      'IMPACT_ACCENTS (src/config.ts):',
-      '  enabled: ' + ($('s-impact-enabled')?.checked ? 'true' : 'false') + ', strokeColor: "' + g('s-impact-color', '#FFE66D') + '", strokeWidthPx: ' + g('s-impact-sw', '5'),
-      '  maxBurstCount: ' + g('s-impact-maxbc', '6') + ', burstDurationMs: ' + g('s-impact-bdur', '360'),
-      '',
-      'Mascot shadow (CHARACTER.shadow): drop-shadow(0 ' + g('n-msh-y','26') + 'px ' + g('n-msh-b','26') + 'px rgba(0,0,0,' + g('n-msh-o','0.95') + '))',
-      'Card shadow (CARD_SHADOW): ' + (function(){ const i=parseFloat(g('n-csh-int','1'))||1, b=parseFloat(g('n-csh-blur','1'))||1; return '0 2px '+Math.round(6*b)+'px rgba(25,23,20,'+Math.min(0.95,0.14*i*10).toFixed(3)+'), 0 10px '+Math.round(22*b)+'px rgba(25,23,20,'+Math.min(0.95,0.12*i*10).toFixed(3)+'), 0 24px '+Math.round(45*b)+'px rgba(25,23,20,'+Math.min(0.95,0.18*i*10).toFixed(3)+'), 0 48px '+Math.round(90*b)+'px rgba(25,23,20,'+Math.min(0.95,0.14*i*10).toFixed(3)+')'; })(),
-      'Card radius: ' + g('s-crad', '60'),
-    ].join('\n');
+    return JSON.stringify(collectConfig(), null, 2);
   }
   function refreshCfg() {
     try { $('cfgout').value = buildCfg(); }
