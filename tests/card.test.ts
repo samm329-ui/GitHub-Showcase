@@ -14,10 +14,12 @@ import {
   CARD_BG,
   CARD_VIEWPORT_HEIGHT,
   CAPTION_OVERLAY,
+  ACCENT_YELLOW,
   MASCOT_LAYOUT,
   STAGE_BG,
   VIEWPORT,
 } from "../src/config.js";
+import { CAPTION_HIGHLIGHT, CAPTION_STYLE } from "../src/caption-overlay.js";
 import {
   CHARACTER_ALPHA_BOUNDS,
   mascotPlacementCss,
@@ -110,9 +112,9 @@ describe("stationary card markup", () => {
   });
 
   test("the caption style matches the specification", () => {
-    assert.match(html, /font-size:\s*50px/);
+    assert.match(html, new RegExp(`font-size:\\s*${CAPTION_STYLE.fontSizePx}px`));
     assert.match(html, /color:\s*#F8F6EF/);
-    assert.match(html, /--caption-yellow:\s*#FFE66D/);
+    assert.match(html, new RegExp(`--caption-yellow:\\s*${ACCENT_YELLOW}`));
     assert.match(html, /text-shadow:\s*0 3px 10px/);
     // The dark panel is a separate layer from the moving word pill.
     assert.match(html, /\.caption-panel\s*\{[^}]*background:\s*rgba\(23,25,29,0\.92\)/s);
@@ -121,8 +123,8 @@ describe("stationary card markup", () => {
       !/\.caption-overlay\s*\{[^}]*background:/s.test(html),
       "the positioning root must stay transparent (no empty black plate)"
     );
-    assert.match(html, /\.caption-overlay \.w\.current\s*\{\s*color:\s*#151619/);
-    assert.match(html, /\.caption-overlay \.w\.key-emphasis\s*\{\s*color:\s*#FFE66D/);
+    assert.match(html, new RegExp(`\\.caption-overlay \\.w\\.current\\s*\\{\\s*color:\\s*${CAPTION_HIGHLIGHT.text}`));
+    assert.match(html, new RegExp(`\\.caption-overlay \\.w\\.key-emphasis\\s*\\{\\s*color:\\s*${CAPTION_STYLE.emphasisColor}`));
     assert.ok(!/\.w\.active/.test(html), "the old combined active class is gone");
   });
 
@@ -141,8 +143,12 @@ describe("stationary card markup", () => {
     assert.match(rule, /overflow:\s*visible/);
     // The animated per-frame wrapper is part of the composition.
     assert.match(html, /\.caption-group\s*\{[^}]*will-change:\s*transform,\s*opacity/s);
-    // The moving highlight element exists behind the glyphs.
-    assert.match(html, /\.caption-highlight\s*\{[^}]*background:\s*#FFE66D/s);
+    // The moving highlight element exists behind the glyphs. The test
+    // follows the committed highlight background rather than a snapshot.
+    assert.match(
+      html,
+      new RegExp(`\\.caption-highlight\\s*\\{[^}]*background:\\s*${CAPTION_HIGHLIGHT.background}`, "s")
+    );
   });
 
   test("the callout bubble is a stage-level sibling outside the clipped card", () => {
@@ -153,10 +159,11 @@ describe("stationary card markup", () => {
     // Shape and copy are separate elements: the text is never baked into SVG.
     assert.match(html, /<svg class="callout-shape"/);
     assert.match(html, /<div class="callout-text" id="callout-text"><\/div>/);
-    // Yellow backing first, then the warm-white cloud and its dark contour.
-    const accentAt = html.indexOf('fill="#FFE66D"');
-    const whiteAt = html.indexOf('fill="#FFFDF7"');
-    assert.ok(accentAt > 0 && whiteAt > accentAt, "accent behind the white bubble");
+    // The accent cloud comes first, then the cloud fill — the colours are
+    // whatever the committed CALLOUT palette ships, so read them from config.
+    const accentAt = html.indexOf(`fill="${CALLOUT.accent}"`);
+    const cloudAt = html.indexOf(`fill="${CALLOUT.fill}"`);
+    assert.ok(accentAt > 0 && cloudAt > accentAt, "accent behind the bubble cloud");
     assert.match(
       html,
       new RegExp(
