@@ -401,7 +401,7 @@ describe("multi-callout scheduling and diversity", () => {
     );
     assert.equal(
       calloutTextFor("XrayFA is a powerful and user-friendly Android / iOS client for Xray-core"),
-      "Android / iOS client!"
+      "Android / iOS client for Xray-core!"
     );
   });
 
