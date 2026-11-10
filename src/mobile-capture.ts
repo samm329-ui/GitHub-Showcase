@@ -350,6 +350,51 @@ const MEASURE_SCRIPT = `(() => {
   };
 })()`;
 
+/**
+ * Hide UI chrome that looks like an error on video: GitHub's "Report
+ * repository" row, cookie/sign-in bars, toasts and dialogs. Removed *before*
+ * measuring and screenshotting, so anchor offsets stay consistent with what
+ * is rendered.
+ */
+const SANITIZE_SCRIPT = `(() => {
+  const HIDE_TEXT = [
+    /^report repository$/i,
+    /^report abuse$/i,
+    /^report content$/i,
+    /^sign in to github$/i,
+    /^you must be signed in/i,
+    /^sign in$/i,
+    /^we use cookies/i,
+    /^accept cookies/i,
+    /^cookie settings/i,
+    /^this repository is being used/i,
+    /^flag this/i,
+  ];
+  const hide = (el) => {
+    if (el) el.style.setProperty('display', 'none', 'important');
+  };
+  const candidates = document.querySelectorAll('a, button, li, p, div, span, [role="button"], [role="link"]');
+  for (const el of candidates) {
+    const raw = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+    if (raw.length === 0 || raw.length > 90) continue;
+    if (HIDE_TEXT.some(pattern => pattern.test(raw))) hide(el);
+  }
+  const overlays = document.querySelectorAll(
+    '[role="dialog"], [role="alert"], [role="status"], .js-flash-container, .flash, .toast, [data-testid="toast"], .signup-prompt, .sign-in-prompt, [data-testid="sign-in-prompt"]'
+  );
+  for (const el of overlays) hide(el);
+  return true;
+})()`;
+
+/** Remove pseudo-error chrome before measuring and capturing. */
+async function sanitizePage(client: CdpClient): Promise<void> {
+  try {
+    await evaluate(client, SANITIZE_SCRIPT);
+  } catch {
+    // Best effort: a failed scrub must never block the capture.
+  }
+}
+
 /** Scroll through the page so lazy images and deferred sections load. */
 async function loadLazyContent(client: CdpClient): Promise<void> {
   await evaluate(
@@ -590,6 +635,8 @@ async function capturePage(
   await sleep(MOBILE_PAGE.settleMs);
   await loadLazyContent(client);
   await waitFor(client, "document.readyState === 'complete'", 4_000);
+  // Scrub error-looking chrome before measuring (heights must match pixels).
+  await sanitizePage(client);
 
   const state = (await evaluate(client, MEASURE_SCRIPT)) as CapturePageState;
   const failure =
