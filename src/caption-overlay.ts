@@ -84,19 +84,19 @@ export const CAPTION_MOTION = {
  * that they stay identical to the exported tokens.
  */
 const CAPTION_HIGHLIGHT_BG =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FFE66D";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FFD500";
 const CAPTION_HIGHLIGHT_TEXT =
   process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? "#151619";
 
 export const CAPTION_STYLE: CaptionStyle = {
   fontFamily:
-    "'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    "'Roboto', 'Helvetica Neue', Arial, sans-serif",
   monoFamily:
     "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
-  fontSizePx: 50,
+  fontSizePx: 45,
   fontWeight: 900,
-  lineHeight: 1.08,
-  letterSpacingPx: -1.3,
+  lineHeight: 0.94,
+  letterSpacingPx: -1.1,
   color: "#F8F6EF",
   highlightColor: CAPTION_HIGHLIGHT_BG,
   activeTextColor: CAPTION_HIGHLIGHT_TEXT,
