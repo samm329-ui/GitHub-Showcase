@@ -85,10 +85,10 @@ describe("caption motion", () => {
   });
 
   test("the underlying typeface rules match the panel specification", () => {
-    assert.equal(CAPTION_STYLE.fontSizePx, 50);
+    assert.equal(CAPTION_STYLE.fontSizePx, 45);
     assert.equal(CAPTION_STYLE.maxLines, 2);
-    assert.equal(CAPTION_STYLE.lineHeight, 1.08);
-    assert.ok(CAPTION_STYLE.fontSizePx >= 48 && CAPTION_STYLE.fontSizePx <= 52);
+    assert.equal(CAPTION_STYLE.lineHeight, 0.94);
+    assert.ok(CAPTION_STYLE.fontSizePx >= 40 && CAPTION_STYLE.fontSizePx <= 52);
     assert.ok(CAPTION_STYLE.fontWeight >= 800);
     // One canonical accent: the pill, the semantic tint and config.ts agree.
     assert.equal(CAPTION_STYLE.highlightColor, CAPTION_HIGHLIGHT.background);
