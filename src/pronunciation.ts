@@ -73,6 +73,7 @@ const EXACT: PronunciationEntry[] = [
   { display: "iOS", spoken: "eye O S", matchMode: "exact" },
   { display: "IP", spoken: "I P", matchMode: "exact" },
   { display: "LLM", spoken: "L L M", matchMode: "exact" },
+  { display: "vLLM", spoken: "V L L M", matchMode: "exact" },
   { display: "MCP", spoken: "M C P", matchMode: "exact" },
   { display: "REST", spoken: "rest", matchMode: "exact" },
   { display: "gRPC", spoken: "G R P C", matchMode: "exact" },
