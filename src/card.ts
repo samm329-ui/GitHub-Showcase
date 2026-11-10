@@ -669,7 +669,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     line-height: ${CAPTION_STYLE.lineHeight};
     letter-spacing: ${CAPTION_STYLE.letterSpacingPx}px;
     text-shadow: ${CAPTION_STYLE.textShadow};
-    text-wrap: balance; overflow-wrap: break-word;
+    text-wrap: balance; overflow-wrap: anywhere; word-break: break-word;
   }
   .caption-group {
     position: relative; display: block;
@@ -686,7 +686,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     overflow: hidden;
   }
   .caption-lines { position: relative; z-index: 1; text-align: center; }
-  .caption-line { display: block; }
+  .caption-line { display: block; overflow-wrap: anywhere; word-break: break-word; }
   .caption-highlight {
     position: absolute; z-index: 0;
     background: ${CAPTION_HIGHLIGHT.background};
