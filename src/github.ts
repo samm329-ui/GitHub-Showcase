@@ -292,7 +292,147 @@ export const TOPIC_ROTATION = [
   "database",
   "observability",
   "static-site-generator",
+  // Priority categories: repositories in these spaces earn reach.
+  "finance",
+  "fintech",
+  "llm",
+  "ai-agents",
 ];
+
+/* ------------------------------------------------------------------ */
+/* Priority categories                                                 */
+/*                                                                     */
+/* Some repositories reliably earn reach — finance tooling, AI-native  */
+/* projects, agent frameworks, and genuinely innovative technology.   */
+/* They are BOOSTED in scoring (never allowed to bypass the hard       */
+/* rejection gates), so borderline candidates from these spaces are    */
+/* selected over equally-matched generic ones.                        */
+/* ------------------------------------------------------------------ */
+
+export type PriorityCategory = {
+  id: "finance" | "ai" | "agents" | "innovation";
+  label: string;
+  /** Exact topic matches (case-insensitive). */
+  topics: string[];
+  /** Description/name keyword patterns, case-insensitive. */
+  keywords: RegExp[];
+  bonus: number;
+};
+
+export const PRIORITY_CATEGORIES: PriorityCategory[] = [
+  {
+    id: "agents",
+    label: "AI agents",
+    topics: [
+      "ai-agent",
+      "agents",
+      "agentic",
+      "multi-agent",
+      "autonomous-agents",
+      "mcp",
+      "model-context-protocol",
+      "agent-framework",
+      "tool-use",
+    ],
+    keywords: [
+      /\b(ai[\s-]?agents?|agentic|multi-agent|autonomous agents?|mcp server|agent framework|agentic workflow)\b/i,
+    ],
+    bonus: 10,
+  },
+  {
+    id: "finance",
+    label: "finance",
+    topics: [
+      "finance",
+      "fintech",
+      "trading",
+      "quantitative-finance",
+      "investing",
+      "accounting",
+      "payments",
+      "budgeting",
+      "banking",
+      "personal-finance",
+    ],
+    keywords: [
+      /\b(fintech|trading|quantitative trading|quant(itative)?\b|portfolio|personal finance|budget(ing)? app|accounting|invoicing|payment(s)? processing|stock(s)? (api|data)|market data)\b/i,
+    ],
+    bonus: 8,
+  },
+  {
+    id: "ai",
+    label: "AI",
+    topics: [
+      "ai",
+      "artificial-intelligence",
+      "machine-learning",
+      "deep-learning",
+      "llm",
+      "generative-ai",
+      "nlp",
+      "computer-vision",
+      "neural-networks",
+      "rag",
+      "llmops",
+    ],
+    keywords: [
+      /\b(llm|llms|gpt-?\d?|openai|anthropic|machine learning|deep learning|neural network|transformer model|diffusion model|generative ai|\brag\b|large language model)\b/i,
+    ],
+    bonus: 8,
+  },
+  {
+    id: "innovation",
+    label: "innovation",
+    topics: [
+      "wasm",
+      "webassembly",
+      "edge-computing",
+      "robotics",
+      "quantum",
+      "self-hosted",
+      "developer-tools",
+      "embedded",
+      "hardware",
+    ],
+    keywords: [
+      /\b(webassembly|wasm|edge computing|robotics|quantum|self-hosted|innovative|novel approach|first[- ]of[- ]its[- ]kind|rust-based rewrite)\b/i,
+    ],
+    bonus: 6,
+  },
+];
+
+/** Hard ceiling for the combined priority bonus. */
+export const MAX_PRIORITY_BONUS = 10;
+
+/**
+ * Match a repository against the priority categories. Returns the matched
+ * category list (best first); a repository may match several, but the bonus
+ * applied to the score is the single highest one (never stacked, hard cap
+ * `MAX_PRIORITY_BONUS`).
+ */
+export function matchPriorityCategories(
+  repo: Pick<Repo, "topics" | "description" | "name" | "full_name">
+): PriorityCategory[] {
+  const topics = new Set(
+    (repo.topics ?? []).map(topic => topic.toLowerCase())
+  );
+  const haystack = `${repo.description ?? ""} ${repo.name ?? ""}`;
+  const matches: PriorityCategory[] = [];
+  for (const category of PRIORITY_CATEGORIES) {
+    const topicHit = category.topics.some(topic => topics.has(topic));
+    const keywordHit = category.keywords.some(pattern => pattern.test(haystack));
+    if (topicHit || keywordHit) matches.push(category);
+  }
+  return matches.sort((a, b) => b.bonus - a.bonus);
+}
+
+/** The priority bonus for a repository: the single best match, capped. */
+export function priorityBonus(
+  repo: Pick<Repo, "topics" | "description" | "name" | "full_name">
+): number {
+  const best = matchPriorityCategories(repo)[0];
+  return best ? Math.min(MAX_PRIORITY_BONUS, best.bonus) : 0;
+}
 
 export async function discoverRepos(options: {
   mode: DiscoveryMode;
@@ -559,6 +699,7 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
     setup: setupScore(readme, repo),
     maturity: maturity.score,
     novelty: noveltyScore(repo, mode),
+    priority: priorityBonus(repo),
   };
 
   const reasons: string[] = [];
@@ -603,6 +744,16 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
     );
   } else {
     warnings.push("no star-history snapshot yet, so no trend claim is possible");
+  }
+  const priorityMatches = matchPriorityCategories(repo);
+  if (priorityMatches.length > 0) {
+    const best = priorityMatches[0];
+    reasons.push(
+      `priority category: ${best.label} (+${breakdown.priority})` +
+        (priorityMatches.length > 1
+          ? ` [also: ${priorityMatches.slice(1).map(match => match.label).join(", ")}]`
+          : "")
+    );
   }
   if (maintenance.warning) warnings.push(maintenance.warning);
   if (maturity.warning) warnings.push(maturity.warning);
