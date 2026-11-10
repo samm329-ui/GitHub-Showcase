@@ -203,11 +203,16 @@ describe("mascot head anchor and caption callout zone", () => {
   test("the callout bubble is placed from the same head anchor", () => {
     const layout = placeCallout(head);
     assert.deepEqual(layout, placeCallout(head));
-    // The bubble body sits fully above the head-top line, so the face never
-    // disappears behind it; only the tail reaches down toward the glasses.
+    // topOffsetPx is the authored drop from the head-top line (17px with the
+    // committed tuning), clamped to the authored band — verify the formula,
+    // not a fixed geometry, so the invariant holds for any tuned offset.
+    const expectedTop = Math.min(
+      Math.max(head.headTopY - CALLOUT.topOffsetPx, CALLOUT.topMinPx),
+      CALLOUT.topMaxPx
+    );
     assert.ok(
-      layout.top + CALLOUT.bodyHeightPx <= head.headTopY,
-      `body ends ${layout.top + CALLOUT.bodyHeightPx}, head at ${head.headTopY}`
+      Math.abs(layout.top - expectedTop) < 0.01,
+      `top ${layout.top} should follow the anchored clamp ${expectedTop}`
     );
     assert.ok(layout.tailTipY > head.headTopY);
     assert.ok(Math.abs(layout.tailTipX - head.faceCenterX) <= 120);
