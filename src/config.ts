@@ -39,6 +39,21 @@ export const MAX_DURATION_SECONDS = 58;
 /** Lower bound a script may target. Shorter than this and it is not a Reel. */
 export const MIN_DURATION_SECONDS = 18;
 
+/** Resolve the effective target duration: explicit per-run override wins over
+ * the environment, clamped to the product bounds. */
+export function resolveTargetSeconds(overrideSeconds?: number): number {
+  const base =
+    overrideSeconds !== undefined && Number.isFinite(overrideSeconds)
+      ? overrideSeconds
+      : TARGET_DURATION_SECONDS;
+  return Math.min(MAX_DURATION_SECONDS, Math.max(MIN_DURATION_SECONDS, Math.round(base)));
+}
+
+/** Rough spoken-word budget for a target length (before TTS measures truth). */
+export function estimatedWordsForSeconds(seconds: number): number {
+  return Math.round((seconds * ESTIMATED_WPM) / 60);
+}
+
 /** Words-per-minute used only for *estimates* before TTS. Audio is truth. */
 export const ESTIMATED_WPM = 155;
 
@@ -67,7 +82,51 @@ export const MAX_ATTEMPTS = 3;
 export const RESERVATION_TIMEOUT_MINUTES = 30;
 
 /* ------------------------------------------------------------------ */
-/* Narration                                                           */
+/* Groq LLM scripting (default writer)                                 */
+/*                                                                      */
+/* The narration is written by a single Groq chat-completion call,      */
+/* grounded on the fact ledger + README excerpt the pipeline already    */
+/* collected. Rate-limit discipline: ONE request per video (plus at     */
+/* most one "shorten" follow-up), capped prompt/output, backoff with    */
+/* jitter and `Retry-After` honoured. Failure fails the run — there is  */
+/* no silent fallback to the legacy templated writer.                   */
+/* ------------------------------------------------------------------ */
+
+export const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+export const GROQ_BASE_URL =
+  process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1";
+export const GROQ_TIMEOUT_MS = readNumber(process.env.GROQ_TIMEOUT_MS, 60_000);
+/** Hard cap on retries after the initial request (3 = at most 4 tries). */
+export const GROQ_MAX_RETRIES = Math.max(
+  0,
+  Math.min(5, Math.floor(Number(process.env.GROQ_MAX_RETRIES ?? "3")) || 0)
+);
+export const GROQ_MAX_TOKENS = readNumber(process.env.GROQ_MAX_TOKENS, 3000);
+/** README is trimmed to this many characters before entering the prompt. */
+export const GROQ_MAX_INPUT_CHARS = readNumber(
+  process.env.GROQ_MAX_INPUT_CHARS,
+  4500
+);
+/** Maximum facts serialized into the prompt; the rest are dropped. */
+export const GROQ_MAX_PROMPT_FACTS = readNumber(
+  process.env.GROQ_MAX_PROMPT_FACTS,
+  30
+);
+/**
+ * Which writer produces the narration. `llm` (default) uses Groq; `rule`
+ * reproduces the legacy evidence-graph composer for A/B comparison.
+ */
+export const SHOWCASE_SCRIPTER: "llm" | "rule" =
+  process.env.SHOWCASE_SCRIPTER === "rule" ? "rule" : "llm";
+/**
+ * When `1`, the scriptability gate skips/fails candidates like the old
+ * pipeline. Default `0`: scriptability is computed and recorded as a signal
+ * but never blocks (the LLM can write from thin evidence honestly or omit).
+ */
+export const SCRIPTABILITY_GATE = process.env.SHOWCASE_SCRIPTABILITY_GATE === "1";
+
+/* ------------------------------------------------------------------ */
+/* Voice preset (narration delivery)                                   */
 /* ------------------------------------------------------------------ */
 
 export const FACT_CONFIDENCE_THRESHOLD = 0.5;
@@ -183,7 +242,7 @@ export const CARD_BG = "#0D1117";
  * config-writer-backed defaults that are asserted equal to it), so the
  * overlay can never drift into three different yellows.
  */
-export const ACCENT_YELLOW = "#FFE66D";
+export const ACCENT_YELLOW = "#FFD500";
 /** Near-black used for callout text and the active karaoke word. */
 export const INK = "#151619";
 /**
@@ -241,9 +300,11 @@ export const CAPTION_PANEL_STYLE = {
  */
 export const CAPTION_OVERLAY = {
   leftPx: 205,
-  topPx: 1590,
+  // Instagram Reels safe group: raised with the mascot and bubble so the
+  // caption sits above the platform's bottom caption/username bar.
+  topPx: 1388,
   widthPx: 680,
-  maxHeightPx: 325,
+  maxHeightPx: 331,
 } as const;
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -393,7 +454,7 @@ export const CALLOUT = {
   // ambiguous (the writer refuses to guess).
   enabled: true,
   /** ~90% of the previous width so the bubble stops covering the page. */
-  bubbleWidthPx: 340,
+  bubbleWidthPx: 357,
   bubbleHeightPx: 400,
   /** Rounded cloud body height before the tail. */
   bodyHeightPx: 176,
@@ -411,7 +472,7 @@ export const CALLOUT = {
    * [bodyHeightPx, height - tailInset] keeps the body above the head while
    * the tail reaches down toward the glasses, whatever the mascot scale.
    */
-  topOffsetPx: 215,
+  topOffsetPx: 17,
   /**
    * Clamp band for the head-anchored top. It spans the canvas (minus the
    * bubble's own height) because the mascot itself can be lifted anywhere
@@ -448,15 +509,15 @@ export const CALLOUT = {
   maxWords: 7,
   maxLines: 2,
   /** Visual tokens. */
-  fill: "#FFFDF7",
-  outline: "#151619",
+  fill: "#161513",
+  outline: "#FFFFFF",
   outlineWidthPx: 5,
   accent: "#FFE66D",
   accentOffsetX: -3,
   accentOffsetY: 8,
-  text: "#151619",
+  text: "#1A1A1A",
   fontSizePx: 31,
-  fontWeight: 900,
+  fontWeight: 800,
   lineHeight: 1,
   textPadXPx: 28,
   rayStrokePx: 6,
@@ -624,9 +685,12 @@ export const MASCOT_LAYOUT: MascotLayout = {
   // Signed visible offsets from the bottom-right edge (see MascotLayout).
   // 0.5889 ≈ the previous 0.6204 scaled by the 0.95 tuning pass (636 px wide;
   // chosen so widthRatio round-trips through the integer pixel width).
-  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.5889),
+  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.6306),
   offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -60),
-  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 252),
+  // Instagram Reels safe group: the mascot, callout bubble and caption panel
+  // move as one unit, lifted ~160px so the bottom caption bar never covers
+  // the subtitles. Use the preview's "Edge (old look)" preset to compare.
+  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 462),
   keepFaceVisible: true,
 };
 
