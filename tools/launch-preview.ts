@@ -32,6 +32,12 @@ function pageUrl(port: number): string {
 }
 
 /** True when a preview server answers `GET /api/config` on this port. */
+const log = (line: string): void => {
+  // Always visible when run from a terminal; the VBS/CMD parents capture this
+  // output into temp/preview-launch.log for troubleshooting when hidden.
+  console.log(`[preview] ${line}`);
+};
+
 async function isPreviewServer(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
@@ -76,24 +82,33 @@ function openBrowser(url: string): void {
 }
 
 /** Start the preview server detached and windowless. */
-function startServer(): void {
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", SERVER],
-    {
-      cwd: ROOT,
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      env: {
-        ...process.env,
-        // The launcher opens the browser itself, so the server must not.
-        PREVIEW_NO_OPEN: "1",
-      },
-    }
-  );
-  child.on("error", () => {});
-  child.unref();
+function startServer(): boolean {
+  try {
+    const child = spawn(
+      process.execPath,
+      ["--import", "tsx", SERVER],
+      {
+        cwd: ROOT,
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: {
+          ...process.env,
+          // The launcher opens the browser itself, so the server must not.
+          PREVIEW_NO_OPEN: "1",
+        },
+      }
+    );
+    child.on("error", error => {
+      console.error(`[preview] could not start the helper server: ${error.message}`);
+      process.exitCode = 1;
+    });
+    child.unref();
+    return true;
+  } catch (error) {
+    console.error(`[preview] could not spawn the helper server: ${(error as Error).message}`);
+    return false;
+  }
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -110,23 +125,40 @@ async function waitForServer(timeoutMs: number): Promise<number | null> {
   return null;
 }
 
-async function main(): Promise<void> {
+async function main(): Promise<number> {
   const running = await findRunningPort();
   if (running !== null) {
+    log(`helper already running on port ${running}; opening the preview…`);
     openBrowser(pageUrl(running));
-    return;
+    return 0;
   }
 
-  startServer();
+  log("starting the helper server…");
+  if (!startServer()) {
+    console.error(
+      "[preview] the helper server could not be started. " +
+        "Is Node.js on PATH and `npm install` up to date? " +
+        "Run `npm run preview:launch` in a terminal to see the full error."
+    );
+    return 1;
+  }
+
   const port = await waitForServer(20_000);
   if (port !== null) {
+    log(`helper answered on port ${port}; opening the preview…`);
     openBrowser(pageUrl(port));
-    return;
+    return 0;
   }
 
+  console.error(
+    "[preview] the helper server did not answer within 20 seconds. " +
+      "Check temp/preview-launch.log for details, or run `npm run preview:launch` " +
+      "in a terminal to see the error directly."
+  );
   // Fall back to the first port so the user still gets a page; if the server
   // needed longer than 20s it will be up by the time they click Save.
   openBrowser(pageUrl(FIRST_PORT));
+  return 1;
 }
 
-await main();
+process.exitCode = await main();
