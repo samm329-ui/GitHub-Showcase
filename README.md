@@ -5,8 +5,8 @@ a narrated, captioned, 9:16 showcase video.
 
 **Input:** a GitHub repository URL, or automatic discovery mode (`--discover`)
 **Output:** `output/<owner>-<repo>-<runId>.mp4` plus a per-run artifact directory in `temp/`
-**Stack:** TypeScript/Node.js, GitHub REST API, Kokoro TTS, Chromium (CDP), FFmpeg, `node:sqlite`
-**No:** paid LLM, paid TTS API, n8n, Playwright, local LLM, or paid subscription
+**Stack:** TypeScript/Node.js, GitHub REST API, Groq (groq.com) for narration, Kokoro TTS, Chromium (CDP), FFmpeg, `node:sqlite`
+**No:** paid subscriptions beyond a free Groq API key, n8n, Playwright, local LLM
 
 ## 1. Requirements
 
@@ -14,7 +14,9 @@ a narrated, captioned, 9:16 showcase video.
 - Google Chrome, Chromium, or Microsoft Edge
 - FFmpeg and `ffprobe` available in `PATH`
 - Python 3.9 or newer with `kokoro-onnx` and `soundfile` installed
-- Internet access for GitHub and loading the repository page
+- A free Groq API key (https://console.groq.com/keys) — the narration script is written by Groq
+- A GitHub token in `GITHUB_TOKEN` (raises the GitHub API rate limit)
+- Internet access for GitHub, Groq and loading the repository page
 
 ## 2. Install Node dependencies
 
@@ -44,6 +46,20 @@ pip install kokoro-onnx soundfile
 
 Chrome/Chromium should be installed separately if needed.
 
+Both API keys are read from `.env` in the repository root (see `.env.example`), or
+from the shell — the file is gitignored and never committed. `run.bat` and the
+pipeline entry point load it automatically; a shell-exported value always wins
+over the file:
+
+```bash
+GITHUB_TOKEN=ghp_...
+GROQ_API_KEY=gsk_...
+```
+
+`GITHUB_TOKEN` raises GitHub's anonymous rate limit; `GROQ_API_KEY` is required
+for the default (Groq) narration writer. Set `SHOWCASE_SCRIPTER=rule` to use the
+legacy offline writer instead (no key needed).
+
 ## 4. Start Chrome with remote debugging
 
 This project controls a separate Chrome instance. Use a temporary profile; do not expose the debugging port to the public internet. `run.bat` does this for you on Windows; on other platforms:
@@ -66,6 +82,13 @@ You can also pass `owner/repo`:
 npm run start -- --repo owner/repo
 ```
 
+Video length is configurable per run with `--length` (18–58 seconds, default 35):
+
+```bash
+npm run start -- --repo owner/repo --length 45
+npm run start -- --discover --length 58
+```
+
 ## 6. Discover a candidate repository automatically
 
 ```bash
@@ -74,7 +97,10 @@ npm run start -- --discover
 
 It runs a rotating set of discovery modes (practical, underdog, popular, emerging,
 topic-specific), applies hard rejection gates and a transparent 0-100 score, and
-picks the best eligible, never-before-completed repository. Use `--dry-run` to
+picks the best eligible, never-before-completed repository. Repositories in
+**priority categories** — AI agents, finance, AI/ML, and innovative technology —
+receive a score boost (up to +10) so they surface more often; the boost never
+bypasses the hard rejection gates. Use `--dry-run` to
 report the selection and narration without rendering, and `--mode` to force a
 mode:
 
@@ -98,12 +124,23 @@ All behaviour is driven by environment variables (there is no second config file
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SHOWCASE_TARGET_SECONDS` | 35 | Target narration length |
+| `SHOWCASE_TARGET_SECONDS` | 35 | Target narration length (`--length` wins when set) |
 | `SHOWCASE_FPS` | 30 | Output frame rate |
 | `SHOWCASE_TEMP_DIR` | `temp/` | Working directory for run artifacts |
 | `SHOWCASE_OUTPUT_DIR` | `output/` | Final MP4 directory |
 | `SHOWCASE_DB` | `output/showcase-history.db` | SQLite history database |
 | `SHOWCASE_MIN_SCORE` | 65 | Eligibility threshold for discovery |
+| `GROQ_API_KEY` | (none) | **Required** (default writer) Groq API key from console.groq.com |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq chat model (free tier: try `openai/gpt-oss-20b` if you hit 429s) |
+| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq API base URL |
+| `GROQ_TIMEOUT_MS` | 60000 | Per-request timeout |
+| `GROQ_MAX_RETRIES` | 3 | Retries after the initial attempt (429/backoff honoured) |
+| `GROQ_MAX_TOKENS` | 3000 | Completion token cap (reasoning + script; the script itself is ~1k) |
+| `GROQ_REASONING_EFFORT` | `low` (gpt-oss only) | `medium`/`high`/`off` — `off` removes the field entirely |
+| `GROQ_MAX_INPUT_CHARS` | 4500 | README is trimmed to this before the prompt |
+| `GROQ_MAX_PROMPT_FACTS` | 30 | Fact-ledger payload cap (highest-confidence first) |
+| `SHOWCASE_SCRIPTER` | `llm` | `llm` = Groq writer; `rule` = legacy offline composer |
+| `SHOWCASE_SCRIPTABILITY_GATE` | `0` | `1` restores the old hard scriptability skip |
 | `KOKORO_VOICE` | `am_fenrir` | Kokoro voice id (locked audition winner, young developer delivery) |
 | `KOKORO_SPEED` | `1.0` | Kokoro speed (natural conversational pace) |
 | `KOKORO_LANG` | `en-us` | Kokoro language code |
@@ -111,7 +148,8 @@ All behaviour is driven by environment variables (there is no second config file
 | `KOKORO_VOICES` | `tools/kokoro/voices-v1.0.bin` | Kokoro voices file |
 | `SHOWCASE_MASCOT_WIDTH_RATIO` | `0.8731` | Presenter width as a fraction of the 1080 px canvas (943 px) |
 | `SHOWCASE_MASCOT_OFFSET_X` | `-60` | Presenter `right` CSS offset (negative extends past the canvas edge) |
-| `SHOWCASE_MASCOT_OFFSET_Y` | `-23` | Presenter `bottom` CSS offset |
+| `SHOWCASE_MASCOT_OFFSET_Y` | `462` | Presenter `bottom` offset; part of the Instagram-safe mascot/bubble/caption group (bottom-safe) |
+| `SHOWCASE_CAPTION_TOP_PX` | `1388` | Caption panel `top`; same Instagram-safe group as the mascot/bubble |
 | `GITHUB_TOKEN` | (none) | Raises the GitHub API rate limit |
 | `CHROME_DEBUG_URL` | `http://127.0.0.1:9222` | Chrome DevTools endpoint |
 | `SHOWCASE_CHARACTER_PNG` | `assets/character.png` | Primary transparent presenter; `none` disables the layer |
@@ -127,7 +165,12 @@ The product rule is a hard maximum of 58 seconds.
 
 - Final MP4: `output/<owner>-<repo>-<runId>.mp4`
 - Per-run artifacts: `temp/<owner>-<repo>-<runId>/`
-  - `repository.json`, `selection.json`, `facts.json`, `narration.json`, `narration-structure.json`, `timeline.json`
+  - `repository.json`, `selection.json`, `facts.json`, `narration.json`, `timeline.json`
+  - `llm-prompt.json`, `llm-response.json`, `llm-script.json` — the exact Groq
+    request, the raw completions (with token usage), and the sanitized plan
+    (`SHOWCASE_SCRIPTER=llm` only)
+  - `explanation-plan.json`, `script-quality.json` — the legacy rule-based
+    writer's artifacts (`SHOWCASE_SCRIPTER=rule` only)
   - `render-metadata.json` — the voice preset (id/speed/language), the exact
     Kokoro model and voices files, the video spec and the mascot layout used
   - `speech-envelope.json` — the measured 25 Hz amplitude envelope that drives the character
@@ -140,13 +183,38 @@ The product rule is a hard maximum of 58 seconds.
 
 ## 10. Narration and TTS
 
-- Narration is assembled from a typed fact ledger (purpose, features, use cases,
-  install, license, adoption, activity, release, requirements). Every segment
-  cites one or more fact IDs; missing facts are omitted, never guessed.
-- A constrained story grammar orders clauses as `identity → value → proof/demo →
-  setup → availability → caveat → cta`. Structures are selected by evidence and
-  rotated between retries, so openings do not repeat, but the same repository
-  and attempt always produce the same script.
+**Default writer: Groq (`SHOWCASE_SCRIPTER=llm`).** The script is written by a
+Groq chat model in a single request per video, grounded on the typed fact
+ledger (purpose, features, use cases, install, license, activity, release —
+with provenance), the repository metadata, a trimmed README excerpt
+(`GROQ_MAX_INPUT_CHARS`) and the requested length budget. The model is told to
+open with the name and one-line purpose, explain the mechanism before any
+metrics, give one concrete use case, keep commands spoken-as-words, and to
+never invent claims. It returns JSON segments, which are sanitized (unknown
+purposes coerced, terminal punctuation repaired) and mapped onto the same
+`NarrationPlan` the rest of the pipeline consumes — Kokoro, captions, callouts,
+scroll, QA all work unchanged. Example:
+
+- One request per video (plus at most one "shorten it" retry when the draft
+  overshoots the 58-second ceiling); token usage is logged on every call.
+- Rate-limit discipline: `Retry-After` is honoured on HTTP 429 and used as a
+  floor, otherwise exponential backoff with full jitter (3s → 6s → 12s),
+  other 5xx get one retry, 4xx fails fast. Retries are capped by
+  `GROQ_MAX_RETRIES` (default 3). If the free-tier budget is exhausted the
+  run fails loudly; point `GROQ_MODEL` at a lighter model (e.g.
+  `openai/gpt-oss-20b`) if that keeps happening.
+- Minimal gates by design: the LLM path requires parseable JSON, 3+ usable
+  segments, and estimated duration ≤ 58s. The legacy citation/repetition
+  gates do not run on this path. If Groq errors or the draft is
+  unrecoverably over-long, the run fails loudly — there is no silent
+  fallback.
+- `SHOWCASE_SCRIPTER=rule` reproduces the legacy writer exactly: a typed fact
+  ledger feeds a constrained story grammar (`identity → value → proof/demo →
+  setup → availability → caveat → cta`), evidence-ranked clauses and a quality
+  gate before TTS.
+- Priority categories: finance, AI/ML, AI agents and innovative technology
+  repositories receive a discovery score boost (max +10, `priority`
+  breakdown dimension). The boost never bypasses the hard rejection gates.
 - Kokoro TTS runs locally with `am_fenrir` at speed `1.0` in American English.
   The preset is configured in one place (`VOICE_PRESET` in `src/config.ts`)
   and recorded into every run's `render-metadata.json`. `am_fenrir` won the
@@ -172,13 +240,13 @@ The product rule is a hard maximum of 58 seconds.
   long is shortened and regenerated, never sped up. Every sentence is timed by
   the synthesizer's measured output — fixed per-sentence durations are never
   assigned — and captions, scroll and gestures are rebuilt from those timings.
-- A structural gate runs before TTS (`src/narration-ir.ts`): every script must
-  compile to a narration that states the repository purpose, explains how it
-  works, and gives a practical use case. Popularity metadata (stars, forks,
-  license) may not exceed 35% of narration words when real explanation evidence
-  exists. Claims are only made from ledger facts; where evidence is missing the
-  section is omitted rather than invented, and the gate records the omission
-  rationale instead of allowing filler.
+- A structural gate runs before TTS (`src/narration-ir.ts`) on the **legacy
+  writer** (`SHOWCASE_SCRIPTER=rule`): the script must compile to a narration
+  that states the repository purpose, explains how it works, and gives a
+  practical use case. Popularity metadata (stars, forks, license) may not
+  exceed 35% of narration words when real explanation evidence exists. The
+  Groq writer does not run this gate; its contract is parseable JSON plus the
+  58-second ceiling.
 
 ## 11. Visual composition
 
@@ -222,10 +290,15 @@ The product rule is a hard maximum of 58 seconds.
   reproducible seeded jitter at semantically meaningful beats (idea presentation,
   bubble entrance), rendering on independent rear and front SVG layers without
   obscuring text or mascot facial features.
-- **Live Preview & Visual Tuning**: Launch `tools/preview-live.html` or run
-  `Save My Edits.cmd` to tweak mascot sizing, shadow, caption panel, callout
-  typography, timing, and impact strokes with one-click bidirectional save to
-  `src/config.ts`, `src/caption-overlay.ts`, and `src/card.ts`.
+- **Live Preview & Visual Tuning**: Double-click `Save My Edits.vbs` (or `Save My Edits.cmd`,
+  or `npm run preview:launch`) to tweak mascot sizing, shadow, caption panel, callout
+  typography, timing and impact strokes with deterministic sliders, one-click
+  bidirectional save, live Instagram Reels safe zones and a mock Reels overlay
+  (top bar, action rail, caption bar) — the mascot, speech bubble and caption
+  panel ship positioned as one Instagram-safe group (`MASCOT_LAYOUT.offsetY`,
+  `CAPTION_OVERLAY.topPx`) so subtitles never hide behind the Reels caption bar.
+  The preview page shows the exact JSON that gets written back to
+  `src/config.ts`, `src/caption-overlay.ts` and `src/card.ts`.
 - Scroll scheduling includes a travel-time pass: a narrated section whose
   speech hint arrives earlier than the speed ceiling permits is reached **late
   in full** rather than stopped halfway. The measured audio timeline is the
@@ -250,8 +323,19 @@ npm run voice:audition   # Generate Kokoro voice samples
 
 ## 13. Known limitations
 
-- Narration is rule-based, not AI-written. It uses repository metadata and the
-  README, and never invents star counts, licenses, or platform support.
+- Narration is written by Groq (`SHOWCASE_SCRIPTER=llm`, the default). It is
+  grounded on the typed fact ledger and the README excerpt, but unlike the
+  legacy rule-based writer it is not fact-citation-gated — the prompt's
+  no-invention rule is the guardrail, and `llm-prompt.json` /
+  `llm-response.json` in the run directory record exactly what the model saw
+  and said. Set `SHOWCASE_SCRIPTER=rule` for the deterministic offline writer
+  (no API key, no non-determinism, duller copy).
+- Groq output is non-deterministic: the same repository can produce a
+  different script on re-run. The script hash recorded in history is still
+  stable per output, not per input.
+- Priority discovery is heuristic (topics + description keywords); a priority
+  repository with an unparsable README can still lose to a stronger generic
+  one, and a non-priority repository can still win outright.
 - "Trending" is never claimed without dated star snapshots.
 - Primary mode uses a real mobile-width screenshot of the public repository
   page. The DOM fallback (used only when that capture fails) is built from
