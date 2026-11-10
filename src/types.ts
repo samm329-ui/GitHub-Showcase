@@ -115,7 +115,8 @@ export type ScoreDimension =
   | "momentum"
   | "setup"
   | "maturity"
-  | "novelty";
+  | "novelty"
+  | "priority";
 
 export type ScoreBreakdown = Record<ScoreDimension, number>;
 
