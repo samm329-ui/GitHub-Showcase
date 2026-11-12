@@ -22,7 +22,7 @@ export type CaptionWordTiming = {
  * per-frame HTML; `card.ts` turns the result into elements.
  *
  * Two independent layers, never one rectangle:
- *  - the dark `.caption-panel` holds the current phrase steady;
+ *  - the white `.caption-panel` holds the current phrase steady;
  *  - the moving accent pill (`CAPTION_HIGHLIGHT`) sits behind exactly one word —
  *    the word actually spoken at this instant.
  *
@@ -40,7 +40,8 @@ export type CaptionStyle = {
   fontWeight: number;
   lineHeight: number;
   letterSpacingPx: number;
-  /** Inactive (spoken phrase) text on the dark panel. */
+  /** Inactive (spoken phrase) text on the white panel — pure black, as the
+   *  composition requires. */
   color: string;
   /** Accent pill colour; the same value as `CAPTION_HIGHLIGHT.background`. */
   highlightColor: string;
@@ -91,6 +92,14 @@ const CAPTION_HIGHLIGHT_BG =
 const CAPTION_HIGHLIGHT_TEXT =
   process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? OV?.highlightText ?? "#151619";
 
+/**
+ * Semantic emphasis colour (marketing words on the phrase, not the karaoke
+ * pill). The accent yellow cannot sit on a white panel — it camouflages — so
+ * emphasis uses the same dark-amber family GitHub uses for attention text on
+ * light backgrounds. WCAG-contrast ≈ 5.9:1 on the panel.
+ */
+const CAPTION_EMPHASIS = "#9A6700";
+
 export const CAPTION_STYLE: CaptionStyle = {
   fontFamily: OV?.captionFontFamily ?? "'Roboto', 'Helvetica Neue', Arial, sans-serif",
   monoFamily:
@@ -99,13 +108,15 @@ export const CAPTION_STYLE: CaptionStyle = {
   fontWeight: OV?.captionFontWeight ?? 900,
   lineHeight: OV?.captionLineHeight ?? 0.94,
   letterSpacingPx: OV?.captionLetterSpacing ?? -1.1,
-  color: OV?.captionColor ?? "#F8F6EF",
+  color: OV?.captionColor ?? "#000000",
   highlightColor: CAPTION_HIGHLIGHT_BG,
   activeTextColor: CAPTION_HIGHLIGHT_TEXT,
-  emphasisColor: CAPTION_HIGHLIGHT_BG,
+  /** Dark amber that keeps semantic emphasis legible on the white panel
+   *  (yellow on white camouflages; GitHub's attention colour convention). */
+  emphasisColor: CAPTION_EMPHASIS,
   textShadow: OV
     ? `0 ${OV.captionShadowOffsetY}px ${OV.captionShadowBlur}px rgba(0,0,0,${OV.captionShadowOpacity})`
-    : "0 3px 10px rgba(0,0,0,0.95)",
+    : "0 2px 6px rgba(0,0,0,0.25)",
   textStroke: "0",
   maxLines: CAPTION_PANEL_STYLE.maxLines,
   maxCharsPerLine: 22,
@@ -170,7 +181,7 @@ export function wrapCaptionText(
   ].slice(0, Math.max(1, maxLines));
 }
 
-/** Usable text width inside the dark panel, in canvas px. */
+/** Usable text width inside the light panel, in canvas px. */
 function panelTextWidthPx(): number {
   const geometry = captionOverlayGeometry();
   // 1px border on each side, then the panel's horizontal padding.
@@ -494,11 +505,11 @@ export function activeWordStateAt(
 }
 
 /**
- * Complete per-frame caption markup: the dark panel, the moving pill and the
+ * Complete per-frame caption markup: the white panel, the moving pill and the
  * phrase HTML (with exactly one `.current` word).
  *
  * The panel is absent when no phrase is active, so the overlay never leaves an
- * empty black rectangle on screen. `browser-capture.ts` injects this once per
+ * empty plate on screen. `browser-capture.ts` injects this once per
  * frame. Everything is derived from the shared audio timeline; rendering the
  * same frame twice produces byte-identical markup.
  */
