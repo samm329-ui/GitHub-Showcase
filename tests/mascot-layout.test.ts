@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import { loadImage, createCanvas } from "canvas";
 import {
@@ -55,7 +55,7 @@ async function measureAlphaBounds(file: string): Promise<AlphaBounds> {
 
 describe("mascot alpha bounds", () => {
   test("the shipped presenter PNG matches the recorded visible bounds", async () => {
-    const measured = await measureAlphaBounds("assets/character.png");
+    const measured = await measureAlphaBounds("assets/github/presenter/character.png");
     const recorded = CHARACTER_ALPHA_BOUNDS;
     for (const key of ["srcWidth", "srcHeight", "minX", "minY", "maxX", "maxY"] as const) {
       assert.ok(
@@ -66,7 +66,7 @@ describe("mascot alpha bounds", () => {
   });
 
   test("the close pose PNG matches the recorded visible bounds", async () => {
-    const measured = await measureAlphaBounds("assets/character-close.png");
+    const measured = await measureAlphaBounds("assets/github/presenter/character-close.png");
     const recorded = CHARACTER_CLOSE_ALPHA_BOUNDS;
     for (const key of ["srcWidth", "srcHeight", "minX", "minY", "maxX", "maxY"] as const) {
       assert.ok(
@@ -78,8 +78,8 @@ describe("mascot alpha bounds", () => {
 
   test("the PNGs are transparent, not white-matted", async () => {
     for (const [file, bounds] of [
-      ["assets/character.png", CHARACTER_ALPHA_BOUNDS],
-      ["assets/character-close.png", CHARACTER_CLOSE_ALPHA_BOUNDS],
+      ["assets/github/presenter/character.png", CHARACTER_ALPHA_BOUNDS],
+      ["assets/github/presenter/character-close.png", CHARACTER_CLOSE_ALPHA_BOUNDS],
     ] as const) {
       const image = await loadImage(file);
       const ctx = createCanvas(image.width, image.height).getContext("2d");
