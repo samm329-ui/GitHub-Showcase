@@ -51,6 +51,7 @@ re-centred on the stage from the stored width/height.
 | `SHOWCASE_CAPTION_TOP_PX` | `1388` | Caption panel `top`; same Instagram-safe group as the mascot/bubble |
 | `GITHUB_TOKEN` | (none) | Raises the GitHub API rate limit |
 | `CHROME_DEBUG_URL` | `http://127.0.0.1:9222` | Chrome DevTools endpoint |
+| `SHOWCASE_CAPTURE_COLOR_SCHEME` | `dark` | Theme of the captured repository page (`dark`/`light`/`auto`). GitHub renders from the OS color-scheme, so without the pin captures were light on light-mode Linux — which does not sit on the white stage; always dark by default |
 | `SHOWCASE_CHARACTER_PNG` | `assets/github/presenter/character.png` | Primary transparent presenter; `none` disables the layer |
 | `SHOWCASE_CHARACTER_POINT_PNG` | `assets/github/presenter/character.png` | Optional pointing pose; falls back to the primary cut-out |
 | `SHOWCASE_CHARACTER_CLOSE_PNG` | `assets/github/presenter/character-close.png` | Optional medium CTA pose |
