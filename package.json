@@ -9,15 +9,17 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "showcase": "tsx src/index.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit -p tsconfig.check.json",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
-    "preview": "tsx tools/preview.ts",
-    "preview:live": "tsx tools/preview-server.ts",
-    "preview:launch": "tsx tools/launch-preview.ts",
-    "voice:audition": "python tools/kokoro-audition.py",
+    "preview": "tsx tools/preview/preview.ts",
+    "preview:live": "tsx tools/preview/preview-server.ts",
+    "preview:launch": "tsx tools/preview/launch-preview.ts",
+    "voice:audition": "node tools/run-python.mjs tools/python/kokoro-audition.py",
     "start:news": "tsx src/channels/news/index.ts",
-    "news:prepare-assets": "python tools/prep_lazy_news_assets.py",
-    "news:selftest-alignment": "python tools/align_audio.py --selftest"
+    "news:prepare-assets": "node tools/run-python.mjs tools/python/prep_lazy_news_assets.py",
+    "news:selftest-alignment": "node tools/run-python.mjs tools/python/align_audio.py --selftest",
+    "scripts:list": "tsx tools/scripts-dataset.ts list",
+    "scripts:show": "tsx tools/scripts-dataset.ts show"
   },
   "dependencies": {
     "canvas": "^3.2.3",
