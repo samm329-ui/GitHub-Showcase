@@ -1,17 +1,26 @@
-node_modules/
+﻿node_modules/
 temp/*
 !temp/.gitkeep
 output/*
 !output/.gitkeep
-tools/kokoro/
-tools/audition/
-tools/*.wav
+db/*.db
+db/*.db-shm
+db/*.db-wal
+dataset/*
+!dataset/README.md
+models/kokoro/
+samples/
+.venv/
 .env
 .env.local
+visual-overrides.json
 
-# Python bytecode (Lazy News tools)
+# Python bytecode (tools/python)
 __pycache__/
 *.pyc
 
-# Raw Lazy News source artwork (10 MB zip; extracted RGBA layers live in assets/lazy-news/)
+# Raw Lazy News source artwork (10 MB zip; extracted RGBA layers live in assets/news/)
 News assets/
+
+# Local tool state
+.freebuff/
