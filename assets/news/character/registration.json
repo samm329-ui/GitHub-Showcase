@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "kind": "lazy-news-character-registration",
+  "canvas": { "width": 941, "height": 1672 },
+  "note": "Coordinate estimates below come from magnified crops (3.4x) of assets/news/layers/8.png; they are coarse on purpose and are not sufficient for unattended pixel work. Origin (0,0) top-left of the 941x1672 canvas.",
+  "components": [
+    { "id": "bg_plate",      "role": "background",      "file": "assets/news/layers/1.png",          "z": 0, "alphaBBox": [0, 0, 941, 1672],     "status": "ok" },
+    { "id": "board_cork",    "role": "midground",       "file": "assets/news/layers/2.png",          "z": 5, "alphaBBox": [200, 214, 904, 769],  "status": "ok" },
+    { "id": "board_note_left","role": "midground",      "file": "assets/news/layers/note-left.png",  "z": 6, "alphaBBox": [579, 682, 725, 830],  "status": "ok" },
+    { "id": "board_note_right","role": "midground",     "file": "assets/news/layers/note-right.png", "z": 6, "alphaBBox": [729, 656, 853, 817],  "status": "ok" },
+    { "id": "board_pin",     "role": "midground",       "file": "assets/news/layers/3.png",          "z": 7, "alphaBBox": [505, 256, 598, 365],  "status": "ok" },
+    { "id": "character_master","role": "character",      "file": "assets/news/layers/8.png",          "z": 10,"alphaBBox": [18, 655, 941, 1455],  "status": "ok" },
+    { "id": "laptop",        "role": "foreground",      "file": "assets/news/layers/9.png",          "z": 20,"alphaBBox": [62, 1284, 885, 1468], "status": "ok" }
+  ],
+  "face": {
+    "head":   { "est": [130, 640, 480, 1130], "action": "manual redraw as head base layer; preserve glasses rim position and hair silhouette" },
+    "brow_left":   { "est": [175, 760, 300, 830], "action": "manual extraction: solid dark stroke shape; thicken for 'unimpressed' state variants" },
+    "brow_right":  { "est": [280, 740, 340, 805], "action": "manual extraction (partially hidden behind glasses bridge)" },
+    "eye_left":    { "est": [185, 855, 270, 915], "action": "manual redraw: half-lidded iris (dark upper arc). Provide neutral/blink/bored/unimpressed variants" },
+    "eye_right":   { "est": [245, 845, 330, 910], "action": "manual redraw: mirror of left eye; glasses rim overlaps upper third" },
+    "lid_left":    { "est": [180, 850, 275, 895], "action": "separate eyelid layer for blink states (line of lid arcs already visible)" },
+    "lid_right":   { "est": [240, 845, 335, 895], "action": "separate eyelid layer for blink states" },
+    "nose":        { "est": [270, 905, 330, 975], "action": "static; keep (small nostril stroke)" },
+    "mouth_frown": { "est": [235, 1010, 300, 1045], "action": "manual redraw: only a shallow frown line is visible; beard covers remainder" },
+    "beard":       { "est": [175, 960, 340, 1140], "action": "full redraw required for mouth animation behind it; keep silhouette identical to master" },
+    "glasses":     { "est": [175, 780, 345, 960], "action": "manual separation into a single 'glasses' asset; rims + bridge + arms as ONE static layer over eyes" },
+    "hair":        { "est": [110, 640, 320, 920], "action": "manual separation or static; do not re-render, do not clean beyond alpha matting" }
+  },
+  "extractionFeasibility": {
+    "alreadySeparated": ["bg_plate", "board_cork", "board_note_left", "board_note_right", "board_pin", "character_master", "laptop"],
+    "mustBeRedrawnByArtist": ["head_base_without_features", "eyes", "eyelids", "eyebrows", "mouth", "beard", "cheek_shading_separations_if_needed"],
+    "staticWithOriginals": ["nose", "glasses_frame (as one layer)", "hair silhouette"],
+    "notFeasibleProgrammatically": [
+      "Eye-rest vs blink vs bored variants (no scalable-vector source; raster pixels are half-litrets of differing line weights)",
+      "Mouth shapes behind the beard (the articulation simply does not exist in the flattened art)",
+      "Per-portion nose/cheek separation (independent shading painted directly onto the base)"
+    ]
+  },
+  "knownLimitations": [
+    "No editable/vector source exists in the repo — all layers are flattened raster.",
+    "Original RGB originals under assets/news/original/ are white-background composites; layers/ have alpha but a thin light fringe halo is visible on 1.png and 2.png edges.",
+    "Glasses rim holds most of the eyelid boundary — a clean lid cut must extend ~4px under the rim.",
+    "Mouth is mostly hidden by the beard; visemes will read via beard-edge silhouette motion, not lip shapes.",
+    "All coordinate estimates are ±6px; any artist pass must re-derive anchors from eye-centre grids."
+  ]
+}
