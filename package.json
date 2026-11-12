@@ -14,7 +14,10 @@
     "preview": "tsx tools/preview.ts",
     "preview:live": "tsx tools/preview-server.ts",
     "preview:launch": "tsx tools/launch-preview.ts",
-    "voice:audition": "python tools/kokoro-audition.py"
+    "voice:audition": "python tools/kokoro-audition.py",
+    "start:news": "tsx src/channels/news/index.ts",
+    "news:prepare-assets": "python tools/prep_lazy_news_assets.py",
+    "news:selftest-alignment": "python tools/align_audio.py --selftest"
   },
   "dependencies": {
     "canvas": "^3.2.3",
