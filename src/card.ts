@@ -1,4 +1,4 @@
-import type { CharacterPoseName, EnrichedRepo } from "./types.js";
+﻿import type { CharacterPoseName, EnrichedRepo } from "./types.js";
 import {
   ACCENT_YELLOW,
   CALLOUT,
@@ -16,6 +16,8 @@ import {
   captionOverlayGeometry,
   getCalloutAssetProfile,
 } from "./config.js";
+import { VISUAL_OVERRIDES } from "./visual-overrides.js";
+import { bundledFontFaces } from "./font-faces.js";
 import { CAPTION_STYLE, CAPTION_HIGHLIGHT } from "./caption-overlay.js";
 import {
   CALLOUT_PATH,
@@ -73,7 +75,7 @@ export type CardComposition = {
  * Card shadow: four neutral layers, near contact through broad ambient.
  *
  * The geometry is fixed; the *feel* is tuned live in
- * `tools/preview-live.html` and saved back through `tools/config-writer.ts`.
+ * `tools/preview/preview-live.html` and saved to `visual-overrides.json`.
  * `buildCardShadow` is the only place the CSS is assembled, so the preview and
  * the renderer can never disagree about what a tuning means.
  */
@@ -92,8 +94,8 @@ export type CardShadowTuning = {
 };
 
 export const CARD_SHADOW_TUNING: CardShadowTuning = {
-  intensity: 0.3,
-  blurScale: 0.85,
+  intensity: VISUAL_OVERRIDES?.cardShadowIntensity ?? 0.3,
+  blurScale: VISUAL_OVERRIDES?.cardShadowBlurScale ?? 0.85,
 };
 
 /** Assemble the layered box-shadow from the tuned intensity/blur scale. */
@@ -523,6 +525,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
 <meta charset="utf-8">
 <title>${escapeHtml(repo.full_name)}</title>
 <style>
+  ${bundledFontFaces()}
   :root {
     --stage-bg: ${UI_TOKENS.stageBg};
     --card-bg: ${UI_TOKENS.cardBg};
