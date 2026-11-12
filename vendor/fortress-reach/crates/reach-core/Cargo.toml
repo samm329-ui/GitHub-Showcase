@@ -1,0 +1,15 @@
+[package]
+name = "reach-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared core models, error types, and configuration for Fortress-Reach"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
