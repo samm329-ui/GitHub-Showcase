@@ -59,6 +59,35 @@ news_usage() {
   echo "Usage: ./run.sh news --topic politics --discover | --url URL | --approve A --run-dir DIR"
 }
 
+ensure_fortress() {
+  # Lazy News discovery is Fortress-Reach only; start the MCP server if it is
+  # not already running, and export REACH_MCP_URL for the npm child.
+  if [ -n "${REACH_MCP_URL:-}" ]; then return 0; fi
+  local exe="vendor/fortress-reach/target/release/reach-server"
+  if curl -fsS -m 2 http://127.0.0.1:8050/health >/dev/null 2>&1; then
+    export REACH_MCP_URL="http://127.0.0.1:8050/mcp"
+    echo "[Lazy News] Fortress-Reach already running: $REACH_MCP_URL"
+    return 0
+  fi
+  if [ ! -x "$exe" ]; then
+    echo "[Lazy News] Fortress-Reach is not built. Build it once with: npm run fortress:build"
+    return 1
+  fi
+  echo "[Lazy News] Starting the Fortress-Reach server (one-time for this session)..."
+  REACH_TUNNEL=0 REACH_PORT=8050 REACH_CDP_PORT=9226 REACH_APPLY_PROFILE=0 "$exe" >/tmp/fortress-reach.log 2>&1 &
+  local i=0
+  until curl -fsS -m 2 http://127.0.0.1:8050/health >/dev/null 2>&1; do
+    i=$((i+1))
+    if [ "$i" -ge 25 ]; then
+      echo "[Lazy News] Fortress-Reach did not answer on 8050 within 25 seconds. See /tmp/fortress-reach.log"
+      return 1
+    fi
+    sleep 1
+  done
+  export REACH_MCP_URL="http://127.0.0.1:8050/mcp"
+  echo "[Lazy News] Fortress-Reach ready: $REACH_MCP_URL"
+}
+
 # ---------------------------------------------------------------- direct modes
 if [ "$#" -ge 1 ]; then
   case "${1,,}" in
@@ -74,6 +103,7 @@ if [ "$#" -ge 1 ]; then
     news)
       shift
       if [ "$#" -eq 0 ]; then news_usage; pause; exit 1; fi
+      case " $* " in *" --approve"*) ;; *) ensure_fortress || { pause; exit 1; } ;; esac
       checks
       echo "LAZY NEWS — gates A (facts) and B (script) require explicit approval."
       npm run start:news -- "$@"
@@ -133,11 +163,13 @@ case "$choice" in
       1)
         read -r -p "Topic (politics/geopolitics/ai/technology/finance/environment/under_covered/mixed) [mixed]: " topic
         topic="${topic:-mixed}"
+        ensure_fortress || { pause; exit 1; }
         npm run start:news -- --topic "$topic" --discover
         echo "Finished. Episodes: output/news/" ;;
       2)
         read -r -p "Story URL (must be a permitted primary/primary-record source): " url
         [ -z "$url" ] && { echo "No URL given."; exit 1; }
+        ensure_fortress || { pause; exit 1; }
         npm run start:news -- --url "$url" ;;
       3)
         read -r -p "Which gate (A/B/C)? " gate
