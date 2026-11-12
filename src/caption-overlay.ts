@@ -2,7 +2,10 @@ import {
   CAPTION_PANEL_STYLE,
   captionOverlayGeometry,
 } from "./config.js";
+import { VISUAL_OVERRIDES } from "./visual-overrides.js";
 import type { CaptionPhrase } from "./types.js";
+
+const OV = VISUAL_OVERRIDES;
 
 /** Word-level timing estimate inside a measured phrase window. */
 export type CaptionWordTiming = {
@@ -63,20 +66,20 @@ export type CaptionStyle = {
  */
 export const CAPTION_MOTION = {
   /** Group entrance: 160 ms, opacity 0→1, translateY 12→0, scale 0.98→1.0. */
-  enterMs: 160,
-  enterYPx: 12,
-  enterScale: 0.98,
+  enterMs: OV?.enterMs ?? 160,
+  enterYPx: OV?.enterYPx ?? 12,
+  enterScale: OV?.enterScale ?? 0.98,
   /** Group exit: 120 ms, opacity 1→0, translateY 0→-6. */
-  exitMs: 120,
-  exitYPx: 6,
+  exitMs: OV?.exitMs ?? 120,
+  exitYPx: OV?.exitYPx ?? 6,
   exitScale: 0.02,
   /** Moving highlight interpolation window (60–80 ms). */
   activeWordMs: 70,
 } as const;
 
 /**
- * Moving-highlight colours. Authored live in `tools/preview-live.html` and
- * saved back through `tools/config-writer.ts`. Both the highlight box and the
+ * Moving-highlight colours. Authored live in `tools/preview/preview-live.html`;
+ * saved overrides live in `visual-overrides.json`. Both the highlight box and the
  * active-word text read these, so the two can never drift apart.
  *
  * The defaults are the canonical lemon-yellow / near-black pair from
@@ -84,24 +87,25 @@ export const CAPTION_MOTION = {
  * that they stay identical to the exported tokens.
  */
 const CAPTION_HIGHLIGHT_BG =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? "#FFD500";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_BG ?? OV?.highlightBackground ?? "#FFD500";
 const CAPTION_HIGHLIGHT_TEXT =
-  process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? "#151619";
+  process.env.SHOWCASE_CAPTION_HIGHLIGHT_TEXT ?? OV?.highlightText ?? "#151619";
 
 export const CAPTION_STYLE: CaptionStyle = {
-  fontFamily:
-    "'Roboto', 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: OV?.captionFontFamily ?? "'Roboto', 'Helvetica Neue', Arial, sans-serif",
   monoFamily:
-    "'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace",
-  fontSizePx: 45,
-  fontWeight: 900,
-  lineHeight: 0.94,
-  letterSpacingPx: -1.1,
-  color: "#F8F6EF",
+    "'Cascadia Code', 'JetBrains Mono', Consolas, 'Roboto Mono', 'SF Mono', Menlo, monospace",
+  fontSizePx: OV?.captionFontSize ?? 45,
+  fontWeight: OV?.captionFontWeight ?? 900,
+  lineHeight: OV?.captionLineHeight ?? 0.94,
+  letterSpacingPx: OV?.captionLetterSpacing ?? -1.1,
+  color: OV?.captionColor ?? "#F8F6EF",
   highlightColor: CAPTION_HIGHLIGHT_BG,
   activeTextColor: CAPTION_HIGHLIGHT_TEXT,
   emphasisColor: CAPTION_HIGHLIGHT_BG,
-  textShadow: "0 3px 10px rgba(0,0,0,0.95)",
+  textShadow: OV
+    ? `0 ${OV.captionShadowOffsetY}px ${OV.captionShadowBlur}px rgba(0,0,0,${OV.captionShadowOpacity})`
+    : "0 3px 10px rgba(0,0,0,0.95)",
   textStroke: "0",
   maxLines: CAPTION_PANEL_STYLE.maxLines,
   maxCharsPerLine: 22,
