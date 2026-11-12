@@ -18,13 +18,13 @@ import { fileURLToPath } from "node:url";
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "..", "..");
+const ROOT = path.resolve(HERE, "..", "..", "..");
 const SERVER = path.join(HERE, "preview-server.ts");
 const FIRST_PORT = Number(process.env.PREVIEW_PORT ?? 5178);
 const MAX_PORT_TRIES = 10;
 const PORTS = Array.from({ length: MAX_PORT_TRIES + 1 }, (_, i) => FIRST_PORT + i);
 
-const PAGE_PATH = "/tools/preview/preview-live.html";
+const PAGE_PATH = "/tools/preview/github/preview-live.html";
 
 function pageUrl(port: number): string {
   return `http://127.0.0.1:${port}${PAGE_PATH}`;
