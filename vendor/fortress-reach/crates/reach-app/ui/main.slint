@@ -1,0 +1,1129 @@
+import { ScrollView } from "std-widgets.slint";
+
+export struct ChannelInfo {
+    name: string,
+    latency: string,
+    message: string,
+    tier: string,
+    is_ready: bool,
+}
+
+export struct LogRow {
+    text: string,
+    is_error: bool,
+    is_success: bool,
+}
+
+export global Bridge {
+    in-out property <bool> is_registered: false;
+    in-out property <string> user_name: "";
+    in-out property <string> user_email: "";
+    in-out property <string> user_phone: "";
+    in-out property <string> permanent_domain: "";
+    in-out property <string> cloudflare_token: "";
+    in-out property <string> endpoint_url: "http://127.0.0.1:8000/sse";
+    in-out property <bool> server_running: true;
+    in-out property <bool> copied_active: false;
+    in-out property <[ChannelInfo]> channels: [];
+    in-out property <[LogRow]> logs: [];
+
+    callback register_user(string, string, string, string);
+    callback toggle_server();
+    callback copy_endpoint();
+}
+
+// ============================================================================
+// CUSTOM REUSABLE HIGH-QUALITY UI COMPONENTS
+// ============================================================================
+
+component ModernInput inherits VerticalLayout {
+    in property <string> label;
+    in property <string> badge_text: "";
+    in property <color> badge_color: #38BDF8;
+    in property <string> placeholder;
+    in-out property <string> text;
+
+    spacing: 6px;
+
+    HorizontalLayout {
+        alignment: space-between;
+
+        Text {
+            text: root.label;
+            color: input_core.has-focus ? #38BDF8 : #94A3B8;
+            font-size: 10px;
+            font-weight: 800;
+            animate color { duration: 150ms; }
+        }
+
+        if root.badge_text != "" : Text {
+            text: root.badge_text;
+            color: root.badge_color;
+            font-size: 9px;
+            font-weight: 800;
+        }
+    }
+
+    Rectangle {
+        height: 40px;
+        background: input_core.has-focus ? #0F172A : #070B14;
+        border-radius: 8px;
+        border-width: input_core.has-focus ? 1.5px : 1px;
+        border-color: input_core.has-focus ? #38BDF8 : #1E293B;
+        drop-shadow-blur: input_core.has-focus ? 14px : 0px;
+        drop-shadow-color: input_core.has-focus ? #38BDF830 : #00000000;
+        animate background, border-color, drop-shadow-blur { duration: 160ms; }
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+
+            Rectangle {
+                horizontal-stretch: 1;
+                clip: true;
+
+                if root.text == "" : Text {
+                    width: 100%;
+                    height: 100%;
+                    text: root.placeholder;
+                    color: #475569;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+
+                input_core := TextInput {
+                    width: 100%;
+                    height: 100%;
+                    text <=> root.text;
+                    color: #F8FAFC;
+                    font-size: 12px;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    single-line: true;
+                }
+            }
+        }
+    }
+}
+
+component MetricCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <color> value_color: #F8FAFC;
+    in property <color> accent_color: #38BDF8;
+
+    height: 42px;
+    horizontal-stretch: 1;
+    background: #070B14;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: #162032;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 10px;
+        alignment: start;
+
+        Rectangle {
+            width: 3px;
+            height: 20px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 1.5px;
+            background: root.accent_color;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.label;
+                color: #64748B;
+                font-size: 9px;
+                font-weight: 800;
+            }
+
+            Text {
+                text: root.value;
+                color: root.value_color;
+                font-size: 11px;
+                font-weight: 800;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+component ChannelCard inherits Rectangle {
+    in property <ChannelInfo> channel;
+
+    height: 44px;
+    background: row_touch.has-hover ? #111A2E : #080D1A;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: row_touch.has-hover ? #263859 : #152033;
+    animate background, border-color { duration: 120ms; }
+
+    row_touch := TouchArea {}
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+
+        // Status Pill with Glowing Dot
+        Rectangle {
+            width: 84px;
+            height: 24px;
+            y: (parent.height - self.height) / 2;
+            background: root.channel.is_ready ? #052E24 : #3B0A14;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: root.channel.is_ready ? #10B98150 : #F43F5E50;
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+                alignment: center;
+
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: 3px;
+                    background: root.channel.is_ready ? #10B981 : #F43F5E;
+                    drop-shadow-blur: 6px;
+                    drop-shadow-color: root.channel.is_ready ? #10B981 : #F43F5E;
+                }
+
+                Text {
+                    text: root.channel.is_ready ? "READY" : "OFFLINE";
+                    color: root.channel.is_ready ? #34D399 : #FB7185;
+                    font-size: 9px;
+                    font-weight: 800;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Channel Name
+        Text {
+            width: 135px;
+            text: root.channel.name;
+            color: #F8FAFC;
+            font-size: 12px;
+            font-weight: 700;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        // Latency Badge
+        Rectangle {
+            width: 64px;
+            height: 22px;
+            y: (parent.height - self.height) / 2;
+            background: #0D1627;
+            border-radius: 5px;
+            border-width: 1px;
+            border-color: #1E293B;
+
+            Text {
+                text: root.channel.latency;
+                color: #38BDF8;
+                font-size: 10px;
+                font-weight: 800;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // Diagnostic Message
+        Text {
+            horizontal-stretch: 1;
+            text: root.channel.message;
+            color: #94A3B8;
+            font-size: 11px;
+            font-weight: 500;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        // Tier Badge
+        Rectangle {
+            width: 82px;
+            height: 22px;
+            y: (parent.height - self.height) / 2;
+            background: #0F172A;
+            border-radius: 5px;
+            border-width: 1px;
+            border-color: #1E293B;
+
+            Text {
+                text: root.channel.tier;
+                color: #94A3B8;
+                font-size: 9px;
+                font-weight: 800;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// MAIN WINDOW
+// ============================================================================
+
+export component MainWindow inherits Window {
+    title: "Fortress-Reach // Operator Gateway";
+    preferred-width: 1020px;
+    preferred-height: 740px;
+    min-width: 820px;
+    min-height: 620px;
+    background: #04070D;
+
+    VerticalLayout {
+        padding: 18px;
+        spacing: 16px;
+
+        // ====================================================================
+        // TOP NAVIGATION BAR
+        // ====================================================================
+        Rectangle {
+            height: 60px;
+            background: @linear-gradient(180deg, #0F172A 0%, #0A0F1D 100%);
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #1E293B;
+            drop-shadow-blur: 20px;
+            drop-shadow-color: #00000070;
+            drop-shadow-offset-y: 4px;
+
+            HorizontalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                alignment: space-between;
+
+                // Brand Identity
+                HorizontalLayout {
+                    spacing: 14px;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 38px;
+                        height: 38px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: 10px;
+                        background: @linear-gradient(135deg, #00F0FF 0%, #2563EB 50%, #4F46E5 100%);
+                        drop-shadow-blur: 12px;
+                        drop-shadow-color: #2563EB60;
+
+                        Rectangle {
+                            width: 34px;
+                            height: 34px;
+                            border-radius: 8px;
+                            background: #080D1A;
+
+                            Text {
+                                text: "FR";
+                                color: #38BDF8;
+                                font-size: 14px;
+                                font-weight: 900;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+
+                            Text {
+                                text: "FORTRESS // REACH";
+                                color: #F8FAFC;
+                                font-size: 15px;
+                                font-weight: 900;
+                                vertical-alignment: center;
+                            }
+
+                            Rectangle {
+                                width: 46px;
+                                height: 18px;
+                                background: #1E293B;
+                                border-radius: 4px;
+
+                                Text {
+                                    text: "v153.0";
+                                    color: #38BDF8;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "MODEL CONTEXT PROTOCOL & ZERO-TRUST STEALTH GATEWAY";
+                            color: #64748B;
+                            font-size: 9px;
+                            font-weight: 700;
+                        }
+                    }
+                }
+
+                // Right Controls
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+
+                    if Bridge.is_registered : Rectangle {
+                        height: 34px;
+                        y: (parent.height - self.height) / 2;
+                        background: #090E1A;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #1E293B;
+
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            spacing: 6px;
+
+                            Text {
+                                text: "NODE:";
+                                color: #64748B;
+                                font-size: 10px;
+                                font-weight: 800;
+                                vertical-alignment: center;
+                            }
+
+                            Text {
+                                text: Bridge.user_name;
+                                color: #E2E8F0;
+                                font-size: 11px;
+                                font-weight: 800;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    // Server Status Pill with Glowing Dot
+                    Rectangle {
+                        width: 104px;
+                        height: 34px;
+                        y: (parent.height - self.height) / 2;
+                        background: Bridge.server_running ? #052E24 : #3B0A14;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Bridge.server_running ? #10B98160 : #F43F5E60;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: center;
+
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                y: (parent.height - self.height) / 2;
+                                border-radius: 4px;
+                                background: Bridge.server_running ? #10B981 : #F43F5E;
+                                drop-shadow-blur: 8px;
+                                drop-shadow-color: Bridge.server_running ? #10B981 : #F43F5E;
+                            }
+
+                            Text {
+                                text: Bridge.server_running ? "ONLINE" : "OFFLINE";
+                                color: Bridge.server_running ? #34D399 : #FB7185;
+                                font-size: 11px;
+                                font-weight: 800;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    // Pause / Resume Action Button
+                    btn_srv := Rectangle {
+                        width: 124px;
+                        height: 34px;
+                        y: (parent.height - self.height) / 2;
+                        background: Bridge.server_running
+                            ? (srv_touch.pressed ? #7F1D1D : (srv_touch.has-hover ? #DC2626 : #991B1B))
+                            : (srv_touch.pressed ? #065F46 : (srv_touch.has-hover ? #10B981 : #059669));
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Bridge.server_running ? #F8717180 : #34D39980;
+                        animate background { duration: 150ms; }
+
+                        Text {
+                            text: Bridge.server_running ? "PAUSE NODE" : "RESUME NODE";
+                            color: #FFFFFF;
+                            font-size: 11px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        srv_touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { Bridge.toggle_server(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // VIEW 1: PREMIUM ONBOARDING & REGISTRATION CARD
+        // ====================================================================
+        if !Bridge.is_registered : VerticalLayout {
+            vertical-stretch: 1;
+            alignment: center;
+
+            HorizontalLayout {
+                alignment: center;
+
+                Rectangle {
+                    width: 580px;
+                    background: @linear-gradient(180deg, #0F172A 0%, #090D18 100%);
+                    border-radius: 16px;
+                    border-width: 1px;
+                    border-color: #1E293B;
+                    drop-shadow-blur: 32px;
+                    drop-shadow-color: #00000090;
+                    drop-shadow-offset-y: 10px;
+                    clip: true;
+
+                    VerticalLayout {
+                        // Top Gradient Accent Line
+                        Rectangle {
+                            height: 3px;
+                            background: @linear-gradient(90deg, #00F0FF 0%, #3B82F6 50%, #6366F1 100%);
+                        }
+
+                        VerticalLayout {
+                            padding: 32px;
+                            spacing: 22px;
+
+                            // Header Section
+                            VerticalLayout {
+                                spacing: 10px;
+                                alignment: center;
+
+                                HorizontalLayout {
+                                    alignment: center;
+
+                                    Rectangle {
+                                        width: 240px;
+                                        height: 26px;
+                                        background: #0B1528;
+                                        border-radius: 13px;
+                                        border-width: 1px;
+                                        border-color: #0284C7;
+
+                                        Text {
+                                            text: "INITIAL OPERATOR PROVISIONING";
+                                            color: #38BDF8;
+                                            font-size: 9px;
+                                            font-weight: 800;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    text: "Activate Your Private Gateway";
+                                    color: #F8FAFC;
+                                    font-size: 22px;
+                                    font-weight: 900;
+                                    horizontal-alignment: center;
+                                }
+
+                                Text {
+                                    text: "Register once to bind a permanent, dedicated Cloudflare Tunnel domain. Your assigned MCP endpoint stays fixed across every restart and session.";
+                                    color: #94A3B8;
+                                    font-size: 12px;
+                                    horizontal-alignment: center;
+                                    wrap: word-wrap;
+                                }
+                            }
+
+                            Rectangle {
+                                height: 1px;
+                                background: #1E293B;
+                            }
+
+                            // Form Grid (2-Column Top + Full-Width Stack)
+                            VerticalLayout {
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    spacing: 14px;
+
+                                    name_field := ModernInput {
+                                        horizontal-stretch: 1;
+                                        label: "OPERATOR NAME";
+                                        badge_text: "REQUIRED";
+                                        badge_color: #38BDF8;
+                                        placeholder: "e.g. Alex Mercer";
+                                        text <=> Bridge.user_name;
+                                    }
+
+                                    phone_field := ModernInput {
+                                        horizontal-stretch: 1;
+                                        label: "CONTACT PHONE";
+                                        badge_text: "VERIFICATION";
+                                        badge_color: #64748B;
+                                        placeholder: "+1 555-0199";
+                                        text <=> Bridge.user_phone;
+                                    }
+                                }
+
+                                email_field := ModernInput {
+                                    label: "PRIMARY OPERATOR EMAIL";
+                                    badge_text: "DERIVES PERMANENT DOMAIN";
+                                    badge_color: #34D399;
+                                    placeholder: "operator@company.com";
+                                    text <=> Bridge.user_email;
+                                }
+
+                                token_field := ModernInput {
+                                    label: "CLOUDFLARE TUNNEL TOKEN";
+                                    badge_text: "OPTIONAL";
+                                    badge_color: #64748B;
+                                    placeholder: "Paste Cloudflare Named Tunnel Token (eyJh...)";
+                                    text <=> Bridge.cloudflare_token;
+                                }
+                            }
+
+                            // Primary Gradient CTA Button
+                            btn_reg := Rectangle {
+                                height: 46px;
+                                border-radius: 10px;
+                                background: reg_touch.pressed
+                                    ? @linear-gradient(90deg, #0369A1 0%, #1D4ED8 50%, #4338CA 100%)
+                                    : reg_touch.has-hover
+                                    ? @linear-gradient(90deg, #00F0FF 0%, #3B82F6 50%, #6366F1 100%)
+                                    : @linear-gradient(90deg, #0284C7 0%, #2563EB 50%, #4F46E5 100%);
+                                drop-shadow-blur: reg_touch.has-hover ? 20px : 12px;
+                                drop-shadow-color: reg_touch.has-hover ? #38BDF860 : #2563EB40;
+                                drop-shadow-offset-y: 4px;
+                                animate background, drop-shadow-blur { duration: 150ms; }
+
+                                Text {
+                                    text: "PROVISION PERMANENT DOMAIN & LAUNCH GATEWAY";
+                                    color: #FFFFFF;
+                                    font-size: 12px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                reg_touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        Bridge.register_user(
+                                            name_field.text,
+                                            email_field.text,
+                                            phone_field.text,
+                                            token_field.text
+                                        );
+                                    }
+                                }
+                            }
+
+                            // Security Trust Badges
+                            HorizontalLayout {
+                                alignment: center;
+                                spacing: 16px;
+
+                                Text {
+                                    text: "256-BIT LOCAL KEYSTORE";
+                                    color: #475569;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                }
+
+                                Text { text: "•"; color: #334155; font-size: 9px; }
+
+                                Text {
+                                    text: "ZERO TELEMETRY LEAK";
+                                    color: #475569;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                }
+
+                                Text { text: "•"; color: #334155; font-size: 9px; }
+
+                                Text {
+                                    text: "DISK PERSISTED";
+                                    color: #475569;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // VIEW 2: OPERATOR COMMAND DASHBOARD
+        // ====================================================================
+        if Bridge.is_registered : VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 16px;
+
+            // TOP COMMAND & ENDPOINT HERO CARD
+            Rectangle {
+                height: 154px;
+                background: @linear-gradient(180deg, #0F172A 0%, #090E1A 100%);
+                border-radius: 14px;
+                border-width: 1px;
+                border-color: #1E293B;
+                drop-shadow-blur: 20px;
+                drop-shadow-color: #00000060;
+                drop-shadow-offset-y: 4px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+
+                    // Top Bar: Title + Domain Pill
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        HorizontalLayout {
+                            spacing: 10px;
+                            alignment: start;
+
+                            Text {
+                                text: "PERMANENT MCP GATEWAY ENDPOINT";
+                                color: #F8FAFC;
+                                font-size: 12px;
+                                font-weight: 800;
+                                vertical-alignment: center;
+                            }
+
+                            Rectangle {
+                                width: 100px;
+                                height: 20px;
+                                background: #052E24;
+                                border-radius: 10px;
+                                border-width: 1px;
+                                border-color: #10B98150;
+
+                                Text {
+                                    text: "FIXED DOMAIN";
+                                    color: #34D399;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 24px;
+                            background: #070B14;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: #1E293B;
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                spacing: 6px;
+
+                                Text {
+                                    text: "HOST:";
+                                    color: #64748B;
+                                    font-size: 10px;
+                                    font-weight: 800;
+                                    vertical-alignment: center;
+                                }
+
+                                Text {
+                                    text: Bridge.permanent_domain != "" ? Bridge.permanent_domain : "provisioning.local";
+                                    color: #38BDF8;
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+
+                    // Middle Bar: Endpoint Box + Copy Button
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            height: 42px;
+                            background: #050811;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: Bridge.copied_active ? #10B98180 : #1E293B;
+                            animate border-color { duration: 150ms; }
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 14px;
+                                spacing: 10px;
+
+                                Rectangle {
+                                    width: 58px;
+                                    height: 26px;
+                                    y: (parent.height - self.height) / 2;
+                                    background: #0D1B33;
+                                    border-radius: 5px;
+                                    border-width: 1px;
+                                    border-color: #0284C760;
+
+                                    Text {
+                                        text: "SSE / MCP";
+                                        color: #38BDF8;
+                                        font-size: 9px;
+                                        font-weight: 800;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: Bridge.endpoint_url;
+                                    color: #E2E8F0;
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+
+                        btn_copy := Rectangle {
+                            width: 150px;
+                            height: 42px;
+                            background: Bridge.copied_active
+                                ? #059669
+                                : (copy_touch.pressed ? #1D4ED8 : (copy_touch.has-hover ? #3B82F6 : #2563EB));
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: Bridge.copied_active ? #34D399 : #60A5FA80;
+                            drop-shadow-blur: copy_touch.has-hover ? 14px : 0px;
+                            drop-shadow-color: #2563EB60;
+                            animate background, border-color, drop-shadow-blur { duration: 150ms; }
+
+                            Text {
+                                text: Bridge.copied_active ? "COPIED TO CLIPBOARD" : "COPY ENDPOINT";
+                                color: #FFFFFF;
+                                font-size: 11px;
+                                font-weight: 800;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            copy_touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Bridge.copy_endpoint(); }
+                            }
+                        }
+                    }
+
+                    // Bottom Bar: 4-Column Telemetry Strip
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        MetricCard {
+                            label: "STEALTH ENGINE";
+                            value: "FORTRESS v153";
+                            value_color: #F8FAFC;
+                            accent_color: #38BDF8;
+                        }
+
+                        MetricCard {
+                            label: "CDP BRIDGE";
+                            value: "127.0.0.1:9222";
+                            value_color: #38BDF8;
+                            accent_color: #6366F1;
+                        }
+
+                        MetricCard {
+                            label: "MCP ARSENAL";
+                            value: "35 TOOLS ACTIVE";
+                            value_color: #34D399;
+                            accent_color: #10B981;
+                        }
+
+                        MetricCard {
+                            label: "REGISTERED OPERATOR";
+                            value: Bridge.user_email != "" ? Bridge.user_email : "local@operator";
+                            value_color: #CBD5E1;
+                            accent_color: #F59E0B;
+                        }
+                    }
+                }
+            }
+
+            // MAIN WORKSPACE SPLIT: READINESS MATRIX (60%) + TERMINAL LOGS (40%)
+            HorizontalLayout {
+                vertical-stretch: 1;
+                spacing: 16px;
+
+                // LEFT PANEL: CHANNEL DIAGNOSTICS & READINESS MATRIX
+                Rectangle {
+                    horizontal-stretch: 6;
+                    background: @linear-gradient(180deg, #0F172A 0%, #090E1A 100%);
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: #1E293B;
+                    drop-shadow-blur: 20px;
+                    drop-shadow-color: #00000060;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 12px;
+
+                        // Panel Header
+                        HorizontalLayout {
+                            alignment: space-between;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+
+                                Rectangle {
+                                    width: 4px;
+                                    height: 16px;
+                                    y: (parent.height - self.height) / 2;
+                                    border-radius: 2px;
+                                    background: #38BDF8;
+                                }
+
+                                Text {
+                                    text: "READINESS MATRIX & PROTOCOL DIAGNOSTICS";
+                                    color: #F8FAFC;
+                                    font-size: 12px;
+                                    font-weight: 800;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Rectangle {
+                                width: 118px;
+                                height: 22px;
+                                background: #070B14;
+                                border-radius: 6px;
+                                border-width: 1px;
+                                border-color: #1E293B;
+
+                                Text {
+                                    text: "REAL-TIME PROBES";
+                                    color: #38BDF8;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // Column Headers
+                        Rectangle {
+                            height: 28px;
+                            background: #060A12;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: #141E30;
+
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 12px;
+
+                                Text { width: 84px; text: "STATE"; color: #64748B; font-size: 9px; font-weight: 800; vertical-alignment: center; }
+                                Text { width: 135px; text: "CHANNEL NODE"; color: #64748B; font-size: 9px; font-weight: 800; vertical-alignment: center; }
+                                Text { width: 64px; text: "LATENCY"; color: #64748B; font-size: 9px; font-weight: 800; vertical-alignment: center; }
+                                Text { horizontal-stretch: 1; text: "TELEMETRY DIAGNOSTICS"; color: #64748B; font-size: 9px; font-weight: 800; vertical-alignment: center; }
+                                Text { width: 82px; text: "SECURITY TIER"; color: #64748B; font-size: 9px; font-weight: 800; horizontal-alignment: end; vertical-alignment: center; }
+                            }
+                        }
+
+                        // Channel Rows Scroll Area
+                        ScrollView {
+                            vertical-stretch: 1;
+
+                            VerticalLayout {
+                                spacing: 8px;
+                                alignment: start;
+
+                                if Bridge.channels.length == 0 : Rectangle {
+                                    height: 160px;
+                                    background: #060A12;
+                                    border-radius: 8px;
+                                    border-width: 1px;
+                                    border-color: #141E30;
+
+                                    Text {
+                                        text: "Initializing channel diagnostics & probing endpoints...";
+                                        color: #475569;
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                for item in Bridge.channels : ChannelCard {
+                                    channel: item;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // RIGHT PANEL: LIVE TELEMETRY LOG STREAM
+                Rectangle {
+                    horizontal-stretch: 4;
+                    background: #050811;
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: #1E293B;
+                    drop-shadow-blur: 20px;
+                    drop-shadow-color: #00000070;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 12px;
+
+                        // Terminal Top Bar
+                        HorizontalLayout {
+                            alignment: space-between;
+
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+
+                                // macOS style terminal dots
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: start;
+
+                                    Rectangle { width: 8px; height: 8px; y: (parent.height - self.height) / 2; border-radius: 4px; background: #F43F5E; }
+                                    Rectangle { width: 8px; height: 8px; y: (parent.height - self.height) / 2; border-radius: 4px; background: #F59E0B; }
+                                    Rectangle { width: 8px; height: 8px; y: (parent.height - self.height) / 2; border-radius: 4px; background: #10B981; }
+                                }
+
+                                Text {
+                                    text: "TELEMETRY & LOG STREAM";
+                                    color: #F8FAFC;
+                                    font-size: 11px;
+                                    font-weight: 800;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Rectangle {
+                                width: 68px;
+                                height: 22px;
+                                background: #052E24;
+                                border-radius: 11px;
+                                border-width: 1px;
+                                border-color: #10B98150;
+
+                                HorizontalLayout {
+                                    spacing: 5px;
+                                    alignment: center;
+
+                                    Rectangle {
+                                        width: 6px;
+                                        height: 6px;
+                                        y: (parent.height - self.height) / 2;
+                                        border-radius: 3px;
+                                        background: #10B981;
+                                        drop-shadow-blur: 6px;
+                                        drop-shadow-color: #10B981;
+                                    }
+
+                                    Text {
+                                        text: "LIVE";
+                                        color: #34D399;
+                                        font-size: 9px;
+                                        font-weight: 800;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 1px;
+                            background: #141E30;
+                        }
+
+                        // Log Stream ScrollView
+                        ScrollView {
+                            vertical-stretch: 1;
+
+                            VerticalLayout {
+                                spacing: 6px;
+                                alignment: start;
+
+                                if Bridge.logs.length == 0 : Text {
+                                    text: "> Awaiting gateway telemetry stream...";
+                                    color: #475569;
+                                    font-size: 11px;
+                                    font-weight: 600;
+                                }
+
+                                for log in Bridge.logs : Rectangle {
+                                    min-height: 28px;
+                                    background: log.is_error ? #2A0810 : (log.is_success ? #04241C : #090F1E);
+                                    border-radius: 6px;
+                                    border-width: 1px;
+                                    border-color: log.is_error ? #F43F5E40 : (log.is_success ? #10B98140 : #141E30);
+
+                                    HorizontalLayout {
+                                        padding-left: 10px;
+                                        padding-right: 10px;
+                                        padding-top: 6px;
+                                        padding-bottom: 6px;
+                                        spacing: 8px;
+
+                                        Rectangle {
+                                            width: 3px;
+                                            border-radius: 1.5px;
+                                            background: log.is_error ? #F43F5E : (log.is_success ? #10B981 : #38BDF8);
+                                        }
+
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            text: log.text;
+                                            color: log.is_error ? #FDA4AF : (log.is_success ? #6EE7B7 : #CBD5E1);
+                                            font-size: 10px;
+                                            font-weight: 600;
+                                            vertical-alignment: center;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
