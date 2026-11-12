@@ -1,0 +1,45 @@
+Fortress-Reach
+Copyright (c) 2026 Fortress-Reach Contributors
+
+This product includes software developed by the Fortress-Reach Contributors
+and is distributed under the MIT License (see the workspace Cargo.toml).
+
+--------------------------------------------------------------------------------
+Third party material that informed the behaviour of this project
+--------------------------------------------------------------------------------
+
+1. Agent-Reach
+   https://github.com/Panniantong/Agent-Reach
+   Copyright (c) 2025 Agent Eyes. MIT License.
+   The multi platform channel set (web reader, YouTube subtitles, Reddit, X,
+   GitHub, feeds and search) was reimplemented from the public API
+   documentation of each service. No source code was copied.
+
+2. Fortress, by Tilion Inc.
+   https://github.com/tiliondev/fortress
+   Copyright (c) 2026 Tilion Inc. Fortress Source Available License 1.1.
+   This project is an independent implementation. The behaviour of the
+   upstream project was observed from the outside, through the public DevTools
+   protocol and the public documentation of the upstream project, and the
+   findings are recorded in docs/PROVENANCE.md and docs/CAPABILITY-MATRIX.md.
+   No source code, no patch and no binary of the upstream project is included,
+   redistributed or required by this project. No trademark of Tilion Inc. is
+   used.
+
+3. Chromium
+   https://chromium.googlesource.com/chromium/src
+   Copyright the Chromium Authors. BSD 3-Clause License.
+   The project drives an installed Chromium based browser through the Chrome
+   DevTools Protocol. It does not ship, patch or redistribute Chromium.
+
+--------------------------------------------------------------------------------
+Notes
+--------------------------------------------------------------------------------
+
+* The project contains no CAPTCHA solving service, no credential collection
+  code and no mechanism that circumvents a licence check.
+* The environment profile data (graphics device names, font family names,
+  keyboard layouts, country and timezone pairs) is compiled from publicly
+  documented platform specifications: the IANA time zone database, the Unicode
+  CLDR, the WebGL and WebGPU specifications and the platform documentation of
+  the vendors concerned.
