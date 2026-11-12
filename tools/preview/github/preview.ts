@@ -2,22 +2,22 @@
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { buildFactLedger } from "../../src/facts.js";
-import { buildNarrationPlan, validateScript } from "../../src/narration.js";
-import { synthesizeSegments, concatChunks, toTimedChunks } from "../../src/voice.js";
-import { buildCaptions, buildScrollKeyframes } from "../../src/timeline.js";
-import { measureCard } from "../../src/browser-capture.js";
-import { renderVideo } from "../../src/render.js";
-import { startAssetServer } from "../../src/asset-server.js";
-import { buildSpeechEnvelope, resolveCharacterAsset } from "../../src/character-motion.js";
+import { buildFactLedger } from "../../../src/facts.js";
+import { buildNarrationPlan, validateScript } from "../../../src/narration.js";
+import { synthesizeSegments, concatChunks, toTimedChunks } from "../../../src/voice.js";
+import { buildCaptions, buildScrollKeyframes } from "../../../src/timeline.js";
+import { measureCard } from "../../../src/browser-capture.js";
+import { renderVideo } from "../../../src/render.js";
+import { startAssetServer } from "../../../src/asset-server.js";
+import { buildSpeechEnvelope, resolveCharacterAsset } from "../../../src/character-motion.js";
 import {
   captureMobileRepositoryPage,
   chooseStoryEnd,
   cropMobileCapture,
-} from "../../src/mobile-capture.js";
-import { CARD_VIEWPORT_HEIGHT, CHARACTER_PNG } from "../../src/config.js";
-import { enriched } from "../../tests/helpers.js";
-import type { VisualAnchor } from "../../src/types.js";
+} from "../../../src/mobile-capture.js";
+import { CARD_VIEWPORT_HEIGHT, CHARACTER_PNG } from "../../../src/config.js";
+import { enriched } from "../../../tests/helpers.js";
+import type { VisualAnchor } from "../../../src/types.js";
 
 /**
  * Local preview of the full visual/narration pipeline for one fixture.
@@ -116,3 +116,4 @@ try {
 } finally {
   await assets.close();
 }
+
