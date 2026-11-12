@@ -375,7 +375,7 @@ describe("priority categories", () => {
       full_name: "acme/agent-x",
     } as Repo);
     assert.equal(matches[0]?.id, "agents");
-    assert.equal(priorityBonus({ topics: ["ai-agent"], description: "x", name: "x", full_name: "a/x" } as Repo), 10);
+    assert.equal(priorityBonus({ topics: ["ai-agent"], description: "x", name: "x", full_name: "a/x" } as unknown as Repo), 10);
   });
 
   test("a finance repository matches by keyword even without topics", () => {
@@ -384,7 +384,7 @@ describe("priority categories", () => {
       description: "Personal finance budgeting and invoicing for freelancers",
       name: "ledgerline",
       full_name: "acme/ledgerline",
-    } as Repo);
+    } as unknown as Repo);
     assert.equal(bonus, 8);
   });
 
