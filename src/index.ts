@@ -23,6 +23,7 @@ import {
   SHOWCASE_SCRIPTER,
   SCRIPTABILITY_GATE,
   GROQ_MODEL,
+  ESTIMATED_WPM,
   resolveTargetSeconds,
 } from "./config.js";
 import { TOPIC_ROTATION as TOPICS } from "./github.js";
@@ -432,6 +433,10 @@ async function main(): Promise<void> {
 
     let plan: NarrationPlan;
     let useCaseCovered: boolean;
+    /** Token usage for the dataset record (LLM path only). Stored verbatim. */
+    let datasetLlm:
+      | { model: string; usage: unknown; retries: number }
+      | undefined;
     if (SHOWCASE_SCRIPTER === "llm") {
       log(
         `Stage 3/9: Groq is writing the narration (model=${GROQ_MODEL}, target ${targetSeconds}s)...`
@@ -444,6 +449,7 @@ async function main(): Promise<void> {
       });
       plan = llm.plan;
       useCaseCovered = plan.segments.some(segment => segment.purpose === "demo");
+      datasetLlm = { model: llm.model, usage: llm.usage, retries: llm.retries };
       await writeJson(path.join(runDir, "llm-prompt.json"), llm.prompt);
       await writeJson(path.join(runDir, "llm-response.json"), {
         model: llm.model,
@@ -502,6 +508,36 @@ async function main(): Promise<void> {
     }
     if (useCaseCovered) {
       log(`  use case covered via ${plan.angle}; metadata is secondary.`);
+    }
+
+    /* ---- Script dataset: phase 1 — persist the script as generated ---- */
+    try {
+      const { saveDatasetRecord } = await import("./script-dataset.js");
+      await saveDatasetRecord({
+        id: `${slug}-${runId}`,
+        channel: "github",
+        phase: "pending",
+        title: repo.full_name,
+        subject: repo.html_url,
+        runId,
+        invocation: {
+          kind: discoverMode ? "discover" : "repo",
+          detail: discoverMode ? evaluation.mode ?? null : repo.full_name,
+        },
+        script: {
+          segments: plan.segments,
+          estimatedWords: plan.estimatedWords,
+          estimatedSeconds: Math.round((plan.estimatedWords / ESTIMATED_WPM) * 60),
+          styleVariant: plan.styleVariant,
+          angle: plan.angle,
+          ...(datasetLlm ? { llm: datasetLlm } : {}),
+        },
+        facts: { ledger },
+        selection: evaluation,
+      });
+      log(`  dataset: script saved to dataset/github/${slug}-${runId}.json`);
+    } catch (error) {
+      log(`  dataset: could not save script (${(error as Error).message}) — continuing`);
     }
     console.log("\nNarration:");
     plan.segments.forEach(segment => console.log(`  [${segment.purpose}] ${segment.spokenText}`));
@@ -730,6 +766,32 @@ async function main(): Promise<void> {
       };
       await writeJson(path.join(runDir, "timeline.json"), timeline);
       await writeAssFromCaptions(captions, path.join(workDir, "captions.ass"));
+
+      /* Script dataset: phase 2 — measured audio is now known */
+      try {
+        const { saveDatasetRecord } = await import("./script-dataset.js");
+        await saveDatasetRecord({
+          id: `${slug}-${runId}`,
+          channel: "github",
+          phase: "completed",
+          title: repo.full_name,
+          subject: repo.html_url,
+          runId,
+          script: {
+            segments: plan.segments,
+            estimatedWords: plan.estimatedWords,
+            estimatedSeconds: Math.round((plan.estimatedWords / ESTIMATED_WPM) * 60),
+            styleVariant: plan.styleVariant,
+            angle: plan.angle,
+          },
+          alignment: {
+            durationMs: merged.durationMs,
+            sampleRate: merged.sampleRate,
+          },
+        });
+      } catch (error) {
+        log(`  dataset: could not mark script completed (${(error as Error).message}) — continuing`);
+      }
       log(
         `  ${captions.length} caption phrases, ${scrollKeyframes.length} scroll keyframes, ` +
           `max scroll ${bounds.maxScroll}px.`
@@ -846,6 +908,14 @@ async function main(): Promise<void> {
 
     /* ---------------- Stage 9: completion -------------------- */
     currentStage = "qa";
+    try {
+      const { updateDatasetRecord } = await import("./script-dataset.js");
+      await updateDatasetRecord("github", `${slug}-${runId}`, {
+        output: path.relative(process.cwd(), output),
+      });
+    } catch {
+      // dataset is archival; never block completion on it
+    }
     history.completeRepository(repo.nodeId, output, hashScript(plan));
     history.finishRun(runId, "succeeded", {
       stage: "qa",
