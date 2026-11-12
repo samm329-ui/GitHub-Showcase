@@ -1,4 +1,4 @@
-import http from "node:http";
+﻿import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -11,7 +11,7 @@ import {
 } from "./config-writer.js";
 
 /**
- * Dev server for `tools/preview/preview-live.html`.
+ * Dev server for `tools/preview/github/preview-live.html`.
  *
  * Why a server at all: browsers cannot write to disk from a `file://` page, so
  * "Save (one click)" has nowhere to go. This tiny zero-dependency server does
@@ -20,14 +20,14 @@ import {
  *   - serves the preview page (and the mascot assets) so relative paths work;
  *   - exposes `GET /api/config` and `POST /api/save`, which read and write
  *     `visual-overrides.json` (the composition tuning the pipeline merges at
- *     startup) through `tools/preview/config-writer.ts`.
+ *     startup) through `tools/preview/shared/config-writer.ts`.
  *
  * The page itself never parses or edits TypeScript; it only speaks JSON.
  */
 
 const ROOT = process.cwd();
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PAGE = path.join(HERE, "preview-live.html");
+const PAGE = path.join(HERE, "..", "github", "preview-live.html");
 const FIRST_PORT = Number(process.env.PREVIEW_PORT ?? 5178);
 const MAX_PORT_TRIES = 10;
 
@@ -111,7 +111,7 @@ async function readBinaryBody(
 /**
  * Store the picked mascot as the one stable upload filename.
  *
- * A fixed name (`assets/github/presenter/mascot-custom.png`) keeps the saved config stable —
+ * A fixed name (`assets/github/presenter/mascot-custom.png`) keeps the saved config stable â€”
  * every pick overwrites the same file, so old uploads never pile up and the
  * rendered pipeline always finds the exact file the preview is showing.
  */
@@ -162,7 +162,7 @@ async function handleSave(
     const config: PreviewConfig = normalizePreviewConfig(parsed, base);
     const result = await applyPreviewConfig(ROOT, config);
     console.log(
-      `[preview] saved → ${result.files.length ? result.files.join(", ") : "no file changes"}` +
+      `[preview] saved â†’ ${result.files.length ? result.files.join(", ") : "no file changes"}` +
         (result.fields.length ? ` (${result.fields.join(", ")})` : "")
     );    sendJson(res, 200, {
       ok: true,
@@ -222,7 +222,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if ((req.method === "GET" || req.method === "HEAD") && urlPath === "/") {
-    res.writeHead(302, { Location: "/tools/preview/preview-live.html", ...corsHeaders() });
+    res.writeHead(302, { Location: "/tools/preview/github/preview-live.html", ...corsHeaders() });
     res.end();
     return;
   }
@@ -244,7 +244,7 @@ function listen(port: number, attempt = 0): void {
     process.exitCode = 1;
   });
   server.listen(port, "127.0.0.1", () => {
-    const url = `http://127.0.0.1:${port}/tools/preview/preview-live.html`;
+    const url = `http://127.0.0.1:${port}/tools/preview/github/preview-live.html`;
     console.log(`[preview] live preview: ${url}`);
     console.log(`[preview] one-click Save writes visual-overrides.json (merged at pipeline startup)`);
     console.log(`[preview] Ctrl+C to stop`);
@@ -276,3 +276,4 @@ listen(FIRST_PORT);
 await fs.access(PAGE).catch(() => {
   console.error(`[preview] cannot find ${PAGE}`);
 });
+
