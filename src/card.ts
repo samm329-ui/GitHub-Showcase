@@ -75,7 +75,7 @@ export type CardComposition = {
  * Card shadow: four neutral layers, near contact through broad ambient.
  *
  * The geometry is fixed; the *feel* is tuned live in
- * `tools/preview/preview-live.html` and saved to `visual-overrides.json`.
+ * `tools/preview/github/preview-live.html` and saved to `visual-overrides.json`.
  * `buildCardShadow` is the only place the CSS is assembled, so the preview and
  * the renderer can never disagree about what a tuning means.
  */
