@@ -1,4 +1,4 @@
-import {
+﻿import {
   CAPTION_PANEL_STYLE,
   captionOverlayGeometry,
 } from "./config.js";
@@ -23,7 +23,7 @@ export type CaptionWordTiming = {
  *
  * Two independent layers, never one rectangle:
  *  - the white `.caption-panel` holds the current phrase steady;
- *  - the moving accent pill (`CAPTION_HIGHLIGHT`) sits behind exactly one word —
+ *  - the moving accent pill (`CAPTION_HIGHLIGHT`) sits behind exactly one word â€”
  *    the word actually spoken at this instant.
  *
  * Design rules enforced here:
@@ -40,7 +40,7 @@ export type CaptionStyle = {
   fontWeight: number;
   lineHeight: number;
   letterSpacingPx: number;
-  /** Inactive (spoken phrase) text on the white panel — pure black, as the
+  /** Inactive (spoken phrase) text on the white panel â€” pure black, as the
    *  composition requires. */
   color: string;
   /** Accent pill colour; the same value as `CAPTION_HIGHLIGHT.background`. */
@@ -62,24 +62,24 @@ export type CaptionStyle = {
  *
  * The caption group enters fast and settles naturally, and leaves quickly.
  * Values are applied per frame from the measured audio timeline, so the same
- * timestamp always renders the same visual state — there is no CSS
+ * timestamp always renders the same visual state â€” there is no CSS
  * transition, no accumulated state and no dependence on frame order.
  */
 export const CAPTION_MOTION = {
-  /** Group entrance: 160 ms, opacity 0→1, translateY 12→0, scale 0.98→1.0. */
+  /** Group entrance: 160 ms, opacity 0â†’1, translateY 12â†’0, scale 0.98â†’1.0. */
   enterMs: OV?.enterMs ?? 160,
   enterYPx: OV?.enterYPx ?? 12,
   enterScale: OV?.enterScale ?? 0.98,
-  /** Group exit: 120 ms, opacity 1→0, translateY 0→-6. */
+  /** Group exit: 120 ms, opacity 1â†’0, translateY 0â†’-6. */
   exitMs: OV?.exitMs ?? 120,
   exitYPx: OV?.exitYPx ?? 6,
   exitScale: 0.02,
-  /** Moving highlight interpolation window (60–80 ms). */
+  /** Moving highlight interpolation window (60â€“80 ms). */
   activeWordMs: 70,
 } as const;
 
 /**
- * Moving-highlight colours. Authored live in `tools/preview/preview-live.html`;
+ * Moving-highlight colours. Authored live in `tools/preview/github/preview-live.html`;
  * saved overrides live in `visual-overrides.json`. Both the highlight box and the
  * active-word text read these, so the two can never drift apart.
  *
@@ -94,9 +94,9 @@ const CAPTION_HIGHLIGHT_TEXT =
 
 /**
  * Semantic emphasis colour (marketing words on the phrase, not the karaoke
- * pill). The accent yellow cannot sit on a white panel — it camouflages — so
+ * pill). The accent yellow cannot sit on a white panel â€” it camouflages â€” so
  * emphasis uses the same dark-amber family GitHub uses for attention text on
- * light backgrounds. WCAG-contrast ≈ 5.9:1 on the panel.
+ * light backgrounds. WCAG-contrast â‰ˆ 5.9:1 on the panel.
  */
 const CAPTION_EMPHASIS = "#9A6700";
 
@@ -133,7 +133,7 @@ export const CAPTION_HIGHLIGHT = {
   padYPx: 4,
 } as const;
 
-const CLAUSE_BREAK = /[,;:—–]$/;
+const CLAUSE_BREAK = /[,;:â€”â€“]$/;
 
 /**
  * Break a caption phrase into at most two lines at a natural boundary.
@@ -247,7 +247,7 @@ function estimateWordWeight(word: string): number {
  * timings. A longer/syllable-heavier word holds the screen longer and a
  * terminal punctuation word gets a small extra beat, so the pill is
  * proportional rather than delegated to equal division. This is an estimate
- * inside a measured phrase — not phoneme-level forced alignment.
+ * inside a measured phrase â€” not phoneme-level forced alignment.
  */
 export function wordTimings(phrase: CaptionPhrase): CaptionWordTiming[] {
   if (phrase.wordTimings && phrase.wordTimings.length > 0) return phrase.wordTimings;
@@ -432,8 +432,8 @@ export type CaptionGroupStyle = {
 /**
  * Deterministic group entrance/exit for one caption phrase at `timeMs`.
  *
- * In:  160 ms ease-out — rises 12 px, fades in, scales 0.98 → 1.
- * Out: last 120 ms ease-in — sinks 6 px, fades out, scale eases back.
+ * In:  160 ms ease-out â€” rises 12 px, fades in, scales 0.98 â†’ 1.
+ * Out: last 120 ms ease-in â€” sinks 6 px, fades out, scale eases back.
  * Between the two the group is perfectly stable while the same phrase stays
  * on screen (words do not re-trigger the entrance).
  */
@@ -479,7 +479,7 @@ export type ActiveWordState = {
 /**
  * The active word plus its blended text colour at `timeMs`.
  *
- * The highlight takes over at the word's *measured* start time — the ramp only
+ * The highlight takes over at the word's *measured* start time â€” the ramp only
  * blends from the panel's inactive text colour to the near-black pill text
  * within the first `CAPTION_MOTION.activeWordMs`, so the glyphs are readable on
  * the accent pill from the first frame without lagging behind the audio.
@@ -529,3 +529,4 @@ export function captionFrameHtml(
     `</div></div>`
   );
 }
+
