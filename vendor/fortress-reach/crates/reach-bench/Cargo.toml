@@ -1,0 +1,27 @@
+[package]
+name = "reach-bench"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress-Reach Contributors"]
+license = "MIT"
+description = "Compares the Fortress-Reach environment profile against a reference browser"
+
+[[bin]]
+name = "fortress-bench"
+path = "src/main.rs"
+
+[[bin]]
+name = "reach-live-compare"
+path = "src/live_compare.rs"
+
+[dependencies]
+reach-core = { workspace = true }
+reach-persona = { workspace = true }
+reach-browser = { workspace = true }
+reach-router = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
