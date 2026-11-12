@@ -106,7 +106,7 @@ rem NOTE: Chrome is launched with a VISIBLE window on purpose.
 rem The news channel uses its own headless Chromium (9224/9223) - never this one.
 :launch_github_chrome
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "tools\launch-github-chrome.ps1" -ChromeExe "!CHROME!"
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\windows\launch-github-chrome.ps1" -ChromeExe "!CHROME!"
 if errorlevel 1 (
   pause
   exit /b 1
