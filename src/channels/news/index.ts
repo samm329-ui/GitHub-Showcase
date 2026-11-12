@@ -325,6 +325,36 @@ async function main(): Promise<void> {
   if (!validation.ok) process.exit(2);
   await writeArtifact(runDir, "script.json", script);
 
+  /* ---- Script dataset: phase 1 — persist the script as drafted ---- */
+  try {
+    const { saveDatasetRecord } = await import("../../script-dataset.js");
+    const gates = await readApprovalState(runDir);
+    await saveDatasetRecord({
+      id: `${slug}-${runId}`,
+      channel: "news",
+      phase: "pending",
+      title: script.workingTitle,
+      subject: chosenUrl,
+      runId,
+      invocation: {
+        kind: manualUrl ? "url" : "discover",
+        detail: manualUrl ?? topicArg ?? null,
+      },
+      script: {
+        segments: script.narration,
+        estimatedWords: validation.words,
+        estimatedSeconds: validation.estimatedSeconds,
+      },
+      approvals: {
+        gateA: gates.gateA?.approved ?? false,
+        gateB: gates.gateB?.approved ?? false,
+      },
+    });
+    log(`  dataset: script saved to dataset/news/${slug}-${runId}.json`);
+  } catch (error) {
+    log(`  dataset: could not save script (${(error as Error).message}) — continuing`);
+  }
+
   /* ---------------- Gate B (mandatory) ---------------- */
   const approvals2 = await readApprovalState(runDir);
   if (!approvals2.gateB?.approved) {
@@ -406,6 +436,35 @@ async function main(): Promise<void> {
   await writeArtifact(runDir, "scene-events.json", events);
   await writeArtifact(runDir, "captions.json", captions);
   await writeArtifact(runDir, "source-credits.json", credits);
+
+  /* ---- Script dataset: phase 2 — measured audio + approvals known ---- */
+  try {
+    const { saveDatasetRecord } = await import("../../script-dataset.js");
+    await saveDatasetRecord({
+      id: `${slug}-${runId}`,
+      channel: "news",
+      phase: "completed",
+      title: script.workingTitle,
+      subject: chosenUrl,
+      runId,
+      script: {
+        segments: script.narration,
+        estimatedWords: validation.words,
+        estimatedSeconds: validation.estimatedSeconds,
+      },
+      alignment: {
+        durationMs,
+        coverage: alignment.coverage,
+        alignmentSource: alignment.alignmentSource,
+      },
+      approvals: {
+        gateA: approvals.gateA?.approved ?? false,
+        gateB: approvals2.gateB?.approved ?? false,
+      },
+    });
+  } catch (error) {
+    log(`  dataset: could not mark script completed (${(error as Error).message}) — continuing`);
+  }
   log(`Stage 5: ${events.length} scene events, ${captions.length} caption phrases, credits="${credits.headline}"`);
 
   /* ---------------- Stage 6: render + encode ---------------- */
@@ -458,6 +517,16 @@ async function main(): Promise<void> {
   await writeArtifact(runDir, "qa.json", qaNews);
   log(`Stage 7: QA ${qaReport.ok ? "PASS" : "FAIL"} (${qaReport.checks.filter(c => !c.ok).map(c => c.name).join(", ") || "all checks green"})`);
   if (!qaReport.ok) process.exit(2);
+
+  /* Script dataset: attach the output artifact to the record */
+  try {
+    const { updateDatasetRecord } = await import("../../script-dataset.js");
+    await updateDatasetRecord("news", `${slug}-${runId}`, {
+      output: path.relative(process.cwd(), outputPath),
+    });
+  } catch {
+    /* dataset is archival; never block completion on it */
+  }
 
   /* ---------------- Stage 8: history ---------------- */
   const history = new NewsHistory();
