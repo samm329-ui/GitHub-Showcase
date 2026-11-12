@@ -1,3 +1,5 @@
+const SHOWCASE_CAPTURE_PROF = process.env.SHOWCASE_CAPTURE_PROF === "1";
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -221,6 +223,9 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
   const fps = options.fps ?? FPS;
   const durationSeconds = Math.min(MAX_DURATION_SECONDS, options.durationMs / 1000);
   const totalFrames = Math.max(1, Math.round(durationSeconds * fps));
+  let profEvalMs = 0;
+  let profShotMs = 0;
+  let profFrames = 0;
   await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
   await fs.mkdir(options.workDir, { recursive: true });
 
@@ -288,81 +293,177 @@ export async function renderCardVideo(options: RenderCardOptions): Promise<Captu
     };
     const mascotPlacement = mascotPlacementCss(placementInput);
 
-    for (let frame = 0; frame < totalFrames; frame += 1) {
-      const timeMs = Math.min(options.durationMs, (frame / fps) * 1000);
-      const scrollY = scrollAt(options.scrollKeyframes, timeMs);
-      const caption = captionFor(options.captions, timeMs);
-      const calloutCue = calloutCueAt(options.callouts ?? [], timeMs);
-      const calloutState = calloutStateAt(calloutCue, timeMs);
-      const poseName = characterCueAt(options.characterCues ?? [], timeMs);
-      const pose = characterPoseAt(
-        timeMs,
-        speechLevelAt(options.speechEnvelope ?? null, timeMs),
-        poseName
-      );
-      const frameGeo = getMascotFrameGeometry(placementInput, mascotPlacement, pose);
-      const activeImpacts = evaluateImpactBurstsAt(
-        options.impactBursts ?? [],
-        timeMs,
-        frameGeo.impactAnchors
-      );
+  // Per-frame state is a pure function of timeMs, so frames can be rendered
+  // out of order on separate CDP tabs in the same debuggable Chrome, then
+  // written to FFmpeg in order (SHOWCASE_CAPTURE_WORKERS, default 3).
+  const frameParams = (frame: number) => {
+    const timeMs = Math.min(options.durationMs, (frame / fps) * 1000);
+    const scrollY = scrollAt(options.scrollKeyframes, timeMs);
+    const caption = captionFor(options.captions, timeMs);
+    const calloutCue = calloutCueAt(options.callouts ?? [], timeMs);
+    const calloutState = calloutStateAt(calloutCue, timeMs);
+    const poseName = characterCueAt(options.characterCues ?? [], timeMs);
+    const pose = characterPoseAt(
+      timeMs,
+      speechLevelAt(options.speechEnvelope ?? null, timeMs),
+      poseName
+    );
+    const frameGeo = getMascotFrameGeometry(placementInput, mascotPlacement, pose);
+    const activeImpacts = evaluateImpactBurstsAt(
+      options.impactBursts ?? [],
+      timeMs,
+      frameGeo.impactAnchors
+    );
 
-      // Resolve the active word + its measured start time for the moving
-      // highlight. The highlight interpolates over 70 ms (within the 60-80 ms
-      // spec) from the previous word's box to the current one.
-      let activeIndex = -1;
-      let highlightProgress = 0;
-      if (caption) {
-        const timings = wordTimings(caption);
-        const active = timings.find(t => timeMs >= t.startMs && timeMs < t.endMs);
-        if (active) {
-          activeIndex = timings.indexOf(active);
-          const elapsed = timeMs - active.startMs;
-          highlightProgress = Math.max(0, Math.min(1, elapsed / 70));
-        }
+    let activeIndex = -1;
+    let highlightProgress = 0;
+    if (caption) {
+      const timings = wordTimings(caption);
+      const active = timings.find(t => timeMs >= t.startMs && timeMs < t.endMs);
+      if (active) {
+        activeIndex = timings.indexOf(active);
+        const elapsed = timeMs - active.startMs;
+        highlightProgress = Math.max(0, Math.min(1, elapsed / 70));
       }
+    }
+    return { timeMs, scrollY, caption, calloutState, poseName, pose, activeImpacts, activeIndex, highlightProgress };
+  };
 
-      await evaluate(
-        client,
-        `(() => {
-          window.__showcase.setScroll(${scrollY.toFixed(2)});
-          window.__showcase.setCaption(${JSON.stringify(captionFrameHtml(caption, timeMs))});
-          window.__showcase.measureCaption();
-          window.__showcase.setCaptionActive(${activeIndex}, ${highlightProgress.toFixed(4)});
-          window.__showcase.setCallout(${JSON.stringify(calloutState.cueId)}, ${JSON.stringify(calloutState.text)}, ${calloutState.opacity}, ${calloutState.translateY}, ${calloutState.scale}, ${calloutState.raysOpacity});
-          window.__showcase.setImpactState(${JSON.stringify(activeImpacts)});
-          window.__showcase.setCharacterPose(${JSON.stringify(pose)}, ${JSON.stringify(poseName)});
-          return 1;
-        })()`
-      );
+  const evalExpr = (p: ReturnType<typeof frameParams>) =>
+    `(() => {
+      window.__showcase.setScroll(${p.scrollY.toFixed(2)});
+      window.__showcase.setCaption(${JSON.stringify(captionFrameHtml(p.caption, p.timeMs))});
+      window.__showcase.measureCaption();
+      window.__showcase.setCaptionActive(${p.activeIndex}, ${p.highlightProgress.toFixed(4)});
+      window.__showcase.setCallout(${JSON.stringify(p.calloutState.cueId)}, ${JSON.stringify(p.calloutState.text)}, ${p.calloutState.opacity}, ${p.calloutState.translateY}, ${p.calloutState.scale}, ${p.calloutState.raysOpacity});
+      window.__showcase.setImpactState(${JSON.stringify(p.activeImpacts)});
+      window.__showcase.setCharacterPose(${JSON.stringify(p.pose)}, ${JSON.stringify(p.poseName)});
+      return 1;
+    })()`;
 
-      const shot = await client.Page.captureScreenshot({
-        format: "jpeg",
-        quality: 85,
-        fromSurface: true,
-        captureBeyondViewport: false,
-        optimizeForSpeed: true,
-      });
-      const buffer = Buffer.from(shot.data, "base64");
+  // Pending frames are bounded so workers can run at most ~16 frames ahead.
+  const pending = new Map<number, Buffer>();
+  const shardErrors: unknown[] = [];
+  let aborted = false;
+  let writeCursor = 0;
 
+  // Track FFmpeg stdin backpressure with a persistent listener + a flag.
+  // The old pattern (once(stdin, "drain") after every write) could miss the
+  // event and hang the pump forever — the bug that froze Stage 6.
+  let stdinFull = false;
+  ffmpeg.stdin.on("drain", () => { stdinFull = false; });
+
+  const captureShard = async (worker: CdpClient, start: number, end: number) => {
+    try {
+      for (let frame = start; frame < end; frame += 1) {
+        if (aborted) return;
+        const p = frameParams(frame);
+        const tEval = SHOWCASE_CAPTURE_PROF ? Date.now() : 0;
+        await evaluate(worker, evalExpr(p));
+        const tShot = SHOWCASE_CAPTURE_PROF ? Date.now() : 0;
+        let shotTimer: ReturnType<typeof setTimeout> | undefined;
+        const shot = await Promise.race([
+          worker.Page.captureScreenshot({
+            format: "jpeg",
+            quality: 85,
+            fromSurface: true,
+            captureBeyondViewport: false,
+            optimizeForSpeed: true,
+          }),
+          new Promise<never>((_, reject) => {
+            shotTimer = setTimeout(() => reject(new Error("CDP Page.captureScreenshot timed out after 30s — the browser likely crashed or is out of memory.")), 30_000);
+          }),
+        ]);
+        if (shotTimer) clearTimeout(shotTimer);
+        const buffer = Buffer.from(shot.data, "base64");
+        if (SHOWCASE_CAPTURE_PROF) {
+          profEvalMs += tShot - tEval;
+          profShotMs += Date.now() - tShot;
+          profFrames += 1;
+        }
+        while (pending.size >= 16 && !aborted) await sleep(4);
+        pending.set(frame, buffer);
+      }
+    } catch (error) {
+      shardErrors.push(error);
+      aborted = true;
+    }
+  };
+
+  let pumpError: unknown = null;
+  const pump = (async () => {
+    try {
+    while (writeCursor < totalFrames && !aborted) {
+      const buffer = pending.get(writeCursor);
+      if (!buffer) { await sleep(4); continue; }
+      pending.delete(writeCursor);
+      const frame = writeCursor;
       const percent = referenceIndices.get(frame);
       if (writeReferences && percent !== undefined) {
         const file = path.join(referenceDir, `reference-${percent}pct.jpg`);
         await fs.writeFile(file, buffer);
         referenceFrames.push(file);
       }
-
+      while (stdinFull) await sleep(2);
       if (!ffmpeg.stdin.write(buffer)) {
-        await once(ffmpeg.stdin, "drain");
+        stdinFull = true;
       }
-
       options.onProgress?.(frame + 1, totalFrames);
+      writeCursor += 1;
     }
+    } catch (error) {
+      pumpError = error;
+      aborted = true;
+    }
+  })();
+
+  // Parallel tabs re-render the same blur-heavy page per tab, which multiplies
+  // memory. This machine starves below ~1 GB free RAM, so default to serial;
+  // opt in with SHOWCASE_CAPTURE_WORKERS=2|3|4 on a roomier machine.
+  const workers = Math.max(1, Math.min(4, Number(process.env.SHOWCASE_CAPTURE_WORKERS ?? "1") || 1, totalFrames));
+  const workerPromises: Promise<void>[] = [];
+  const shardEdges = (i: number) => [
+    Math.floor((totalFrames * i) / workers),
+    Math.floor((totalFrames * (i + 1)) / workers),
+  ];
+  // Shard 0 reuses the primary tab; the rest get fresh tabs in the same Chrome.
+  const extraTabs = await Promise.all(
+    Array.from({ length: Math.max(0, workers - 1) }, () => openTarget())
+  );
+  const workerClients = [{ client, targetId }, ...extraTabs];
+  for (const tab of extraTabs) {
+    await loadCardPage(tab.client, composition);
+  }
+  for (let i = 0; i < workers; i += 1) {
+    const [start, end] = shardEdges(i);
+    workerPromises.push(captureShard(workerClients[i].client, start, end));
+  }
+  await Promise.all(workerPromises);
+  if (pumpError) {
+    aborted = true;
+    throw pumpError instanceof Error ? pumpError : new Error(String(pumpError));
+  }
+  if (shardErrors.length > 0) {
+    aborted = true;
+    await pump.catch(() => {});
+    throw shardErrors[0] instanceof Error ? shardErrors[0] : new Error(String(shardErrors[0]));
+  }
+  await pump;
+  await Promise.all(
+    extraTabs.map(tab => tab.client.close().catch(() => {}).then(() => closeTarget(tab.targetId).catch(() => {})))
+  );
 
     ffmpeg.stdin.end();
     const [code] = (await once(ffmpeg, "close")) as [number | null];
     if (code !== 0) {
       throw new Error(`FFmpeg exited with code ${code}\n${ffmpegStderr.slice(-2000)}`);
+    }
+    if (SHOWCASE_CAPTURE_PROF) {
+      console.log(
+        `[capture-prof] frames=${profFrames} ` +
+        `evaluate=${profEvalMs}ms (${(profEvalMs / Math.max(1, profFrames)).toFixed(1)}ms/frame) ` +
+        `screenshot=${profShotMs}ms (${(profShotMs / Math.max(1, profFrames)).toFixed(1)}ms/frame)`
+      );
     }
 
     return {
