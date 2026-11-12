@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Lazy News asset preparation.
 
@@ -7,10 +7,10 @@ PNGs. Originals are NEVER modified. The master reference (4.png) is used to
 validate the composite at native coordinates.
 
     pip install pillow numpy scipy
-    python tools/prep_lazy_news_assets.py --zip "Lazy news.zip" --out assets/lazy-news
-    python tools/prep_lazy_news_assets.py --validate assets/lazy-news
+    python tools/python/prep_lazy_news_assets.py --zip "News assets/Lazy news.zip" --out assets/news
+    python tools/python/prep_lazy_news_assets.py --validate assets/news
 
-Rules (docs/Lazy_News_Detailed_Implementation_Plan.md §11.2):
+Rules (docs/lazy-news.md §11.2):
   - edge-seeded near-white flood fill (NOT a global white color key, which
     would destroy shirt/paper/card edges);
   - per-asset component inspection + explicit drop rules (no global y cut);
@@ -241,7 +241,7 @@ def cmd_validate(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--zip", help="Path to 'Lazy news.zip' (extract mode)")
-    parser.add_argument("--out", default="assets/lazy-news", help="Output root for original/ layers/ reference/")
+    parser.add_argument("--out", default="assets/news", help="Output root for original/ layers/ reference/")
     parser.add_argument("--validate", metavar="ROOT", help="Validate prepared assets instead of extracting")
     parser.add_argument("--verbose", action="store_true", help="Print component inspection reports")
     args = parser.parse_args()
