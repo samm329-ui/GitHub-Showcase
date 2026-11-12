@@ -101,7 +101,7 @@ describe("caption motion", () => {
 describe("caption panel", () => {
   test("the panel is a separate dark layer with a moving pill", () => {
     assert.equal(CAPTION_PANEL_STYLE.maxLines, 2);
-    assert.match(CAPTION_PANEL_STYLE.background, /^rgba\(23,25,29,/);
+    assert.match(CAPTION_PANEL_STYLE.background, /^rgba\(255,255,255,/);
     assert.ok(CAPTION_PANEL_STYLE.radiusPx >= 20);
     // Tuning pass: vertical padding is trimmed before the font size is.
     assert.ok(CAPTION_PANEL_STYLE.padYPx <= 12);
