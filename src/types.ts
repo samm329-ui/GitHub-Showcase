@@ -366,6 +366,12 @@ export type VoicePreset = {
 /* Captions & timeline                                                 */
 /* ------------------------------------------------------------------ */
 
+export type CaptionWordTiming = {
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
 export type CaptionPhrase = {
   index: number;
   startMs: number;
@@ -374,6 +380,12 @@ export type CaptionPhrase = {
   /** Words (as displayed) that receive the highlight colour. */
   highlights: string[];
   segmentId: string;
+  /**
+   * Pre-measured per-word timings from forced alignment (news channel).
+   * Absent in the GitHub channel; the renderer falls back to syllable
+   * weighting there.
+   */
+  wordTimings?: CaptionWordTiming[];
 };
 
 export type AudioChunk = {

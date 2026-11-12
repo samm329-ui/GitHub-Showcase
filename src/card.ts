@@ -956,8 +956,10 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
           rearHtml += g;
         }
       }
-      rear.innerHTML = rearHtml;
-      front.innerHTML = frontHtml;
+      // Skip the DOM entirely when nothing changed — innerHTML rewrites
+      // invalidate paint even when the string is identical.
+      if (rear.__lastHtml !== rearHtml) { rear.innerHTML = rearHtml; rear.__lastHtml = rearHtml; }
+      if (front.__lastHtml !== frontHtml) { front.innerHTML = frontHtml; front.__lastHtml = frontHtml; }
     },
     async ready(timeoutMs) {
       const limit = Number(timeoutMs) || 8000;

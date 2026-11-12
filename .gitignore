@@ -8,3 +8,10 @@ tools/audition/
 tools/*.wav
 .env
 .env.local
+
+# Python bytecode (Lazy News tools)
+__pycache__/
+*.pyc
+
+# Raw Lazy News source artwork (10 MB zip; extracted RGBA layers live in assets/lazy-news/)
+News assets/

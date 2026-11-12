@@ -319,7 +319,47 @@ npm run check           # TypeScript type check
 npm test                # Run all tests
 npm run preview         # Render a single preview (uses a fixture repository)
 npm run voice:audition   # Generate Kokoro voice samples
+npm run start:news      # Lazy News channel (see §14)
+npm run news:prepare-assets  # Cut RGBA layers from Lazy news.zip artwork
+npm run news:selftest-alignment   # Alignment structural self-check
 ```
+
+## 14. Lazy News (second channel)
+
+The same automation engine powers a second show: one story per episode, English only, non-commercial. It is NOT a genre fork — it is the same pipeline with a different content-intelligence stage (discover → corroborate → ledger → script), a different presenter (the lazy office commentator from `assets/lazy-news/`), and the same rules: Kokoro voice, measured audio timeline, captions/waveform from alignment, Chromium→FFmpeg render, QA, SQLite history.
+
+**How it works**
+
+`run.bat` → choose `[1] GitHub Repository Showcase` (launches Chrome on port 9222 exactly as before) or `[2] Lazy News Commentary` (uses its own headless Chromium — evidence on 9223, render on 9224 — and never touches the GitHub Chrome window). Direct invocations also work: `run.bat github --repo owner/name`, `run.bat news --topic ai --discover`, and legacy `run.bat --discover` still routes to the GitHub channel with Chrome launched.
+
+```bash
+npm run start:news -- --discover --topic ai          # discover + shortlist from permitted sources
+npm run start:news -- --url https://pib.gov.in/...    # story from a permitted primary source
+npm run start:news -- --url <url> --dry-run           # artifacts + reports, no media
+npm run start:news -- --approve A --run-dir temp/news-<slug>   # Gate A (facts)
+npm run start:news -- --resume temp/news-<slug>                 # resume after Gate A → Gate B
+npm run start:news -- --approve B --run-dir temp/news-<slug>   # Gate B (script + voice)
+npm run start:news -- --resume temp/news-<slug>                 # render + QA → output/news/
+npm run start:news -- --skip-audio --resume temp/news-<slug>    # re-render without re-synthesizing
+```
+
+**Two mandatory human gates before rendering.** Gate A (factual package) and Gate B (script + voice) block the render under every configuration; Gate C (final MP4 preview) blocks publication. No environment variable bypasses them. Approvals are recorded in `gate-approvals.json` with a SHA-256 of the exact payload shown.
+
+**Evidence before writing.** Discovery (RSS/GDELT/Bluesky) is a signal layer only. The script may only use facts that passed a claim-level ledger verifier: every number/date/name/quote must appear in collected evidence from **permitted primary records** (Government of India, RBI, MEA, Sansad, ECI, Supreme Court, UN, SEC EDGAR, company newsrooms, arXiv). Every enabled source has an individual policy with an explicit `permissionBasis` (`public_domain | explicit_license | written_permission | terms_reviewed | discovery_only`); `config/news-sources.json` lists them. BBC/Guardian-style discovery sources can never reach evidence or the Groq prompt. Groq never touches the evidence: atomic claims are extracted deterministically (`src/channels/news/claims.ts`, verbatim rule grammars) and decided by the deterministic claim-level verifier; Groq writes only the narration script. `--assist claims` re-enables LLM claim proposals for comparison, but it is off by default. You approve what is safe to say.
+
+**Alignment.** `tools/align_audio.py` aligns the approved transcript against `narration.wav` with a transcript-conditioned forced aligner (WhisperX/Montreal Forced Aligner preferred; `faster-whisper` CTranslate2 fallback, installed via `pip install faster-whisper`). ≥99% token coverage is enforced; monotonicity is mandatory; missing words are listed, never silently interpolated. Captions & callouts burn at the measured word onsets.
+
+**Scene.** 941×1672 native artwork (`assets/lazy-news/original/`), RGBA-cut layers (`tools/prep_lazy_news_assets.py` — never use a global white color key; the white shirt/paper must survive). Opening has the headline on the noticeboard; `narration_focus` dims/blurs only the background group; `board_callout` restores it with a type-on reveal and yellow marker strip; sticky notes drift at independent phases; the narrator enters from the left and idles. Export 1080×1920 H.264/yuv420p, 30 fps, ~49 s episode, `-16 LUFS` loudnorm.
+
+**Discovery vs evidence, honestly:** `--discover` uses RSS on registered outlets (BBC, Guardian, AJ, NPR, CNBC, and the now-registered `economictimes.indiatimes.com` / `thehindu.com` for non-commercial commentary with on-screen attribution). Outlets whose article text is not licence-cleared never reach evidence or Groq — instead the episode rides on their **metadata** (title + one-line description) and every claim stays attributed to the outlet ("according to BBC…"). The pipeline never fetches, quotes or cites what it is not permitted to use.
+
+**JS-rendered stories:** if the article body is loaded by the client (Economic Times, many news sites), the collector first tries JSON-LD `articleBody` extraction, then falls back to headless Chromium (`NEWS_EVIDENCE_PORT`, default 9223) `document.body.innerText`. Frame capture uses a separate headless Chromium (`NEWS_RENDER_PORT` / `NEWS_CHROME_DEBUG_URL`, default `http://127.0.0.1:9224`) — neither touches the GitHub channel's port-9222 Chrome. No paywall, 403 or CAPTCHA bypass exists anywhere in the code; failures are loud.
+
+**Outputs:** `output/news/<slug>-<runId>.mp4` and the full episode audit bundle in `temp/news-<slug>/` (evidence ledger, source records, script, gate approvals, alignment, QA).
+
+**Editing:** unlike the GitHub mascot preview, v1 tuning is code-driven (`config/news-scene.json` is read by the renderer via `scene.ts`); a `--skip-audio` fast pass makes visual iterations ~90 s. An interactive news preview page is a planned follow-up.
+
+See `docs/Lazy_News_Detailed_Implementation_Plan.md` (FINAL IMPLEMENTATION SPECIFICATION) for the full specification, legal source policies, gates, acceptance criteria and phase plan.
 
 ## 13. Known limitations
 

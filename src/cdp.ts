@@ -82,6 +82,11 @@ export async function ensureBrowser(): Promise<void> {
     );
   }
 
+  console.warn(
+    `[showcase] WARNING: no debuggable Chrome on http://${host}:${port} — ` +
+      `launching headless Chromium instead (slower software rendering). ` +
+      `Use run.bat or pass --remote-debugging-port=${port} to a visible Chrome for speed and to see the window.`
+  );
   const userDataDir = path.join(os.tmpdir(), "github-showcase-chrome");
   const child = spawn(
     exe,
@@ -134,21 +139,34 @@ export async function closeTarget(targetId: string): Promise<void> {
 }
 
 export async function evaluate(client: CdpClient, expression: string): Promise<any> {
-  const result = await client.Runtime.evaluate({
-    expression,
-    returnByValue: true,
-    awaitPromise: true,
-  });
-  if (result?.exceptionDetails) {
-    throw new Error(
-      `Browser evaluation failed: ${
-        result.exceptionDetails.exception?.description ??
-        result.exceptionDetails.text ??
-        "unknown error"
-      }`
-    );
+  // Race the CDP round trip against a hard timeout. chrome-remote-interface
+  // has no default request timeout, so a crashed/disconnected renderer would
+  // otherwise hang the pipeline forever with zero output.
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const result = await Promise.race([
+      client.Runtime.evaluate({
+        expression,
+        returnByValue: true,
+        awaitPromise: true,
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("CDP Runtime.evaluate timed out after 30s — the browser likely crashed or the profile is locked.")), 30_000);
+      }),
+    ]);
+    if (result?.exceptionDetails) {
+      throw new Error(
+        `Browser evaluation failed: ${
+          result.exceptionDetails.exception?.description ??
+          result.exceptionDetails.text ??
+          "unknown error"
+        }`
+      );
+    }
+    return result?.result?.value;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return result?.result?.value;
 }
 
 export async function setViewport(
