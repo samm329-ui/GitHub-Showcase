@@ -292,9 +292,10 @@ docs/           this file (the two companion specs are archived under docs/archi
 
 | Source | Actual responsibility |
 |---|---|
-| RSS/Atom | Discover published stories (respecting each feed's permissions). |
-| GDELT | Coverage patterns and candidate articles ("which outlets, when, how much") — never a factual citation. |
-| Bluesky | Emerging discussions and original links — never an independent factual source. |
+| ~~RSS/Atom~~ **RETIRED (owner rule: no APIs)** | Fortress is the only lane. |
+| ~~GDELT~~ **RETIRED (no API)** | Fortress search results + homepage harvest. |
+| ~~Bluesky~~ **RETIRED (no API)** | Manual tips remain for hard leads. |
+| Fortress-Reach (vendored) | Homepage headline harvest + web search — Tier A signals only. |
 | Government records | Verify official actions and statements (announcement ≠ truth). |
 | Court & legislative documents | Establish legal and parliamentary records. |
 | Company newsrooms | Verify what the company actually announced/claimed. |
@@ -310,6 +311,26 @@ Strip tracking parameters; canonicalise domains; store original title/URL untouc
 ### 6.3 Source lineage (independence bookkeeping)
 
 Every record carries `parentPublisherGroup`, `wireOrigin` (`AP | Reuters | AFP | PIB | UN… | none`) and `independenceStatus`. Syndicated copies of one wire dispatch, ministry scripts repeated by outlets, mirrored articles and repost-storms all collapse to one origin. Bluesky/GDELT independence = always `non_independent_signal` for verification purposes.
+
+### 6.4 The Fortress-Reach browser lane (optional, vendored, fail closed)
+
+`vendor/fortress-reach/` contains Fortress-Reach (MIT), vendored 2026-11-13 from `fortress-reach.zip` — the workspace only; agent-plugin scaffolding and machine logs were not vendored. It is an MCP server that can read public web pages through a locally installed Chromium. It is used as a **read-only retrieval backend**, never as an evidence source:
+
+| Property | Rule |
+|---|---|
+| Activation | `REACH_MCP_URL` is REQUIRED (e.g. `http://127.0.0.1:8050/mcp`). Unset ⇒ discovery yields nothing and says so loudly. All RSS/GDELT/Bluesky lanes are RETIRED. |
+| Evidence fetch | `collectEvidence` routes through Fortress `read_page` (rendered page text). `NEWS_EVIDENCE_DIRECT=1` is a loud, discouraged debug escape-hatch to direct HTTP — leave unset. |
+| Tools used | `read_page` (homepage headline harvest) and `search_web` (web search). Read-only. Registry check precedes every call; hard stops on any challenge page. |
+| Evidence status | Discovery signal only. Never reaches the ledger as a fact; never a "credit". |
+| Licence gate | The outlet must exist in `config/news-sources.json` as an enabled entry with `discoveryAllowed: true` — `assertDiscoveryAllowed` runs **before** any network call. |
+| Hard stops | 403/429/CAPTCHA/"Just a moment" responses are recorded as failures and never retried, escalated, or worked around. The pipeline has no stealth-escalation path. |
+| Politics & economics lane | RSS removed entirely (owner rule). That lane runs on this browser harvest + manual leads. AI/tech/environment are served by browsed first-party primaries (Google AI blog, DeepMind) and registered pages. |
+| Browser profile | The server's `REACH_APPLY_PROFILE` is the operator's choice. `0` = raw browser, honest mode and the recommended setting; the client never requests, inspects or rotates fingerprints. |
+| Human gates | Unchanged. The lane supplies leads; Gates A/B/C still decide what airs. |
+| Endpoints | Server: `REACH_HOST`/`REACH_PORT` (default 8000 — use 8050 here to avoid clashing with 9222/9223/9224 and the preview). Browser CDP: `REACH_CDP_PORT` (use 9226). `REACH_TUNNEL=0` keeps the Cloudflare quick tunnel **off**. |
+| Build | `npm run fortress:check` (cargo check) · `npm run fortress:build` (release binary) |
+
+Registry note: every outlet stays individually permission-ed. Homepages wired into `BROWSER_PAGES` were probed (2026-11) and answer HTTP 200 to a plain request; outlets serving challenges (NDTV, Reuters, AP, DW, France 24) are registered for GDELT/search leads but are NOT homepage targets. The Hindi mass dailies (Dainik Jagran, Dainik Bhaskar) have no verifiable machine-readable feed or discovery basis; they sit disabled in the registry until a written basis exists.
 
 ---
 
