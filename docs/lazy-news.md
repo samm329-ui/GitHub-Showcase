@@ -71,7 +71,7 @@ Two channels, one launcher. One story per episode. English only. Non-commercial.
 1. **Guardian full-text → Groq: removed.** The free Guardian Developer key permits reading article text via API, but its terms restrict AI processing of content and separate commercial use. Guardian is a discovery/licence-blocked source; its prose never reaches Groq; body text enters the pipeline only with written permission covering this exact use (`GUARDIAN_LLM_ALLOWED=1`, adapter disabled by default, see Open Items §22). Groq receives only our ledger — never raw publisher prose — removing blending risk and quota waste.
 2. **BBC extraction: removed as drafted.** BBC requires permission for protected-content reuse and computer analysis; business use of its RSS needs permission. BBC is discovery/link-only until authorised; it never appears as a supporting source in credits unless specifically authorised. No 403/paywall bypass.
 3. **Mandatory human approval before rendering, unbypassable.** Gate A (factual package) → Gate B (script + voice) → Gate C (final render; mandatory before publication). No environment variable disables Gates A/B/C. Deterministic validators are the technical floor beneath each human gate — never a substitute, never optional.
-4. **Transcript-conditioned forced alignment mandatory.** `tools/align_audio.py` (see §12) aligns the **approved Kokoro transcript** against `narration.wav` with a real forced aligner (WhisperX's alignment stage or Montreal Forced Aligner, evaluated on-machine); Whisper word timestamps (`faster-whisper`, CTranslate2-based — not PyTorch) are fallback only, never the gold standard. Token coverage is necessary but not sufficient — word-boundary accuracy is tested on manually annotated samples before any subtitle animation ships.
+4. **Transcript-conditioned forced alignment mandatory.** `tools/python/align_audio.py` (see §12) aligns the **approved Kokoro transcript** against `narration.wav` with a real forced aligner (WhisperX's alignment stage or Montreal Forced Aligner, evaluated on-machine); Whisper word timestamps (`faster-whisper`, CTranslate2-based — not PyTorch) are fallback only, never the gold standard. Token coverage is necessary but not sufficient — word-boundary accuracy is tested on manually annotated samples before any subtitle animation ships.
 5. **Versioned, reversible migrations.** `schema_migrations` table + transaction + timestamped DB backup; no repeated `ALTER TABLE ADD COLUMN`; GitHub regression stated honestly (§13).
 6. **Per-source permission policies, not category grants.** §4.3 registers individual `SourcePolicy` entries with explicit `permissionBasis`; unknown ⇒ disabled; terms-check audits expire after 90 days; category-level permissions are banned.
 7. **Deterministic vs semantic validation split.** Numbers/dates/currency/names/quotes/legal-status/provenance/FactIDs = deterministic code. Claim-to-evidence semantic assessment, tone, and satire correctness = human editor (Gate B). Groq may flag; it can never approve its own factual claims.
@@ -256,7 +256,7 @@ GATE B: human approves script (+ callouts/highlights)
         ▼
 Kokoro narration (approved voice profile) → measurable chunks
         ▼
-WORD-LEVEL FORCED ALIGNMENT (tools/align_audio.py)
+WORD-LEVEL FORCED ALIGNMENT (tools/python/align_audio.py)
         ▼
 Scene events + captions from MOVEMENT-EXACT audio timeline
         ▼
@@ -279,9 +279,9 @@ src/channels/news/
   pipeline.ts
 src/shared/     (reusable: tts, captions, audio, render, qa, persistence, history)
 config/         news-sources.json  news-source-policies.json  news-categories.json  news-voice-profile.json  news-scene.json
-assets/lazy-news/{original,layers,fonts}/    (see §11)
-tools/          prep_lazy_news_assets.py  align_audio.py  news-preview.ts  news-preview-live.html
-docs/           this file; Lazy_News_Automated_Reel_Production_Brief.md; Lazy_News_Logical_Data_Sourcing_and_Scripting_Implementation_Plan.md
+assets/news/{original,layers,reference}/    (see §11)
+tools/python/   prep_lazy_news_assets.py  align_audio.py  (news-preview.ts + news-preview-live.html planned)
+docs/           this file (the two companion specs are archived under docs/archive/)
 ```
 
 ---
@@ -529,7 +529,7 @@ Listen to the *whole* narration; check names/acronyms/numbers/model IDs; track o
 
 `4.png` (with `5.png`, `6.png`, `10.png` as byte-different duplicates) is the **alignment authority**; `1,2,3,7,8,9.png` are layers on a common **941×1672** canvas. All are 8-bit **RGB** (no alpha) — confirmed. `1.png` = opaque office background. Warm muted palette (wall `#B6AC8E`, board wood `#95734F`, paper `#F1EEE5`, ink `#181715`, marker yellow `#F7C928`, card grey `#8E8F8E`, wood desk `#A78764`). No neon, globe, map, episode numbers, invented branding, unrelated scenery — ever.
 
-### 11.2 Asset preparation (`tools/prep_lazy_news_assets.py`, offline tool; Pillow required)
+### 11.2 Asset preparation (`tools/python/prep_lazy_news_assets.py`, offline tool; Pillow required)
 
 Requirements: keep originals untouched; no global white color-key (would destroy shirt/paper/card edges); **per-asset, inspected component masks** — no globally fixed y-coordinate rules.
 
@@ -542,7 +542,7 @@ Requirements: keep originals untouched; no global white color-key (would destroy
   - `9.png` (grey card): drop the embedded pin component (`3.png` is the single pin); keep card, border, trapezoid shape.
   - `1.png`: copied unchanged (opaque); the character-shaped wall shadow is kept — it sits naturally behind the resting narrator.
 - Halo control: 1 px mask erosion + ~1.2 px gaussian feather on alpha; white-fringe despill if present.
-- Output: `assets/lazy-news/layers/*.RGBA.png` (+ references) — originals never modified; the ZIP stays the archival copy (`assets/lazy-news/original/`).
+- Output: `assets/news/layers/*.RGBA.png` (+ references) — originals never modified; the ZIP stays the archival copy (`assets/news/original/`).
 - **`--validate` mode**: compose 1→2→3→7a→7b→8→9 at native coordinates and pixel-diff against `4.png`; per-region report (only the paper area may differ once headline text is drawn; everything else near-zero delta); alpha-edge checkerboard montage printed.
 
 ### 11.3 Layer order and canvas
@@ -568,7 +568,7 @@ Text never baked into PNGs; live DOM text in the grey card and on the paper. Gre
 ### 11.6 Editing tooling (your parity requirement — similar or more than GitHub)
 
 - `npm run preview:news` — renders a **fixture episode** (fake ledger+script+voice sample; zero API calls, zero network) for layout iteration; instant.
-- `npm run preview:news:live` (+ `Save My Edits` wrapper convenience, same pattern as the GitHub `Save My Edits.vbs/.cmd`) — local HTML with sliders/toggles: anchor x/y/scale, entrance duration + easing, idle amplitude, notes amplitude/phase/rotation, background dim % and blur px, callout font size/wrap/highlight style, subtitle font size/min-width, SFX gains, Reels safe-zone overlay; **one-click save back to `config/news-scene.json`** (typed, validated by `news-config-model.ts` + `news-config-writer.ts`, unit-tested like the GitHub config model).
+- `npm run preview:news:live` (+ a launcher wrapper, same pattern as the GitHub `npm run preview:launch`) — local HTML with sliders/toggles: anchor x/y/scale, entrance duration + easing, idle amplitude, notes amplitude/phase/rotation, background dim % and blur px, callout font size/wrap/highlight style, subtitle font size/min-width, SFX gains, Reels safe-zone overlay; **one-click save back to `config/news-scene.json`** (typed, validated by `news-config-model.ts` + `news-config-writer.ts`, unit-tested like the GitHub config model).
 - All animation parameters live in `config/news-scene.json` — no hard-coded timings in renderer code. Scene events reference narration segment IDs and aligned timestamps; timers never drive motion.
 
 ---
@@ -579,7 +579,7 @@ Text never baked into PNGs; live DOM text in the grey card and on the paper. Gre
 
 Measured per-chunk audio durations (`voice.ts`), captions weighted by syllables + punctuation (`caption-overlay.ts`), Kokoro's `create_timed` returns zero timings (bundled model has no duration predictor), scene events keyed off chunk starts. This gives phrase-level timing — **not** word-level synchronization. Story beats, highlighted words and callout reveals need exact onsets.
 
-### 12.2 New stage: `tools/align_audio.py` (free, local, offline; transcript-conditioned)
+### 12.2 New stage: `tools/python/align_audio.py` (free, local, offline; transcript-conditioned)
 
 The approved script is known *before* alignment — the aligner must consume it, not re-transcribe. Whisper word timestamps are **not** a gold standard; use them only as a documented fallback.
 
@@ -627,7 +627,7 @@ Reuse `sfx.ts` mix + `qa.ts` loudness: target Integrated ≈ **−16 LUFS**, Tru
 
 - New table `schema_migrations(version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT)` — applied before any News tables are touched.
 - Migration runner executes inside one transaction; failure ⇒ full rollback (GitHub untouched).
-- Timestamped DB backup file written before migration (`output/news/backups/showcase-history-<ts>.db`) — automatic, no manual step.
+- Timestamped DB backup file written before migration (`db/news-history-pre-news-<ts>.db`) — automatic, no manual step.
 - Additive only: `pipeline_runs` gains `channel TEXT NOT NULL DEFAULT 'github'`; new tables `story_candidates`, `source_records`, `fact_claims`, `editorial_approvals` (episode status, gates A/B/C). Never drop/rename GitHub columns.
 - Every migration is reversible (`down`) where practical; restore-from-backup path documented.
 
@@ -793,13 +793,13 @@ Relative reachability only — not a licence review: BBC world/tech RSS 200; Gua
 
 ## 24. Changelog
 
-**Revision FINAL IMPLEMENTATION SPECIFICATION (2026-11-10)** � architecture review repairs only; no redesign:
+**Revision FINAL IMPLEMENTATION SPECIFICATION (2026-11-10)** — architecture review repairs only; no redesign:
 
-1. Source permissions: category-level grants replaced by individual `SourcePolicy` entries per domain � documentType with explicit `permissionBasis` (`public_domain | explicit_license | written_permission | terms_reviewed | discovery_only | unknown`); unknown ? disabled; `termsCheckedAt` is an audit field, not proof; 90-day terms-check expiry degrades to discovery-only; loader rejects `llmProcessingAllowed` without `fullTextFetchAllowed`/`quotationAllowed`.
-2. Audio alignment: corrected the dependency description (`faster-whisper` = CTranslate2, not PyTorch); primary path is transcript-conditioned forced alignment of the approved script (WhisperX wav2vec2 alignment or MFA, evaluated on-machine on three samples); Whisper timestamps are documented fallback only; �12.4 defines the acceptance table (=99% coverage, 100% monotonicity, zero chunk-boundary violations, explicit missing-word reporting, per-word confidence) and blocks subtitle animation until it passes.
+1. Source permissions: category-level grants replaced by individual `SourcePolicy` entries per domain → documentType with explicit `permissionBasis` (`public_domain | explicit_license | written_permission | terms_reviewed | discovery_only | unknown`); unknown → disabled; `termsCheckedAt` is an audit field, not proof; 90-day terms-check expiry degrades to discovery-only; loader rejects `llmProcessingAllowed` without `fullTextFetchAllowed`/`quotationAllowed`.
+2. Audio alignment: corrected the dependency description (`faster-whisper` = CTranslate2, not PyTorch); primary path is transcript-conditioned forced alignment of the approved script (WhisperX wav2vec2 alignment or MFA, evaluated on-machine on three samples); Whisper timestamps are documented fallback only; §12.4 defines the acceptance table (≥99% coverage, 100% monotonicity, zero chunk-boundary violations, explicit missing-word reporting, per-word confidence) and blocks subtitle animation until it passes.
 3. Mandatory approvals: `NEWS_INTERACTIVE_REVIEW` removed; Gate A + Gate B are enforced by code (`FACT_APPROVAL_REQUIRED` / `SCRIPT_APPROVAL_REQUIRED`) under every configuration; Gate C mandatory before publication.
 4. Verification duties split: structural determinism (numbers/dates/names/quotes/legal-status/provenance/FactIDs) vs semantic claim-to-evidence/tone/satire (human editor); Groq can flag, never approve; "deterministic final authority" language removed.
 5. Source credits: generated from approved evidence by role (primary / independent_reporting only); discovery-only outlets never on-screen; dates + attribution preserved.
-6. Text errors fixed: "Russian names�" ? Indian/regional/political/AI-identifier override scope; "Karan's eyes" ? "The editor's review is the final editorial authority."
+6. Text errors fixed: "Russian names" → Indian/regional/political/AI-identifier override scope; "Karan's eyes" → "The editor's review is the final editorial authority."
 
 Architecture preserved: two channels, shared infra, claim-level ledger, three independently persisted packages, GitHub pipeline unchanged in behaviour, mandatory pre-render human approval, offline fixture preview, manual publishing only. Do not redesign this document; implement it.
