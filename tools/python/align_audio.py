@@ -1,4 +1,4 @@
-"""
+﻿"""
 Transcript-conditioned word-level alignment for the Lazy News pipeline.
 
 Contract (docs/Lazy_News_Detailed_Implementation_Plan.md §12):
@@ -14,7 +14,7 @@ Contract (docs/Lazy_News_Detailed_Implementation_Plan.md §12):
   - per-word confidence is stored for subtitle weighting.
 
 Usage:
-    python tools/align_audio.py --audio narration.wav \
+    python tools/python/align_audio.py --audio narration.wav \
         --transcript script-spoken.txt --out narration-alignment.json \
         [--segments segments.json] [--selftest]
 
