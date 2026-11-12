@@ -24,3 +24,7 @@ News assets/
 
 # Local tool state
 .freebuff/
+
+# Fortress-Reach vendored source — Rust build output
+vendor/fortress-reach/target/
+dist/
