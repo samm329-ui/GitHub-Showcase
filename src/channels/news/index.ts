@@ -27,6 +27,7 @@ import {
   validateNewsScript,
   ScriptError,
 } from "./script.js";
+import { computePerspectiveCoverage } from "./perspectives.js";
 import { alignNarration } from "./alignment.js";
 import { captionsFromAlignment } from "./captions.js";
 import { buildNewsSceneEvents } from "./scene-events.js";
@@ -163,7 +164,7 @@ async function main(): Promise<void> {
   } else {
     log(`Stage 1: discovering candidates (category: ${category})…`);
     const items = await discoverCategory(category, registry, {}, { maxItems: 250 });
-    log(`  ${items.length} discovery signals from permitted feeds/APIs.`);
+    log(`  ${items.length} discovery signals from Fortress-Reach (the only discovery lane).`);
     const clusters = clusterItems(items);
     const exclusion = new Set<string>();
     const scored = rankCandidates(clusters).filter(c => !exclusion.has(c.cluster.clusterId));
@@ -194,9 +195,20 @@ async function main(): Promise<void> {
 
   const ledgerPath = path.join(runDir, "evidence-ledger.json");
   let ledger: StoryPackage["ledger"];
+  let perspectiveBrief: string[] | undefined;
 
   if (resumeDir && fsSync.existsSync(ledgerPath)) {
     ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
+    // Resume path: reuse the balance brief the first run persisted.
+    const coveragePath = path.join(runDir, "perspective-coverage.json");
+    if (fsSync.existsSync(coveragePath)) {
+      try {
+        const saved = JSON.parse(await fs.readFile(coveragePath, "utf8")) as { brief?: string[] };
+        perspectiveBrief = saved.brief;
+      } catch {
+        perspectiveBrief = undefined;
+      }
+    }
   } else {
     const clusterItems = candidate?.cluster.items ?? [];
     /* Full-text evidence for outlets that permit it; metadata-only evidence for
@@ -233,6 +245,15 @@ async function main(): Promise<void> {
       process.exit(2);
     }
     const metadataOnly = records.every(r => (r.locator ?? "").startsWith("rss-metadata"));
+    const coverage = computePerspectiveCoverage(records);
+    perspectiveBrief = coverage.brief;
+    if (!resumeDir) {
+      await writeArtifact(runDir, "perspective-coverage.json", coverage);
+    }
+    for (const line of coverage.brief) log(`  perspectives: ${line}`);
+    if (coverage.singlePerspective) {
+      log("  ⚠ SINGLE-PERSPECTIVE evidence — the episode would inherit one side's frame. Corroborate across the spectrum before approving Gate A.");
+    }
     for (const r of records) log(`  evidence: ${r.sourceId} (${r.locator?.startsWith("rss-metadata") ? "metadata-only" : "full text"})`);
 
     /* Atomic claims — deterministic by default. Groq is used ONLY for the
@@ -305,7 +326,7 @@ async function main(): Promise<void> {
   } else {
     log(`Stage 3: drafting script with Groq (ledger-grounded, target ${targetSeconds}s)…`);
     try {
-      const draft = await draftScript(ledger, storyTitle, { targetSeconds, log });
+      const draft = await draftScript(ledger, storyTitle, { targetSeconds, log, perspectiveBrief });
       script = draft.plan;
       await writeArtifact(runDir, "llm-script.json", { script, usage: draft.usage });
     } catch (error) {
