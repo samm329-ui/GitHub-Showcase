@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +12,7 @@ import {
 } from "./config.js";
 import type { AudioChunk, AudioMeasurement, NarrationSegment } from "./types.js";
 import { prepareTtsText } from "./tts-text.js";
+import { resolvePython as resolvePythonSpec } from "./python.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,15 +65,11 @@ export type KokoroPaths = {
 export function kokoroPaths(): KokoroPaths {
   const root = process.cwd();
   return {
-    model: process.env.KOKORO_MODEL ?? path.join(root, "tools", "kokoro", "kokoro-v1.0.int8.onnx"),
-    voices: process.env.KOKORO_VOICES ?? path.join(root, "tools", "kokoro", "voices-v1.0.bin"),
-    script: path.join(root, "src", "kokoro-tts.py"),
+    model: process.env.KOKORO_MODEL ?? path.join(root, "models", "kokoro", "kokoro-v1.0.int8.onnx"),
+    voices: process.env.KOKORO_VOICES ?? path.join(root, "models", "kokoro", "voices-v1.0.bin"),
+    script: path.join(root, "tools", "python", "kokoro-tts.py"),
   };
 }
-
-const pythonCandidates = [process.env.PYTHON, "python", "python3"].filter(
-  Boolean
-) as string[];
 
 export class TtsError extends Error {
   constructor(message: string, readonly stage = "tts") {
@@ -122,23 +119,12 @@ export async function probeAudio(file: string): Promise<AudioMeasurement> {
 /* Python resolution                                                   */
 /* ------------------------------------------------------------------ */
 
-let cachedPython: string | null = null;
-
 export async function resolvePython(): Promise<string> {
-  if (cachedPython) return cachedPython;
-  for (const python of pythonCandidates) {
-    try {
-      await execFileAsync(python, ["-c", "import kokoro_onnx, soundfile"]);
-      cachedPython = python;
-      return python;
-    } catch {
-      // try the next interpreter
-    }
+  try {
+    return resolvePythonSpec(["kokoro_onnx", "soundfile"]).command;
+  } catch (error) {
+    throw new TtsError((error as Error).message);
   }
-  throw new TtsError(
-    "Kokoro could not be run. Install Python with the `kokoro-onnx` and `soundfile` packages, " +
-      "or set the PYTHON environment variable to an interpreter that has them."
-  );
 }
 
 export async function assertKokoroAvailable(): Promise<KokoroPaths> {
