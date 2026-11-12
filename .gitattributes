@@ -1,0 +1,20 @@
+# Line endings: shell scripts must stay LF (CRLF breaks the shebang),
+# Windows scripts stay CRLF. Everything else keeps its committed form.
+*.sh        text eol=lf
+*.command   text eol=lf
+*.py        text eol=lf
+.gitattributes text eol=lf
+
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Binary assets
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.mp3       binary
+*.wav       binary
+*.onnx      binary
+*.bin       binary
+*.zip       binary
