@@ -11,16 +11,16 @@ import {
 } from "./config-writer.js";
 
 /**
- * Dev server for `tools/preview-live.html`.
+ * Dev server for `tools/preview/preview-live.html`.
  *
  * Why a server at all: browsers cannot write to disk from a `file://` page, so
  * "Save (one click)" has nowhere to go. This tiny zero-dependency server does
  * two things:
  *
  *   - serves the preview page (and the mascot assets) so relative paths work;
- *   - exposes `GET /api/config` and `POST /api/save`, which read and rewrite
- *     the composition tokens in `src/config.ts`, `src/caption-overlay.ts` and
- *     `src/card.ts` through `tools/config-writer.ts`.
+ *   - exposes `GET /api/config` and `POST /api/save`, which read and write
+ *     `visual-overrides.json` (the composition tuning the pipeline merges at
+ *     startup) through `tools/preview/config-writer.ts`.
  *
  * The page itself never parses or edits TypeScript; it only speaks JSON.
  */
@@ -111,12 +111,13 @@ async function readBinaryBody(
 /**
  * Store the picked mascot as the one stable upload filename.
  *
- * A fixed name (`assets/mascot-custom.png`) keeps the saved config stable —
+ * A fixed name (`assets/github/presenter/mascot-custom.png`) keeps the saved config stable —
  * every pick overwrites the same file, so old uploads never pile up and the
  * rendered pipeline always finds the exact file the preview is showing.
  */
 const MASCOT_UPLOAD_NAME = "mascot-custom.png";
 const MASCOT_UPLOAD_MAX_BYTES = 30 * 1024 * 1024;
+const MASCOT_UPLOAD_URL = `assets/github/presenter/${MASCOT_UPLOAD_NAME}`;
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
 async function handleMascotUpload(
@@ -129,12 +130,13 @@ async function handleMascotUpload(
       sendJson(res, 400, { ok: false, error: "expected a PNG image" });
       return;
     }
-    const file = path.join(ROOT, "assets", MASCOT_UPLOAD_NAME);
+    const file = path.join(ROOT, "assets", "github", "presenter", MASCOT_UPLOAD_NAME);
+    await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, body);
     sendJson(res, 200, {
       ok: true,
-      asset: `assets/${MASCOT_UPLOAD_NAME}`,
-      url: `/assets/${MASCOT_UPLOAD_NAME}`,
+      asset: MASCOT_UPLOAD_URL,
+      url: `/${MASCOT_UPLOAD_URL}`,
     });
   } catch (error) {
     sendJson(res, 400, { ok: false, error: (error as Error).message });
@@ -162,8 +164,7 @@ async function handleSave(
     console.log(
       `[preview] saved → ${result.files.length ? result.files.join(", ") : "no file changes"}` +
         (result.fields.length ? ` (${result.fields.join(", ")})` : "")
-    );
-    sendJson(res, 200, {
+    );    sendJson(res, 200, {
       ok: true,
       files: result.files,
       fields: result.fields,
@@ -221,7 +222,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if ((req.method === "GET" || req.method === "HEAD") && urlPath === "/") {
-    res.writeHead(302, { Location: "/tools/preview-live.html", ...corsHeaders() });
+    res.writeHead(302, { Location: "/tools/preview/preview-live.html", ...corsHeaders() });
     res.end();
     return;
   }
@@ -243,9 +244,9 @@ function listen(port: number, attempt = 0): void {
     process.exitCode = 1;
   });
   server.listen(port, "127.0.0.1", () => {
-    const url = `http://127.0.0.1:${port}/tools/preview-live.html`;
+    const url = `http://127.0.0.1:${port}/tools/preview/preview-live.html`;
     console.log(`[preview] live preview: ${url}`);
-    console.log(`[preview] one-click Save writes into src/config.ts, src/caption-overlay.ts, src/card.ts`);
+    console.log(`[preview] one-click Save writes visual-overrides.json (merged at pipeline startup)`);
     console.log(`[preview] Ctrl+C to stop`);
     // Best-effort auto-open; never fatal if the platform has no opener.
     if (process.env.PREVIEW_NO_OPEN !== "1") {
