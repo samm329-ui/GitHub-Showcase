@@ -1,8 +1,8 @@
-Ôªø<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>GitHub Showcase ‚Äî Live Composition Preview</title>
+<title>GitHub Showcase ó Live Composition Preview</title>
 <style>
   @font-face{font-family:"Roboto";font-style:normal;font-weight:400;font-display:block;src:url("../assets/shared/fonts/roboto-latin-400-normal.woff2") format("woff2");}
   @font-face{font-family:"Roboto";font-style:normal;font-weight:700;font-display:block;src:url("../assets/shared/fonts/roboto-latin-700-normal.woff2") format("woff2");}
@@ -17,8 +17,8 @@
     --text-primary: #F0F6FC; --text-secondary: #8B949E; --github-blue: #58A6FF;
     --caption-font: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     --caption-left: 205px; --caption-top: 1388px; --caption-width: 680px; --caption-maxh: 331px;
-    --caption-fontsize: 45px; --caption-lineheight: 0.94; --caption-color: #F8F6EF;
-    --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -1.1px;
+    --caption-fontsize: 45px; --caption-lineheight: 0.94; --caption-color: #000000;
+    --caption-shadow: 0 2px 6px rgba(0,0,0,0.25); --caption-ls: -1.1px;
     --hl-bg: #FFD500; --hl-text: #FFFFFF; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
     --hl-transition: 70ms;
     --mascot-width: 681px; --mascot-right: -60px; --mascot-bottom: 462px;
@@ -62,12 +62,12 @@
     transition: opacity var(--ent-dur) ease-out, transform var(--ent-dur) ease-out; }
   .caption-group.hidden { opacity: 0; transform: translate3d(0,var(--ent-y),0) scale(var(--ent-scale)); }
   .caption-group.exiting { opacity: 0; transform: translate3d(0,var(--exit-y),0) scale(1); transition: opacity var(--exit-dur) ease-in, transform var(--exit-dur) ease-in; }
-  /* The dark backing plate mirrors src/config.ts CAPTION_PANEL_STYLE (incl. the
+  /* The white backing plate mirrors src/config.ts CAPTION_PANEL_STYLE (incl. the
      trimmed vertical padding) so the preview shows the rendered position. */
   .caption-panel { position: relative; width: 100%;
-    background: rgba(23,25,29,0.92); border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.94); border: 1px solid rgba(15,17,20,0.14);
     border-radius: 26px; padding: 10px 24px;
-    box-shadow: 0 14px 32px rgba(0,0,0,0.25); overflow: hidden; }
+    box-shadow: 0 14px 32px rgba(15,17,20,0.28); overflow: hidden; }
   .caption-lines { position: relative; z-index: 1; text-align: center; }
   .caption-highlight { position: absolute; z-index: 0; background: var(--hl-bg);
     border-radius: var(--hl-radius); pointer-events: none; opacity: 1;
@@ -95,7 +95,7 @@
     line-height: var(--callout-lineheight, 1.1); letter-spacing: -0.6px; z-index: 2; }
 
   /* Instagram Reels safe zones (1080x1920): keep text/UI clear of the
-     platform's overlay chrome ‚Äî top logo/camera row, right action rail
+     platform's overlay chrome ó top logo/camera row, right action rail
      (avatar/heart/comment/share/bookmark) and the bottom caption + username
      bar (name, caption, audio attribution). */
   .safe-zone { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
@@ -213,8 +213,8 @@
     </div>
     <div class="ig-bottom">
       <div class="ig-name">github_showcase</div>
-      <div class="ig-caption">This repository just changed how I build AI agents ‚Äî watch this</div>
-      <div class="ig-audio">&#9835; original audio ‚Äî github_showcase</div>
+      <div class="ig-caption">This repository just changed how I build AI agents ó watch this</div>
+      <div class="ig-audio">&#9835; original audio ó github_showcase</div>
     </div>
   </div>
 </div>
@@ -222,7 +222,7 @@
 
 <div class="panel">
   <h3>Full Composition Preview</h3>
-  <div class="note">Edit numbers directly or drag sliders ‚Äî every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>visual-overrides.json</code>.</div>
+  <div class="note">Edit numbers directly or drag sliders ó every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>visual-overrides.json</code>.</div>
 
   <section>
     <h4>Mascot image (character)</h4>
@@ -233,8 +233,8 @@
       <button id="load-default">Load committed default (assets/github/presenter/mascot-custom.png)</button>
     </div>
     <label>Saved asset (written to visual-overrides.json)<input type="text" id="s-masset" value="mascot-custom.png" readonly></label>
-    <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading‚Ä¶</div>
-    <div class="note">‚ÄúPick PNG file‚Äù copies the image into <code>assets/github/presenter/mascot-custom.png</code>; Save writes that filename into <code>visual-overrides.json</code>, so rendered videos use your character for every pose.</div>
+    <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loadingÖ</div>
+    <div class="note">ìPick PNG fileî copies the image into <code>assets/github/presenter/mascot-custom.png</code>; Save writes that filename into <code>visual-overrides.json</code>, so rendered videos use your character for every pose.</div>
   </section>
 
   <section>
@@ -312,9 +312,9 @@
 
   <section>
     <h4>Caption text shadow</h4>
-    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-20" max="40" value="3" id="s-csh-y"><input type="number" id="n-csh-y" value="3"></div>
-    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="60" value="10" id="s-csh-b"><input type="number" id="n-csh-b" value="10"></div>
-    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="0.95" id="s-csh-o"><input type="number" id="n-csh-o" value="0.95" step="0.01"></div>
+    <div class="ctrl"><span style="width:90px">offset Y</span><input type="range" min="-20" max="40" value="2" id="s-csh-y"><input type="number" id="n-csh-y" value="2"></div>
+    <div class="ctrl"><span style="width:90px">blur</span><input type="range" min="0" max="60" value="6" id="s-csh-b"><input type="number" id="n-csh-b" value="6"></div>
+    <div class="ctrl"><span style="width:90px">opacity</span><input type="range" min="0" max="1" step="0.01" value="0.25" id="s-csh-o"><input type="number" id="n-csh-o" value="0.25" step="0.01"></div>
   </section>
 
   <section>
@@ -327,7 +327,7 @@
 
   <section>
     <h4>Instagram Reels safe zones</h4>
-    <div class="note">Reels covers the frame with: <b>top</b> logo/camera row, <b>right</b> action rail (avatar, like, comment, share, bookmark), <b>bottom</b> caption + username + audio bar. The mascot, speech bubble and caption panel are positioned as <b>one group</b> ‚Äî lifted so the subtitles never hide behind the bottom bar.</div>
+    <div class="note">Reels covers the frame with: <b>top</b> logo/camera row, <b>right</b> action rail (avatar, like, comment, share, bookmark), <b>bottom</b> caption + username + audio bar. The mascot, speech bubble and caption panel are positioned as <b>one group</b> ó lifted so the subtitles never hide behind the bottom bar.</div>
     <div class="row">
       <button type="button" id="btn-ig-safe">Safe for Reels (default)</button>
       <button type="button" id="btn-ig-old">Edge (old look)</button>
@@ -352,11 +352,11 @@
     <div class="ctrl"><span style="width:90px">font-size</span><input type="range" min="32" max="90" value="45" id="s-cfs"><input type="number" id="n-cfs" value="45"></div>
     <div class="ctrl"><span style="width:90px">line-height</span><input type="range" min="0.8" max="1.6" step="0.01" value="0.94" id="s-clh"><input type="number" id="n-clh" value="0.94" step="0.01"></div>
     <div class="ctrl"><span style="width:90px">letter-sp</span><input type="range" min="-2" max="2" step="0.1" value="-1.1" id="s-cls"><input type="number" id="n-cls" value="-1.1" step="0.1"></div>
-    <label>text color<input type="color" value="#F8F6EF" id="s-ccolor"></label>
+    <label>text color<input type="color" value="#000000" id="s-ccolor"></label>
   </section>
 
   <section>
-    <h4>Highlight box (active word) ‚Äî auto-tracks the word</h4>
+    <h4>Highlight box (active word) ó auto-tracks the word</h4>
     <label>background<input type="color" value="#FFD500" id="s-hbg"></label>
     <label>text<input type="color" value="#FFFFFF" id="s-htx"></label>
     <div class="note">Box size, radius and padding are derived automatically from the caption's font size, line-height and word positions. No manual controls needed.</div>
@@ -398,13 +398,13 @@
     </div>
     <div class="note" id="save-status">
       Writes every value on this page into <code>visual-overrides.json</code> (the one file the preview owns). The box below
-      shows the exact JSON that gets sent ‚Äî nothing hidden, nothing reordered.
+      shows the exact JSON that gets sent ó nothing hidden, nothing reordered.
       Run <code>npm run preview:launch</code> in a terminal to start the helper for you.
     </div>
     <div class="row">
       <button id="reloadcfg" onclick="window.__reloadFromCodebase && window.__reloadFromCodebase()">Reload from codebase</button>
       <button id="copycfg" onclick="window.__copyConfig && window.__copyConfig()">Copy text</button>
-      <button id="connectfolder" style="display:none" onclick="window.__connectFolder && window.__connectFolder()">Save to folder‚Ä¶</button>
+      <button id="connectfolder" style="display:none" onclick="window.__connectFolder && window.__connectFolder()">Save to folderÖ</button>
     </div>
     <textarea class="cfg" id="cfgout" style="height:180px;"></textarea>
   </section>
@@ -418,11 +418,11 @@
   </section>
 
   <div class="note">
-    <strong>One-click save, three ways</strong> (all equivalent ‚Äî pick whichever works):
+    <strong>One-click save, three ways</strong> (all equivalent ó pick whichever works):
     run <code>npm run preview:launch</code> (starts the helper and opens this
-    page) ¬∑ or <code>npm run preview:live</code> and open the printed URL ¬∑ or serve this file from any static server and Save writes
+    page) ∑ or <code>npm run preview:live</code> and open the printed URL ∑ or serve this file from any static server and Save writes
     to your project folder (browser asks once).<br>
-    Config: <code>visual-overrides.json</code> ‚Äî merged over the committed composition at pipeline startup
+    Config: <code>visual-overrides.json</code> ó merged over the committed composition at pipeline startup
     (mascot, card, captions, callout, impact accents, highlight colours). Delete the file to return to the committed look.<br>
     Env overrides: <code>SHOWCASE_MASCOT_WIDTH_RATIO</code>, <code>SHOWCASE_MASCOT_OFFSET_X/Y</code>,
     <code>SHOWCASE_CAPTION_HIGHLIGHT_BG/TEXT</code>, <code>SHOWCASE_CHARACTER_PNG</code>.
@@ -727,8 +727,8 @@
       const files = data.files && data.files.length
         ? data.files.map(f => '<code>' + f + '</code>').join(', ')
         : 'no changes (already up to date)';
-      setStatus('‚úì Saved to ' + files, 'ok');
-      doneSaving(btn, 'Saved ‚úì');
+      setStatus('? Saved to ' + files, 'ok');
+      doneSaving(btn, 'Saved ?');
       if (typeof refreshCfg === 'function') refreshCfg();
       return;
     } catch (serverError) { /* fall through to the folder fallback */ }
@@ -739,13 +739,13 @@
       const files = result.files.length
         ? result.files.map(f => '<code>' + f + '</code>').join(', ')
         : 'no changes (already up to date)';
-      setStatus('‚úì Saved to your folder ‚Äî ' + files, 'ok');
-      doneSaving(btn, 'Saved ‚úì');
+      setStatus('? Saved to your folder ó ' + files, 'ok');
+      doneSaving(btn, 'Saved ?');
       if (typeof refreshCfg === 'function') refreshCfg();
       return;
     } catch (folderError) {
       if (folderError && folderError.name === 'AbortError') {
-        setStatus('Save cancelled ‚Äî no folder was chosen.', 'error');
+        setStatus('Save cancelled ó no folder was chosen.', 'error');
         doneSaving(btn, 'Cancelled');
         return;
       }
@@ -758,7 +758,7 @@
   };
 
   window.__reloadFromCodebase = async function () {
-    // Prefer the committed values from the helper server‚Ä¶
+    // Prefer the committed values from the helper serverÖ
     try {
       const data = await apiFetch('/api/config', { method: 'GET' });
       applyConfig(data.config);
@@ -766,7 +766,7 @@
       return;
     } catch (error) { /* try the folder next */ }
 
-    // ‚Ä¶then from a folder that is already connected.
+    // Öthen from a folder that is already connected.
     const handle = await storedFolder();
     if (handle && MODEL) {
       try {
@@ -791,7 +791,7 @@
     }
     try {
       await ensureFolder();
-      setStatus('‚úì Folder connected ‚Äî Save now writes to the files.', 'ok');
+      setStatus('? Folder connected ó Save now writes to the files.', 'ok');
     } catch (error) {
       if (error && error.name === 'AbortError') { setStatus('Folder connection cancelled.', ''); return; }
       setStatus('Could not connect that folder (' + error.message + '). Pick the project folder that contains <code>src</code>.', 'error');
@@ -825,7 +825,7 @@
     sync(s.value);
   }
   // Mirror src/mascot-layout.ts: right/bottom are SIGNED offsets of the
-  // visible artwork from each canvas edge ‚Äî positive lifts the mascot inside
+  // visible artwork from each canvas edge ó positive lifts the mascot inside
   // the frame, negative lets it extend past the edge. The dead padding is
   // character.png's measured 5px per side, subtracted so the *visible* edge
   // (not the image rectangle) lands on the slider's value.
@@ -1065,17 +1065,17 @@
     setPairValue('s-ct', 1546);
   });
 
-  // mascot image ‚Äî a picked PNG is copied into assets/github/presenter/ and saved as the
+  // mascot image ó a picked PNG is copied into assets/github/presenter/ and saved as the
   // default character, so rendered videos use it too (not just this page).
   const mascotEl2 = $('mascot');
   const MASCOT_UPLOAD_NAME = 'mascot-custom.png';
   function mascotAssetUrl(name) { return '../assets/github/presenter/' + encodeURIComponent(name); }
   function setMascotSrc(src) {
     const st = $('mascot-status');
-    if (st) st.textContent = 'mascot status: loading‚Ä¶';
+    if (st) st.textContent = 'mascot status: loadingÖ';
     mascotEl2.style.opacity = '0.25';
-    mascotEl2.onload = () => { mascotEl2.style.opacity = '1'; mascotEl2.style.background = 'transparent'; if (st) st.textContent = 'mascot status: loaded ‚úì'; };
-    mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED ‚Äî click "Pick PNG file" to load your character'; };
+    mascotEl2.onload = () => { mascotEl2.style.opacity = '1'; mascotEl2.style.background = 'transparent'; if (st) st.textContent = 'mascot status: loaded ?'; };
+    mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED ó click "Pick PNG file" to load your character'; };
     mascotEl2.src = src;
   }
   function setMascotAsset(name, displaySrc) {
@@ -1085,7 +1085,7 @@
   $('mascot-file').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const st = $('mascot-status');
-    if (st) st.textContent = 'mascot status: uploading‚Ä¶';
+    if (st) st.textContent = 'mascot status: uploadingÖ';
     // 1. The helper server stores the PNG in assets/github/presenter/ and reports the path.
     try {
       const data = await apiFetch('/api/mascot', { method: 'POST', body: f });
@@ -1108,7 +1108,7 @@
     } catch (folderError) { /* preview-only below */ }
     // 3. Preview-only: show the picked file; Save cannot persist it.
     setMascotSrc(URL.createObjectURL(f));
-    if (st) st.textContent = 'mascot status: shown in preview only ‚Äî the file could not be copied into the project (run `npm run preview:launch` and reload)';
+    if (st) st.textContent = 'mascot status: shown in preview only ó the file could not be copied into the project (run `npm run preview:launch` and reload)';
   });
   $('load-url').addEventListener('click', () => {
     const u = $('mascot-url').value.trim(); if (!u) return;
@@ -1117,7 +1117,7 @@
     const match = u.match(/assets\/(?:[^/?#]+\/)*([^/?#]+\.png)$/i);
     if (match) { setMascotAsset(decodeURIComponent(match[1]), u); return; }
     setMascotSrc(u);
-    if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL ‚Äî renders only use files inside assets/';
+    if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL ó renders only use files inside assets/';
   });
   $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/github/presenter/mascot-custom.png'; setMascotAsset('mascot-custom.png'); });
   setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'mascot-custom.png'));
@@ -1131,7 +1131,7 @@
     const w = words[i % words.length]; if (!w) return;
     const r = w.getBoundingClientRect();
     // The pill is absolutely positioned inside the panel, so word rectangles
-    // are measured against the panel's *padding box* ‚Äî the same coordinate
+    // are measured against the panel's *padding box* ó the same coordinate
     // basis src/card.ts uses in the real render.
     const panel = document.querySelector('.caption-panel');
     const pr = panel.getBoundingClientRect();
