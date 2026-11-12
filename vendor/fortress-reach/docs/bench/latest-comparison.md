@@ -1,0 +1,70 @@
+# Environment profile comparison
+
+Measured against: https://example.com
+
+| Surface | Reference | Fortress-Reach | State |
+| --- | --- | --- | --- |
+| `appVersion` | 5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 | 5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 | different |
+| `audio` | {"baseLatency":null,"length":44100,"outputLatency":null,"sampleRate":44100,"sampleSum":172.671649} | {"baseLatency":null,"length":44100,"outputLatency":null,"sampleRate":44100,"sampleSum":172.671648} | different |
+| `battery` | {"charging":true,"chargingTime":null,"dischargingTime":null,"level":0.8} | {"charging":true,"chargingTime":3600,"dischargingTime":null,"level":0.9367125297773844} | different |
+| `canvas` | {"dataUrlLength":1538,"dataUrlPrefix":"data:image/png;base64,iVBORw0KGg","hash":2004648704,"hashSecondRead":2004648704,"stable":true,"textWidth":98.9404296875,"textWidthFractional":true} | {"dataUrlLength":18058,"dataUrlPrefix":"data:image/png;base64,iVBORw0KGg","hash":1226192138,"hashSecondRead":1226192138,"stable":true,"textWidth":98.94147135416668,"textWidthFractional":true} | different |
+| `chromeObject` | {"hasCsi":true,"hasLoadTimes":true,"hasRuntime":false,"present":true,"runtimeKeys":0} | {"hasCsi":true,"hasLoadTimes":true,"hasRuntime":false,"present":true,"runtimeKeys":0} | same |
+| `connection` | {"downlink":1.7,"effectiveType":"4g","rtt":100,"saveData":false} | {"downlink":100,"effectiveType":"4g","rtt":100,"saveData":false,"type":"wifi"} | different |
+| `cookieEnabled` | true | true | same |
+| `deviceMemory` | 16 | 8 | different |
+| `doNotTrack` | null | null | same |
+| `features` | {"pdfViewer":false,"pointerCoarse":false,"touchEvent":false,"webdriverFlag":false} | {"pdfViewer":false,"pointerCoarse":false,"touchEvent":false,"webdriverFlag":false} | same |
+| `functionSource` | function probe() {} | function probe() {} | same |
+| `hardwareConcurrency` | 16 | 16 | same |
+| `keyboard` | {"sample":[["KeyK","k"],["KeyG","g"],["Digit2","2"],["Digit0","0"],["KeyV","v"]],"size":48} | {"sample":[["Backquote","`"],["Digit1","1"],["Digit2","2"],["Digit3","3"],["Digit4","4"]],"size":47} | different |
+| `language` | en-GB | en-US | different |
+| `languages` | ["en-GB","en-US","en"] | ["en-US","en"] | different |
+| `locale` | {"dateString":"Wed Oct 21 2026 20:33:43 GMT+0530 (India Standard Time)","offset":-330,"resolvedOptions":{"calendar":"gregory","day":"2-digit","locale":"en-GB","month":"2-digit","numberingSystem":"latn","timeZone":"Asia/Calcutta","year":"numeric"},"timezone":"Asia/Calcutta"} | {"dateString":"Wed Oct 21 2026 11:03:53 GMT-0400 (Eastern Daylight Time)","offset":240,"resolvedOptions":{"calendar":"gregory","day":"numeric","locale":"en-US","month":"numeric","numberingSystem":"latn","timeZone":"America/New_York","year":"numeric"},"timezone":"America/New_York"} | different |
+| `maxTouchPoints` | 0 | 0 | same |
+| `mediaDevices` | [{"deviceId":"","groupId":"","kind":"audioinput","label":""},{"deviceId":"","groupId":"","kind":"videoinput","label":""},{"deviceId":"","groupId":"","kind":"audiooutput","label":""}] | [{"deviceId":"","groupId":"","kind":"audioinput","label":""},{"deviceId":"","groupId":"","kind":"videoinput","label":""},{"deviceId":"","groupId":"","kind":"audiooutput","label":""}] | same |
+| `mediaQueries` | {"anyHover":true,"anyPointerCoarse":false,"colorGamutP3":false,"colorGamutSrgb":true,"dynamicRangeHigh":false,"forcedColors":false,"prefersDark":true,"prefersLight":false,"prefersReducedMotion":false} | {"anyHover":true,"anyPointerCoarse":false,"colorGamutP3":false,"colorGamutSrgb":true,"dynamicRangeHigh":false,"forcedColors":false,"prefersDark":false,"prefersLight":true,"prefersReducedMotion":false} | different |
+| `mimeTypes` | {"length":2,"types":["application/pdf","text/pdf"]} | {"length":2,"types":["application/pdf","text/pdf"]} | same |
+| `oscpu` | null | null | same |
+| `pdfViewerEnabled` | true | true | same |
+| `permissions` | {"geolocation":"unknown","notification":"default"} | {"geolocation":"unknown","notification":"default"} | same |
+| `platform` | Win32 | Win32 | same |
+| `plugins` | {"constructor":"PluginArray","isArray":false,"length":5,"names":["PDF Viewer","Chrome PDF Viewer","Chromium PDF Viewer","Microsoft Edge PDF Viewer","WebKit built-in PDF"]} | {"constructor":"PluginArray","isArray":false,"length":5,"names":["PDF Viewer","Chrome PDF Viewer","Chromium PDF Viewer","Microsoft Edge PDF Viewer","WebKit built-in PDF"]} | same |
+| `screen` | {"availHeight":600,"availLeft":0,"availTop":0,"availWidth":800,"colorDepth":24,"height":600,"pixelDepth":24,"width":800} | {"availHeight":816,"availLeft":0,"availTop":0,"availWidth":1536,"colorDepth":24,"height":864,"pixelDepth":24,"width":1536} | different |
+| `stackFormat` |     at <anonymous>:341:21 |     at <anonymous>:341:21 | same |
+| `storage` | {"quota":10737418240,"usage":0} | {"quota":223338299392,"usage":0} | different |
+| `userAgent` | Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 | Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 | different |
+| `userAgentData` | {"brands":[{"brand":"Google Chrome","version":"153"},{"brand":"Not_A Brand","version":"8"},{"brand":"Chromium","version":"153"}],"mobile":false,"platform":"Windows"} | {"brands":[{"brand":"Chromium","version":"155"},{"brand":"Google Chrome","version":"155"},{"brand":"Not)A;Brand","version":"24"}],"mobile":false,"platform":"Windows"} | different |
+| `userAgentDataHigh` | {"architecture":"x86","bitness":"64","brands":[{"brand":"Google Chrome","version":"153"},{"brand":"Not_A Brand","version":"8"},{"brand":"Chromium","version":"153"}],"fullVersionList":[{"brand":"Google Chrome","version":"153.0.8010.36"},{"brand":"Not_A Brand","version":"8.0.0.0"},{"brand":"Chromium","version":"153.0.8010.36"}],"mobile":false,"model":"","platform":"Windows","platformVersion":"19.0.0","wow64":false} | {"architecture":"x86","bitness":"64","brands":[{"brand":"Chromium","version":"155"},{"brand":"Google Chrome","version":"155"},{"brand":"Not)A;Brand","version":"24"}],"fullVersionList":[{"brand":"Chromium","version":"155.0.8059.85"},{"brand":"Google Chrome","version":"155.0.8059.85"},{"brand":"Not)A;Brand","version":"24.0.0.0"}],"mobile":false,"model":"","platform":"Windows","platformVersion":"10.0.0","wow64":false} | different |
+| `vendor` | Google Inc. | Google Inc. | same |
+| `voices` | {"count":0,"names":[]} | {"count":3,"names":["Microsoft David Desktop - English (United States)","Microsoft Mark Desktop - English (United States)","Microsoft Zira Desktop - English (United States)"]} | different |
+| `webdriver` | false | false | same |
+| `webgl1` | {"available":true,"extensionCount":35,"extensionSample":["ANGLE_instanced_arrays","EXT_blend_minmax","EXT_clip_control","EXT_color_buffer_half_float","EXT_depth_clamp","EXT_disjoint_timer_query"],"maxCombinedTextureImageUnits":32,"maxCubeMapTextureSize":16384,"maxFragmentUniformVectors":1024,"maxRenderbufferSize":16384,"maxTextureSize":16384,"maxVaryingVectors":30,"maxVertexAttribs":16,"maxVertexUniformVectors":4096,"maxViewportDims":[32767,32767],"precisionHighFloat":{"precision":23,"rangeMax":127,"rangeMin":127},"renderer":"WebKit WebGL","shadingLanguageVersion":"WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)","unmaskedRenderer":"ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)","unmaskedVendor":"Google Inc. (NVIDIA Corporation)","vendor":"WebKit","version":"WebGL 1.0 (OpenGL ES 2.0 Chromium)"} | {"available":true,"extensionCount":33,"extensionSample":["ANGLE_instanced_arrays","EXT_blend_minmax","EXT_clip_control","EXT_color_buffer_half_float","EXT_depth_clamp","EXT_disjoint_timer_query"],"maxCombinedTextureImageUnits":64,"maxCubeMapTextureSize":32768,"maxFragmentUniformVectors":4096,"maxRenderbufferSize":32768,"maxTextureSize":32768,"maxVaryingVectors":31,"maxVertexAttribs":16,"maxVertexUniformVectors":4096,"maxViewportDims":[32768,32768],"precisionHighFloat":{"precision":23,"rangeMax":127,"rangeMin":127},"renderer":"WebKit WebGL","shadingLanguageVersion":"WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)","unmaskedRenderer":"ANGLE (AMD, AMD Radeon RX 7900 XTX (0x744C0000) Direct3D11 vs_5_0 ps_5_0, D3D11)","unmaskedVendor":"Google Inc. (AMD)","vendor":"WebKit","version":"WebGL 1.0 (OpenGL ES 2.0 Chromium)"} | different |
+| `webgl2` | {"available":true,"extensionCount":35,"extensionSample":["ANGLE_instanced_arrays","EXT_blend_minmax","EXT_clip_control","EXT_color_buffer_half_float","EXT_depth_clamp","EXT_disjoint_timer_query"],"maxCombinedTextureImageUnits":32,"maxCubeMapTextureSize":16384,"maxFragmentUniformVectors":1024,"maxRenderbufferSize":16384,"maxTextureSize":16384,"maxVaryingVectors":30,"maxVertexAttribs":16,"maxVertexUniformVectors":4096,"maxViewportDims":[32767,32767],"precisionHighFloat":{"precision":23,"rangeMax":127,"rangeMin":127},"renderer":"WebKit WebGL","shadingLanguageVersion":"WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)","unmaskedRenderer":"ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)","unmaskedVendor":"Google Inc. (NVIDIA Corporation)","vendor":"WebKit","version":"WebGL 1.0 (OpenGL ES 2.0 Chromium)"} | {"available":true,"extensionCount":33,"extensionSample":["ANGLE_instanced_arrays","EXT_blend_minmax","EXT_clip_control","EXT_color_buffer_half_float","EXT_depth_clamp","EXT_disjoint_timer_query"],"maxCombinedTextureImageUnits":64,"maxCubeMapTextureSize":32768,"maxFragmentUniformVectors":4096,"maxRenderbufferSize":32768,"maxTextureSize":32768,"maxVaryingVectors":31,"maxVertexAttribs":16,"maxVertexUniformVectors":4096,"maxViewportDims":[32768,32768],"precisionHighFloat":{"precision":23,"rangeMax":127,"rangeMin":127},"renderer":"WebKit WebGL","shadingLanguageVersion":"WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)","unmaskedRenderer":"ANGLE (AMD, AMD Radeon RX 7900 XTX (0x744C0000) Direct3D11 vs_5_0 ps_5_0, D3D11)","unmaskedVendor":"Google Inc. (AMD)","vendor":"WebKit","version":"WebGL 1.0 (OpenGL ES 2.0 Chromium)"} | different |
+| `webgpu` | {"architecture":"gcn-5","description":"","features":["depth32float-stencil8","rg11b10ufloat-renderable","bgra8unorm-storage","texture-formats-tier1","chromium-experimental-multi-draw-indirect","texture-compression-bc","dual-source-blending","chromium-experimental-sampling-resource-table","core-features-and-limits","chromium-experimental-timestamp-query-inside-passes"],"isFallbackAdapter":null,"limits":{"maxBufferSize":2147483648,"maxComputeWorkgroupSizeX":1024,"maxTextureDimension2D":16384},"vendor":"amd"} | {"architecture":"rdna-3","description":"","features":["depth-clip-control","depth32float-stencil8","texture-compression-bc","texture-compression-etc2","timestamp-query","indirect-first-instance"],"isFallbackAdapter":false,"limits":{"maxBufferSize":268435456,"maxComputeWorkgroupSizeX":256,"maxTextureDimension2D":16384},"vendor":"amd"} | different |
+| `windowSize` | {"devicePixelRatio":1,"innerHeight":484,"innerWidth":762,"outerHeight":580,"outerWidth":780,"screenX":10,"screenY":10} | {"devicePixelRatio":1.25,"innerHeight":729,"innerWidth":1518,"outerHeight":864,"outerWidth":1536,"screenX":0,"screenY":0} | different |
+
+17 surfaces match, 21 differ.
+
+## Assessment
+
+| Check | Reference | Fortress-Reach |
+| --- | --- | --- |
+| platform_token | pass | pass |
+| no_headless_token | pass | pass |
+| version_agreement | pass | pass |
+| screen_not_default | fail | pass |
+| window_has_a_frame | pass | pass |
+| avail_within_screen | pass | pass |
+| device_memory_bucket | fail | pass |
+| language_list | pass | pass |
+| graphics_agree | fail | pass |
+| webgpu_present | pass | pass |
+| quota_is_not_the_default | fail | pass |
+| no_automation_flag | pass | pass |
+| permission_not_granted | pass | pass |
+| canvas_is_stable | pass | pass |
+| native_source | pass | pass |
+| keyboard_present | pass | pass |
+| media_devices_present | pass | pass |
+
+A check passes when the value is what a browser that was actually used by a person would report. A reference browser that reports a host value is shown as a warning, because that is what makes a session linkable to the machine it came from.
