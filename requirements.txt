@@ -1,0 +1,18 @@
+# Python dependencies for the Kokoro TTS wrapper and the Lazy News pipeline.
+# Install with:  pip install -r requirements.txt
+# Node dependencies are installed separately with `npm install`.
+
+kokoro-onnx>=0.4
+soundfile>=0.12
+numpy>=1.26
+scipy>=1.11
+Pillow>=10
+
+# Lazy News word-level alignment. The pipeline prefers WhisperX/Montreal
+# Forced Aligner when they are importable, but faster-whisper is the built-in
+# fallback and is what `news:selftest-alignment` exercises.
+faster-whisper>=1.0
+
+# WhisperX (preferred aligner) is intentionally NOT pinned here: it pulls in
+# PyTorch and platform-specific binaries. Install it separately if you want it:
+#   pip install whisperx
