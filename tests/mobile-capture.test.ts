@@ -5,12 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import { createCanvas } from "canvas";
 import {
+  buildFallbackMobileHtml,
   chooseStoryEnd,
   cropMobileCapture,
   detectFailedPage,
   normalizeRasterSize,
   scaleAnchorOffsets,
 } from "../src/mobile-capture.js";
+import { enriched } from "./helpers.js";
 import { CARD_VIEWPORT_HEIGHT, MOBILE_PAGE } from "../src/config.js";
 import type { MobilePageCapture } from "../src/types.js";
 
@@ -73,6 +75,20 @@ describe("failed page detection", () => {
     assert.match(
       detectFailedPage({ ...healthy, bodyText: "short" }) ?? "",
       /blank/
+    );
+  });
+
+  test("a README that mentions rate limiting is not mistaken for an abuse wall", () => {
+    // Own README says "rate limit" — kilobytes of healthy prose.
+    const prose =
+      "This tool calls the GitHub API and respects its rate limit. Bring your own token to raise it. ";
+    const repeated = prose.repeat(40);
+    assert.ok(repeated.length > 600);
+    assert.equal(detectFailedPage({ ...healthy, bodyText: repeated }), null);
+    // Title naming the abuse page is still caught even with a long body.
+    assert.match(
+      detectFailedPage({ ...healthy, title: "GitHub - Too Many Requests", bodyText: repeated }) ?? "",
+      /abuse/
     );
   });
 });
@@ -167,5 +183,15 @@ describe("story crop output", () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("fallback mobile page theme", () => {
+  test("the fallback renders GitHub's dark palette so it matches a pinned dark capture", () => {
+    const html = buildFallbackMobileHtml(enriched("high-quality-popular"));
+    assert.match(html, /background:\s*#0d1117/);
+    assert.match(html, /pre\s*\{[^}]*#010409/);
+    assert.doesNotMatch(html.toLowerCase(), /#ffffff/);
+    assert.doesNotMatch(html.toLowerCase(), /#1f2328/);
   });
 });
