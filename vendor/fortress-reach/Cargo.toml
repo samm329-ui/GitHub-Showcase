@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/reach-core",
+    "crates/reach-persona",
+    "crates/reach-router",
+    "crates/reach-browser",
+    "crates/reach-server",
+    "crates/reach-app",
+    "crates/reach-bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress-Reach Contributors"]
+license = "MIT"
+
+[workspace.dependencies]
+# Internal workspace crates
+reach-core = { path = "crates/reach-core" }
+reach-persona = { path = "crates/reach-persona" }
+reach-router = { path = "crates/reach-router" }
+reach-browser = { path = "crates/reach-browser" }
+reach-server = { path = "crates/reach-server" }
+
+# Async runtime & networking
+tokio = { version = "1.43", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures-util = "0.3"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization & parsing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.5"
+feed-rs = "2.3"
+regex = "1.11"
+
+# UI dependencies
+eframe = "0.30"
+egui = "0.30"
+slint = "1.18.1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
