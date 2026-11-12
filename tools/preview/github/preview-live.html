@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>GitHub Showcase � Live Composition Preview</title>
+<title>GitHub Showcase ï¿½ Live Composition Preview</title>
 <style>
   @font-face{font-family:"Roboto";font-style:normal;font-weight:400;font-display:block;src:url("../assets/shared/fonts/roboto-latin-400-normal.woff2") format("woff2");}
   @font-face{font-family:"Roboto";font-style:normal;font-weight:700;font-display:block;src:url("../assets/shared/fonts/roboto-latin-700-normal.woff2") format("woff2");}
@@ -95,7 +95,7 @@
     line-height: var(--callout-lineheight, 1.1); letter-spacing: -0.6px; z-index: 2; }
 
   /* Instagram Reels safe zones (1080x1920): keep text/UI clear of the
-     platform's overlay chrome � top logo/camera row, right action rail
+     platform's overlay chrome ï¿½ top logo/camera row, right action rail
      (avatar/heart/comment/share/bookmark) and the bottom caption + username
      bar (name, caption, audio attribution). */
   .safe-zone { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: none; }
@@ -213,8 +213,8 @@
     </div>
     <div class="ig-bottom">
       <div class="ig-name">github_showcase</div>
-      <div class="ig-caption">This repository just changed how I build AI agents � watch this</div>
-      <div class="ig-audio">&#9835; original audio � github_showcase</div>
+      <div class="ig-caption">This repository just changed how I build AI agents ï¿½ watch this</div>
+      <div class="ig-audio">&#9835; original audio ï¿½ github_showcase</div>
     </div>
   </div>
 </div>
@@ -222,7 +222,7 @@
 
 <div class="panel">
   <h3>Full Composition Preview</h3>
-  <div class="note">Edit numbers directly or drag sliders � every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>visual-overrides.json</code>.</div>
+  <div class="note">Edit numbers directly or drag sliders ï¿½ every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>visual-overrides.json</code>.</div>
 
   <section>
     <h4>Mascot image (character)</h4>
@@ -233,8 +233,8 @@
       <button id="load-default">Load committed default (assets/github/presenter/mascot-custom.png)</button>
     </div>
     <label>Saved asset (written to visual-overrides.json)<input type="text" id="s-masset" value="mascot-custom.png" readonly></label>
-    <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading�</div>
-    <div class="note">�Pick PNG file� copies the image into <code>assets/github/presenter/mascot-custom.png</code>; Save writes that filename into <code>visual-overrides.json</code>, so rendered videos use your character for every pose.</div>
+    <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loadingï¿½</div>
+    <div class="note">ï¿½Pick PNG fileï¿½ copies the image into <code>assets/github/presenter/mascot-custom.png</code>; Save writes that filename into <code>visual-overrides.json</code>, so rendered videos use your character for every pose.</div>
   </section>
 
   <section>
@@ -327,7 +327,7 @@
 
   <section>
     <h4>Instagram Reels safe zones</h4>
-    <div class="note">Reels covers the frame with: <b>top</b> logo/camera row, <b>right</b> action rail (avatar, like, comment, share, bookmark), <b>bottom</b> caption + username + audio bar. The mascot, speech bubble and caption panel are positioned as <b>one group</b> � lifted so the subtitles never hide behind the bottom bar.</div>
+    <div class="note">Reels covers the frame with: <b>top</b> logo/camera row, <b>right</b> action rail (avatar, like, comment, share, bookmark), <b>bottom</b> caption + username + audio bar. The mascot, speech bubble and caption panel are positioned as <b>one group</b> ï¿½ lifted so the subtitles never hide behind the bottom bar.</div>
     <div class="row">
       <button type="button" id="btn-ig-safe">Safe for Reels (default)</button>
       <button type="button" id="btn-ig-old">Edge (old look)</button>
@@ -356,7 +356,7 @@
   </section>
 
   <section>
-    <h4>Highlight box (active word) � auto-tracks the word</h4>
+    <h4>Highlight box (active word) ï¿½ auto-tracks the word</h4>
     <label>background<input type="color" value="#FFD500" id="s-hbg"></label>
     <label>text<input type="color" value="#FFFFFF" id="s-htx"></label>
     <div class="note">Box size, radius and padding are derived automatically from the caption's font size, line-height and word positions. No manual controls needed.</div>
@@ -398,13 +398,13 @@
     </div>
     <div class="note" id="save-status">
       Writes every value on this page into <code>visual-overrides.json</code> (the one file the preview owns). The box below
-      shows the exact JSON that gets sent � nothing hidden, nothing reordered.
+      shows the exact JSON that gets sent ï¿½ nothing hidden, nothing reordered.
       Run <code>npm run preview:launch</code> in a terminal to start the helper for you.
     </div>
     <div class="row">
       <button id="reloadcfg" onclick="window.__reloadFromCodebase && window.__reloadFromCodebase()">Reload from codebase</button>
       <button id="copycfg" onclick="window.__copyConfig && window.__copyConfig()">Copy text</button>
-      <button id="connectfolder" style="display:none" onclick="window.__connectFolder && window.__connectFolder()">Save to folder�</button>
+      <button id="connectfolder" style="display:none" onclick="window.__connectFolder && window.__connectFolder()">Save to folderï¿½</button>
     </div>
     <textarea class="cfg" id="cfgout" style="height:180px;"></textarea>
   </section>
@@ -418,11 +418,11 @@
   </section>
 
   <div class="note">
-    <strong>One-click save, three ways</strong> (all equivalent � pick whichever works):
+    <strong>One-click save, three ways</strong> (all equivalent ï¿½ pick whichever works):
     run <code>npm run preview:launch</code> (starts the helper and opens this
-    page) � or <code>npm run preview:live</code> and open the printed URL � or serve this file from any static server and Save writes
+    page) ï¿½ or <code>npm run preview:live</code> and open the printed URL ï¿½ or serve this file from any static server and Save writes
     to your project folder (browser asks once).<br>
-    Config: <code>visual-overrides.json</code> � merged over the committed composition at pipeline startup
+    Config: <code>visual-overrides.json</code> ï¿½ merged over the committed composition at pipeline startup
     (mascot, card, captions, callout, impact accents, highlight colours). Delete the file to return to the committed look.<br>
     Env overrides: <code>SHOWCASE_MASCOT_WIDTH_RATIO</code>, <code>SHOWCASE_MASCOT_OFFSET_X/Y</code>,
     <code>SHOWCASE_CAPTION_HIGHLIGHT_BG/TEXT</code>, <code>SHOWCASE_CHARACTER_PNG</code>.
@@ -438,9 +438,9 @@
   /* ------------------------------------------------------------------ */
   /* One-click save.                                                     */
   /*                                                                     */
-  /* Save tries, in order: the helper server (tools/preview/preview-server.ts,  */
+  /* Save tries, in order: the helper server (tools/preview/shared/preview-server.ts,  */
   /* started by `npm run preview:launch`), then a picked project folder via   */
-  /* the shared tools/preview/config-model.js, then a text download.          */
+  /* the shared tools/preview/shared/config-model.js, then a text download.          */
   /*                                                                     */
   /* Defined early and exposed on `window` so the buttons keep working   */
   /* even if anything later in this file throws.                          */
@@ -739,13 +739,13 @@
       const files = result.files.length
         ? result.files.map(f => '<code>' + f + '</code>').join(', ')
         : 'no changes (already up to date)';
-      setStatus('? Saved to your folder � ' + files, 'ok');
+      setStatus('? Saved to your folder ï¿½ ' + files, 'ok');
       doneSaving(btn, 'Saved ?');
       if (typeof refreshCfg === 'function') refreshCfg();
       return;
     } catch (folderError) {
       if (folderError && folderError.name === 'AbortError') {
-        setStatus('Save cancelled � no folder was chosen.', 'error');
+        setStatus('Save cancelled ï¿½ no folder was chosen.', 'error');
         doneSaving(btn, 'Cancelled');
         return;
       }
@@ -758,7 +758,7 @@
   };
 
   window.__reloadFromCodebase = async function () {
-    // Prefer the committed values from the helper server�
+    // Prefer the committed values from the helper serverï¿½
     try {
       const data = await apiFetch('/api/config', { method: 'GET' });
       applyConfig(data.config);
@@ -766,7 +766,7 @@
       return;
     } catch (error) { /* try the folder next */ }
 
-    // �then from a folder that is already connected.
+    // ï¿½then from a folder that is already connected.
     const handle = await storedFolder();
     if (handle && MODEL) {
       try {
@@ -791,13 +791,31 @@
     }
     try {
       await ensureFolder();
-      setStatus('? Folder connected � Save now writes to the files.', 'ok');
+      setStatus('? Folder connected ï¿½ Save now writes to the files.', 'ok');
     } catch (error) {
       if (error && error.name === 'AbortError') { setStatus('Folder connection cancelled.', ''); return; }
       setStatus('Could not connect that folder (' + error.message + '). Pick the project folder that contains <code>src</code>.', 'error');
     }
   };
 
+
+  /* ------------------------------------------------------------------ */
+  /* Auto-save. Every slider move / colour change / checkbox toggle     */
+  /* persists itself through the helper server 1.5s after the last      */
+  /* change. When the server is not running (the page was opened from   */
+  /* disk) this quietly no-ops and the manual Save button remains the   */
+  /* only writer â€” exactly as before.                                   */
+  /* ------------------------------------------------------------------ */
+  let __autoSaveTimer = null;
+  document.addEventListener('input', () => {
+    if (__autoSaveTimer) clearTimeout(__autoSaveTimer);
+    __autoSaveTimer = setTimeout(() => {
+      __autoSaveTimer = null;
+      if (typeof window.__saveToCodebase === 'function') {
+        window.__saveToCodebase().catch(() => { /* offline â€” manual Save still works */ });
+      }
+    }, 1500);
+  }, { passive: true });
 
   window.__copyConfig = function () {
     const ta = $('cfgout');
@@ -825,7 +843,7 @@
     sync(s.value);
   }
   // Mirror src/mascot-layout.ts: right/bottom are SIGNED offsets of the
-  // visible artwork from each canvas edge � positive lifts the mascot inside
+  // visible artwork from each canvas edge ï¿½ positive lifts the mascot inside
   // the frame, negative lets it extend past the edge. The dead padding is
   // character.png's measured 5px per side, subtracted so the *visible* edge
   // (not the image rectangle) lands on the slider's value.
@@ -1065,17 +1083,17 @@
     setPairValue('s-ct', 1546);
   });
 
-  // mascot image � a picked PNG is copied into assets/github/presenter/ and saved as the
+  // mascot image ï¿½ a picked PNG is copied into assets/github/presenter/ and saved as the
   // default character, so rendered videos use it too (not just this page).
   const mascotEl2 = $('mascot');
   const MASCOT_UPLOAD_NAME = 'mascot-custom.png';
   function mascotAssetUrl(name) { return '../assets/github/presenter/' + encodeURIComponent(name); }
   function setMascotSrc(src) {
     const st = $('mascot-status');
-    if (st) st.textContent = 'mascot status: loading�';
+    if (st) st.textContent = 'mascot status: loadingï¿½';
     mascotEl2.style.opacity = '0.25';
     mascotEl2.onload = () => { mascotEl2.style.opacity = '1'; mascotEl2.style.background = 'transparent'; if (st) st.textContent = 'mascot status: loaded ?'; };
-    mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED � click "Pick PNG file" to load your character'; };
+    mascotEl2.onerror = () => { mascotEl2.style.opacity = '0.9'; mascotEl2.style.background = 'rgba(255,0,0,0.35)'; if (st) st.textContent = 'mascot status: FAILED ï¿½ click "Pick PNG file" to load your character'; };
     mascotEl2.src = src;
   }
   function setMascotAsset(name, displaySrc) {
@@ -1085,7 +1103,7 @@
   $('mascot-file').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const st = $('mascot-status');
-    if (st) st.textContent = 'mascot status: uploading�';
+    if (st) st.textContent = 'mascot status: uploadingï¿½';
     // 1. The helper server stores the PNG in assets/github/presenter/ and reports the path.
     try {
       const data = await apiFetch('/api/mascot', { method: 'POST', body: f });
@@ -1108,7 +1126,7 @@
     } catch (folderError) { /* preview-only below */ }
     // 3. Preview-only: show the picked file; Save cannot persist it.
     setMascotSrc(URL.createObjectURL(f));
-    if (st) st.textContent = 'mascot status: shown in preview only � the file could not be copied into the project (run `npm run preview:launch` and reload)';
+    if (st) st.textContent = 'mascot status: shown in preview only ï¿½ the file could not be copied into the project (run `npm run preview:launch` and reload)';
   });
   $('load-url').addEventListener('click', () => {
     const u = $('mascot-url').value.trim(); if (!u) return;
@@ -1117,7 +1135,7 @@
     const match = u.match(/assets\/(?:[^/?#]+\/)*([^/?#]+\.png)$/i);
     if (match) { setMascotAsset(decodeURIComponent(match[1]), u); return; }
     setMascotSrc(u);
-    if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL � renders only use files inside assets/';
+    if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL ï¿½ renders only use files inside assets/';
   });
   $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/github/presenter/mascot-custom.png'; setMascotAsset('mascot-custom.png'); });
   setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'mascot-custom.png'));
@@ -1131,7 +1149,7 @@
     const w = words[i % words.length]; if (!w) return;
     const r = w.getBoundingClientRect();
     // The pill is absolutely positioned inside the panel, so word rectangles
-    // are measured against the panel's *padding box* � the same coordinate
+    // are measured against the panel's *padding box* ï¿½ the same coordinate
     // basis src/card.ts uses in the real render.
     const panel = document.querySelector('.caption-panel');
     const pr = panel.getBoundingClientRect();
@@ -1309,3 +1327,4 @@
 </script>
 </body>
 </html>
+
