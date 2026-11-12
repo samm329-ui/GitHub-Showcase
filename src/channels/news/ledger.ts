@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
-import fsSync from "node:fs";
 import pathMod from "node:path";
 import type { ClaimKind, ClaimStatus, EvidenceLedger, EvidenceRecord, FactRecord, ContentClass } from "./types.js";
 import { assertEvidenceAllowed, assertDiscoveryAllowed, type RegistryLoadResult } from "./sources.js";
+import { findChromeExecutable } from "../../chrome-paths.js";
 
 /**
  * Evidence collection + claim-level fact ledger.
@@ -185,13 +185,7 @@ async function cdpExtractText(url: string): Promise<string> {
     }
   }
 
-  const candidates = [
-    process.env.LAZY_NEWS_CHROME,
-    pathMod.join(process.env.LOCALAPPDATA ?? "", "Chromium", "Application", "chrome.exe"),
-    pathMod.join(process.env.PROGRAMFILES ?? "", "Google", "Chrome", "Application", "chrome.exe"),
-    pathMod.join(process.env["PROGRAMFILES(X86)"] ?? "", "Microsoft", "Edge", "Application", "msedge.exe"),
-  ].filter(Boolean) as string[];
-  const exe = candidates.find(p => fsSync.existsSync(p));
+  const exe = findChromeExecutable(process.env.LAZY_NEWS_CHROME);
 
   let spawnedProc: import("node:child_process").ChildProcess | null = null;
   if (!(await cdpResponds())) {
