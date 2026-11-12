@@ -9,7 +9,7 @@ import path from "node:path";
  */
 const [video, outDirArg = "temp/frame-review"] = process.argv.slice(2);
 if (!video) {
-  console.error("usage: tsx tools/frame-review.ts <video.mp4> [outDir]");
+  console.error("usage: tsx tools/assets/frame-review.ts <video.mp4> [outDir]");
   process.exit(1);
 }
 const outDir = path.resolve(outDirArg);
