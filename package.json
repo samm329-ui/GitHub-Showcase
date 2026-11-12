@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "github-showcase",
   "version": "1.1.0",
   "private": true,
@@ -19,7 +19,9 @@
     "news:prepare-assets": "node tools/run-python.mjs tools/python/prep_lazy_news_assets.py",
     "news:selftest-alignment": "node tools/run-python.mjs tools/python/align_audio.py --selftest",
     "scripts:list": "tsx tools/scripts-dataset.ts list",
-    "scripts:show": "tsx tools/scripts-dataset.ts show"
+    "scripts:show": "tsx tools/scripts-dataset.ts show",
+    "fortress:build": "cargo build --release -p reach-app --manifest-path vendor/fortress-reach/Cargo.toml",
+    "fortress:check": "cargo check --workspace --manifest-path vendor/fortress-reach/Cargo.toml"
   },
   "dependencies": {
     "canvas": "^3.2.3",
@@ -31,3 +33,4 @@
     "typescript": "^5.7.3"
   }
 }
+
