@@ -18,6 +18,13 @@ export type SourcePermissionBasis =
   | "discovery_only"
   | "unknown";
 
+/**
+ * Editorial perspective of an independent-reporting outlet. Used ONLY by the
+ * corroboration/balance layer — never to rank an outlet's truthfulness.
+ * Primary records, fact-check desks and aggregators carry no tag on purpose.
+ */
+export type EditorialPerspective = "left" | "centre_left" | "centre" | "centre_right" | "right";
+
 export interface SourcePolicy {
   /** Stable id, e.g. "pib.gov.in". */
   sourceId: string;
@@ -37,6 +44,8 @@ export interface SourcePolicy {
   parentPublisherGroup: string;
   /** Wire origin group: ap | reuters | afp | pib | un | release | none. */
   wireOrigin?: string;
+  /** Editorial leaning of an independent-reporting outlet (see EditorialPerspective). */
+  perspective?: EditorialPerspective;
   notes?: string;
 }
 
