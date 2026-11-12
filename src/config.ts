@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { CalloutAssetProfile, DiscoveryMode, ImpactAnchor } from "./types.js";
+import { VISUAL_OVERRIDES } from "./visual-overrides.js";
+
+/** Presentation overrides authored in the live preview, or `null` when
+ * `visual-overrides.json` is absent (the committed composition wins). */
+const OV = VISUAL_OVERRIDES;
 
 export const ROOT = process.cwd();
 export const OUTPUT_DIR = process.env.SHOWCASE_OUTPUT_DIR
@@ -139,7 +144,7 @@ export const MAX_REPEATED_TEMPLATE_USAGE = 2;
 /**
  * Configurable narrator preset. `am_fenrir` is the locked baseline voice —
  * auditioned against `am_liam`, `am_puck` and `am_michael` on the identical
- * script in `tools/audition/`. Speed 1.0 vs 1.05 is tuned by listening; the
+ * script in `samples/voice/`. Speed 1.0 vs 1.05 is tuned by listening; the
  * *delivery* (young, curious, conversational) comes from the writing, the
  * punctuation and the brief measured pauses between segments, not from an
  * emotion knob — Kokoro has none.
@@ -249,13 +254,19 @@ export const INK = "#151619";
  * Card geometry. The live preview rewrites `width`/`height` as one anchored
  * block and re-centres `left`/`top` on the 1080x1920 stage in the same write,
  * so the card can never end up off-centre or half-updated.
+ *
+ * With `visual-overrides.json` present, `width`/`height` come from the file
+ * and `left`/`top` are re-centred here on every load — the file stores only
+ * what the preview authors.
  */
+const CARD_WIDTH = OV?.cardWidth ?? 810;
+const CARD_HEIGHT = OV?.cardHeight ?? 1668;
 export const CARD = {
-  width: 810,
-  height: 1668,
-  left: 135,
-  top: 126,
-  radius: 60,
+  width: CARD_WIDTH,
+  height: CARD_HEIGHT,
+  left: Math.round((VIEWPORT.width - CARD_WIDTH) / 2),
+  top: Math.round((VIEWPORT.height - CARD_HEIGHT) / 2),
+  radius: OV?.cardRadius ?? 60,
   border: "1px solid rgba(255,255,255,0.14)",
 } as const;
 
@@ -294,17 +305,18 @@ export const CAPTION_PANEL_STYLE = {
  * Caption panel placement in canvas coordinates.
  *
  * The panel sits in the lower third, clear of the mascot's face and of the
- * Reels-style UI margins. These authored numbers are the committed
- * geometry the live preview reads and writes; `captionOverlayGeometry()`
- * layers validated environment overrides on top for device testing.
+ * Reels-style UI margins. These values are the effective geometry: the
+ * committed composition by default, or `visual-overrides.json` when the
+ * live preview has saved tuning there; `captionOverlayGeometry()` layers
+ * validated environment overrides on top for device testing.
  */
 export const CAPTION_OVERLAY = {
-  leftPx: 205,
+  leftPx: OV?.captionLeft ?? 205,
   // Instagram Reels safe group: raised with the mascot and bubble so the
   // caption sits above the platform's bottom caption/username bar.
-  topPx: 1388,
-  widthPx: 680,
-  maxHeightPx: 331,
+  topPx: OV?.captionTop ?? 1388,
+  widthPx: OV?.captionWidth ?? 680,
+  maxHeightPx: OV?.captionMaxHeight ?? 331,
 } as const;
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -434,7 +446,7 @@ export function getCalloutAssetProfile(assetPath?: string | null): CalloutAssetP
   if (!assetPath) return FALLBACK_SVG_CALLOUT_PROFILE;
   const basename = path.basename(assetPath).toLowerCase();
   if (basename.includes("callout-bubble")) return DEFAULT_CALLOUT_PROFILE;
-  if (basename.includes("comic speech bubble")) return STICKER_CALLOUT_PROFILE;
+  if (basename.includes("comic-speech-bubble")) return STICKER_CALLOUT_PROFILE;
   return DEFAULT_CALLOUT_PROFILE;
 }
 
@@ -442,20 +454,20 @@ export function getCalloutAssetProfile(assetPath?: string | null): CalloutAssetP
  * Callout bubble: short, evidence-backed summaries attached to the mascot's
  * head. Geometry is derived from the mascot's head anchor and active asset
  * profile at render time; the constants here are the authored shape, bounds
- * and motion.
+ * and motion — the committed composition by default, overlaid with
+ * `visual-overrides.json` when present.
  *
  * Motion is a pure function of media time (see `src/callout-overlay.ts`); there
  * are no CSS transitions and no browser timers, so a frame rendered out of
  * order looks exactly the same as one rendered in order.
  */
 export const CALLOUT = {
-  // Named `bubble*` deliberately: the live preview rewrites the caption's
-  // `widthPx`, and two `widthPx` keys in this file would make that save
-  // ambiguous (the writer refuses to guess).
-  enabled: true,
+  // Named `bubble*` deliberately: two `widthPx` keys in this file would make
+  // a future config edit ambiguous to guess at.
+  enabled: OV?.calloutEnabled ?? true,
   /** ~90% of the previous width so the bubble stops covering the page. */
-  bubbleWidthPx: 357,
-  bubbleHeightPx: 400,
+  bubbleWidthPx: OV?.calloutBubbleWidth ?? 357,
+  bubbleHeightPx: OV?.calloutBubbleHeight ?? 400,
   /** Rounded cloud body height before the tail. */
   bodyHeightPx: 176,
   /**
@@ -465,60 +477,60 @@ export const CALLOUT = {
    * the mascot. The top band follows the measured head-top line: the body
    * stays above the head while the tail reaches down toward the glasses.
    */
-  leftMinPx: 630,
-  rightMarginPx: 0,
+  leftMinPx: OV?.calloutLeftMin ?? 630,
+  rightMarginPx: OV?.calloutRightMargin ?? 0,
   /**
    * Head-relative drop from the measured head-top line. The window
    * [bodyHeightPx, height - tailInset] keeps the body above the head while
    * the tail reaches down toward the glasses, whatever the mascot scale.
    */
-  topOffsetPx: 17,
+  topOffsetPx: OV?.calloutTopOffset ?? 17,
   /**
    * Clamp band for the head-anchored top. It spans the canvas (minus the
    * bubble's own height) because the mascot itself can be lifted anywhere
    * over the frame by `MASCOT_LAYOUT.offsetY`; the anchor, not this band,
    * decides the position in the normal case.
    */
-  topMinPx: 0,
-  topMaxPx: 871,
+  topMinPx: OV?.calloutTopMin ?? 0,
+  topMaxPx: OV?.calloutTopMax ?? 871,
   /** Tail tip, in callout-local pixels (derived from asset profile). */
   tailXLocalPx: 135,
   tailInsetPx: 15,
   /** The tail aims this far right of the measured face centre. */
-  faceOffsetPx: 100,
+  faceOffsetPx: OV?.calloutFaceOffset ?? 100,
   /** Entrance / exit / ray timing, all in media milliseconds. */
-  enterMs: 200,
+  enterMs: OV?.calloutEnterMs ?? 200,
   rayMs: 140,
-  exitMs: 180,
-  enterYPx: 12,
-  exitYPx: 6,
-  enterScale: 0.96,
-  exitScale: 0.01,
+  exitMs: OV?.calloutExitMs ?? 180,
+  enterYPx: OV?.calloutEnterY ?? 12,
+  exitYPx: OV?.calloutExitY ?? 6,
+  enterScale: OV?.calloutEnterScale ?? 0.96,
+  exitScale: OV?.calloutExitScale ?? 0.01,
   /** Cue bounds relative to the measured audio chunk. */
   startLeadMs: 100,
   endTailMs: 200,
   minStartMs: 380,
-  minVisibleMs: 1200,
+  minVisibleMs: OV?.calloutMinVisibleMs ?? 1200,
   preferredVisibleMs: 2200,
   minCueDurationMs: 400,
-  maxVisibleMs: 3400,
-  interCalloutGapMs: 550,
-  maxCues: 5,
+  maxVisibleMs: OV?.calloutMaxVisibleMs ?? 3400,
+  interCalloutGapMs: OV?.calloutInterGapMs ?? 550,
+  maxCues: OV?.calloutMaxCues ?? 5,
   /** Copy limits: a bubble is a summary, never a second subtitle track. */
   minWords: 3,
   maxWords: 7,
   maxLines: 2,
   /** Visual tokens. */
-  fill: "#161513",
-  outline: "#FFFFFF",
-  outlineWidthPx: 5,
-  accent: "#FFE66D",
-  accentOffsetX: -3,
-  accentOffsetY: 8,
-  text: "#1A1A1A",
-  fontSizePx: 31,
-  fontWeight: 800,
-  lineHeight: 1,
+  fill: OV?.calloutFill ?? "#161513",
+  outline: OV?.calloutOutline ?? "#FFFFFF",
+  outlineWidthPx: OV?.calloutOutlineWidth ?? 5,
+  accent: OV?.calloutAccent ?? "#FFE66D",
+  accentOffsetX: OV?.calloutAccentOffsetX ?? -3,
+  accentOffsetY: OV?.calloutAccentOffsetY ?? 8,
+  text: OV?.calloutTextColor ?? "#1A1A1A",
+  fontSizePx: OV?.calloutFontSize ?? 31,
+  fontWeight: OV?.calloutFontWeight ?? 800,
+  lineHeight: OV?.calloutLineHeight ?? 1,
   textPadXPx: 28,
   rayStrokePx: 6,
 } as const;
@@ -528,16 +540,16 @@ export const CALLOUT = {
 /* ------------------------------------------------------------------ */
 
 export const IMPACT_ACCENTS = {
-  enabled: true,
-  strokeColor: "#FFE66D",
-  strokeWidthPx: 5,
-  peakOpacity: 0.88,
-  minBurstCount: 2,
-  maxBurstCount: 6,
-  minIntervalMs: 500,
-  jitterMs: 120,
-  burstDurationMs: 360,
-  lineStaggerMs: 45,
+  enabled: OV?.impactEnabled ?? true,
+  strokeColor: OV?.impactStrokeColor ?? "#FFE66D",
+  strokeWidthPx: OV?.impactStrokeWidth ?? 5,
+  peakOpacity: OV?.impactPeakOpacity ?? 0.88,
+  minBurstCount: OV?.impactMinBurstCount ?? 2,
+  maxBurstCount: OV?.impactMaxBurstCount ?? 6,
+  minIntervalMs: OV?.impactMinIntervalMs ?? 500,
+  jitterMs: OV?.impactJitterMs ?? 120,
+  burstDurationMs: OV?.impactBurstDurationMs ?? 360,
+  lineStaggerMs: OV?.impactLineStaggerMs ?? 45,
   allowedAnchors: [
     "hair-left",
     "hair-right",
@@ -595,12 +607,13 @@ export const MOBILE_PAGE = {
 /**
  * Default mascot artwork, as a filename inside `assets/`.
  *
- * This is the one value the live preview rewrites when you pick a new
- * character image (`tools/preview-live.html` → Save), so the rendered
- * pipeline — including the pose fallbacks below — follows the choice.
- * `SHOWCASE_CHARACTER_PNG` still wins when set.
+ * This is the one asset the live preview re-pins when you pick a new
+ * character image (`tools/preview/preview-live.html` → Save writes
+ * `visual-overrides.json`), so the rendered pipeline — including the pose
+ * fallbacks below — follows the choice. `SHOWCASE_CHARACTER_PNG` still wins
+ * when set.
  */
-export const CHARACTER_PNG_FILENAME = "mascot-custom.png";
+export const CHARACTER_PNG_FILENAME = OV?.mascotAsset ?? "mascot-custom.png";
 
 function readCharacterPath(): string | null {
   const raw = process.env.SHOWCASE_CHARACTER_PNG;
@@ -609,7 +622,7 @@ function readCharacterPath(): string | null {
     if (trimmed === "" || trimmed.toLowerCase() === "none") return null;
     return path.resolve(ROOT, trimmed);
   }
-  return path.join(ROOT, "assets", CHARACTER_PNG_FILENAME);
+  return path.join(ROOT, "assets", "github", "presenter", CHARACTER_PNG_FILENAME);
 }
 
 function readOptionalCharacterPath(envKey: string): string | null {
@@ -632,15 +645,16 @@ function readCalloutPath(): string | null {
     if (trimmed === "" || trimmed.toLowerCase() === "none") return null;
     return path.resolve(ROOT, trimmed);
   }
-  const cropped = path.join(ROOT, "assets", "callout-bubble.png");
+  const cropped = path.join(ROOT, "assets", "github", "callout", "callout-bubble.png");
   if (fs.existsSync(cropped)) return cropped;
-  const sticker = path.join(ROOT, "assets", "Comic Speech Bubble Sticker.png");
+  const sticker = path.join(ROOT, "assets", "github", "callout", "comic-speech-bubble.png");
   if (fs.existsSync(sticker)) return sticker;
   return null;
 }
 
 /** Authentic comic speech bubble sticker asset. */
 export const CALLOUT_PNG = readCalloutPath();
+
 
 /**
  * Optional presenter poses. Any pose without dedicated artwork falls back to
@@ -683,14 +697,17 @@ export type MascotLayout = {
 export const MASCOT_LAYOUT: MascotLayout = {
   anchor: "bottom-right",
   // Signed visible offsets from the bottom-right edge (see MascotLayout).
-  // 0.5889 ≈ the previous 0.6204 scaled by the 0.95 tuning pass (636 px wide;
-  // chosen so widthRatio round-trips through the integer pixel width).
-  widthRatio: readNumber(process.env.SHOWCASE_MASCOT_WIDTH_RATIO, 0.6306),
-  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, -60),
+  // 0.6306 is the committed default (681 px wide); with visual-overrides.json
+  // the width is authored in whole pixels and converted to a ratio here.
+  widthRatio: readNumber(
+    process.env.SHOWCASE_MASCOT_WIDTH_RATIO,
+    OV ? OV.mascotWidthPx / VIEWPORT.width : 0.6306
+  ),
+  offsetX: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_X, OV?.mascotRight ?? -60),
   // Instagram Reels safe group: the mascot, callout bubble and caption panel
   // move as one unit, lifted ~160px so the bottom caption bar never covers
   // the subtitles. Use the preview's "Edge (old look)" preset to compare.
-  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, 462),
+  offsetY: readNumber(process.env.SHOWCASE_MASCOT_OFFSET_Y, OV?.mascotBottom ?? 462),
   keepFaceVisible: true,
 };
 
@@ -703,7 +720,9 @@ export const CHARACTER = {
   /** Alpha-mask shadow: drop-shadow follows the cut-out silhouette, never a
    * rectangle, and always renders *behind* the artwork. Soft, dark, offset
    * downward; the blur scales with the rendered mascot size. */
-  shadow: "drop-shadow(0 24px 54px rgba(0,0,0,1))",
+  shadow: OV
+    ? `drop-shadow(0 ${OV.mascotShadowOffsetY}px ${OV.mascotShadowBlur}px rgba(0,0,0,${OV.mascotShadowOpacity}))`
+    : "drop-shadow(0 24px 54px rgba(0,0,0,1))",
   idleBobPx: 2,
   speechBobPx: 6,
   tiltDeg: 1.1,
@@ -736,13 +755,13 @@ export type SfxConfig = {
 export const SFX_CONFIG: SfxConfig = {
   mascotEntrance: {
     enabled: process.env.SHOWCASE_SFX_MASCOT !== "0",
-    asset: path.join(ROOT, "assets", "sfx", "mascot-slide-whoosh.wav"),
+    asset: path.join(ROOT, "assets", "github", "sfx", "mascot-slide-whoosh.wav"),
     startOffsetMs: 0,
     gain: 0.18,
   },
   calloutPop: {
     enabled: process.env.SHOWCASE_SFX_CALLOUT !== "0",
-    asset: path.join(ROOT, "assets", "sfx", "callout-pop.wav"),
+    asset: path.join(ROOT, "assets", "github", "sfx", "callout-pop.wav"),
     startOffsetMs: 20,
     gain: 0.14,
   },
@@ -752,6 +771,12 @@ export const SFX_CONFIG: SfxConfig = {
 /* Storage                                                             */
 /* ------------------------------------------------------------------ */
 
+/** Directory for all persistent channel databases. `SHOWCASE_DB` / `NEWS_DB`
+ * override the individual files. */
+export const DB_DIR = process.env.SHOWCASE_DB_DIR
+  ? path.resolve(process.env.SHOWCASE_DB_DIR)
+  : path.join(ROOT, "db");
+
 export const DB_PATH = process.env.SHOWCASE_DB
   ? path.resolve(process.env.SHOWCASE_DB)
-  : path.join(OUTPUT_DIR, "showcase-history.db");
+  : path.join(DB_DIR, "showcase-history.db");
