@@ -82,7 +82,7 @@ describe("visual overrides", () => {
     assert.equal(CAPTION_STYLE.lineHeight, DEFAULT_VISUAL_OVERRIDES.captionLineHeight);
     assert.equal(CAPTION_STYLE.letterSpacingPx, DEFAULT_VISUAL_OVERRIDES.captionLetterSpacing);
     assert.equal(CAPTION_STYLE.color, DEFAULT_VISUAL_OVERRIDES.captionColor);
-    assert.equal(CAPTION_STYLE.textShadow, "0 3px 10px rgba(0,0,0,0.95)");
+    assert.equal(CAPTION_STYLE.textShadow, "0 2px 6px rgba(0,0,0,0.25)");
     assert.equal(CAPTION_MOTION.enterMs, DEFAULT_VISUAL_OVERRIDES.enterMs);
     assert.equal(CAPTION_MOTION.exitYPx, DEFAULT_VISUAL_OVERRIDES.exitYPx);
     assert.equal(CAPTION_HIGHLIGHT.background, DEFAULT_VISUAL_OVERRIDES.highlightBackground);
