@@ -235,6 +235,7 @@ function estimateWordWeight(word: string): number {
  * inside a measured phrase — not phoneme-level forced alignment.
  */
 export function wordTimings(phrase: CaptionPhrase): CaptionWordTiming[] {
+  if (phrase.wordTimings && phrase.wordTimings.length > 0) return phrase.wordTimings;
   const words = phrase.text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
   const span = Math.max(1, phrase.endMs - phrase.startMs);
