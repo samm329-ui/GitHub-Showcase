@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import {
   CAPTION_HIGHLIGHT,
@@ -13,8 +13,8 @@ import {
   captionHtml,
   captionLineEstimate,
   wrapCaptionText,
-  type CaptionPhrase,
 } from "../src/caption-overlay.js";
+import type { CaptionPhrase } from "../src/types.js";
 import {
   ACCENT_YELLOW,
   CAPTION_OVERLAY,
