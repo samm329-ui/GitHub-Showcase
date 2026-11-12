@@ -149,6 +149,32 @@ export async function setViewport(
   await client.Emulation.setDeviceMetricsOverride(viewport);
 }
 
+/**
+ * Pin the CSS media feature `prefers-color-scheme` for this target.
+ *
+ * GitHub (like most of the modern web) renders `light dark` from this media
+ * query, so without pinning, captures follow the *automation OS theme*: dark
+ * on a dark-mode Windows box, light on a light-mode Linux box. Pinning it
+ * makes the captured repository page identical on every machine.
+ *
+ * The GitHub capture is private to its own top-level target, so this does not
+ * affect any other page. Best effort: an older headless build that rejects the
+ * command keeps the OS default instead of failing the capture.
+ */
+export async function setEmulatedColorScheme(
+  client: CdpClient,
+  scheme: "light" | "dark"
+): Promise<void> {
+  try {
+    await client.Emulation.setEmulatedMedia({
+      media: "screen",
+      features: [{ name: "prefers-color-scheme", value: scheme }],
+    });
+  } catch {
+    /* Emulation is best-effort; never fail a capture over the color scheme */
+  }
+}
+
 /** Poll a boolean expression until it is true or the timeout expires. */
 export async function waitFor(
   client: CdpClient,
