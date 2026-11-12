@@ -1,4 +1,4 @@
-import fs from "node:fs/promises";
+﻿import fs from "node:fs/promises";
 import path from "node:path";
 import { createCanvas, loadImage } from "canvas";
 import { MOBILE_PAGE, SCROLL, VIEWPORT_PADDING } from "./config.js";
@@ -19,6 +19,7 @@ import {
   type CdpClient,
 } from "./cdp.js";
 import { sanitizeReadmeHtml } from "./card.js";
+import { bundledFontFaces } from "./font-faces.js";
 
 /**
  * Real responsive GitHub capture.
@@ -545,6 +546,7 @@ export function buildFallbackMobileHtml(repo: EnrichedRepo): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(repo.full_name)}</title>
 <style>
+  ${bundledFontFaces()}
   * { box-sizing: border-box; }
   body { margin: 0; background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; }
   header[data-anchor] { padding: 18px 16px 14px; border-bottom: 1px solid #30363d; }
