@@ -85,6 +85,7 @@ temp/           per-run artifacts · scratch/ for experiments
 output/         final MP4s
 db/             SQLite history DBs (one per pipeline — see db/README.md)
 dataset/        archived narration scripts, one per channel (see dataset/README.md)
+vendor/         vendored third-party source: fortress-reach/ (MIT) — optional browser lane, see docs/lazy-news.md §6.4
 ```
 
 The full tour lives in [docs/architecture.md](docs/architecture.md); every
@@ -364,7 +365,7 @@ Gate B (script + voice) block the render under every configuration; Gate C
 Approvals are recorded in `gate-approvals.json` with a SHA-256 of the exact
 payload shown.
 
-**Evidence before writing.** Discovery (RSS/GDELT/Bluesky) is a signal layer
+**Evidence before writing.** Discovery (RSS/GDELT/Bluesky, plus the optional Fortress-Reach browser lane — see docs/lazy-news.md §6.4) is a signal layer
 only. The script may only use facts that passed a claim-level ledger verifier:
 every number/date/name/quote must appear in collected evidence from **permitted
 primary records** (Government of India, RBI, MEA, Sansad, ECI, Supreme Court, UN,
