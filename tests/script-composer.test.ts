@@ -80,6 +80,7 @@ describe("script composer", () => {
     const segments = plan.segments;
     for (let index = 0; index < segments.length - 1; index += 1) {
       const pause = segments[index].pauseAfterMs;
+      assert.ok(pause !== undefined, `segment ${segments[index].id} has a pauseAfterMs`);
       assert.ok(
         Object.values(TTS_PAUSE_POLICY).some(
           range => pause >= range.min && pause <= range.max
