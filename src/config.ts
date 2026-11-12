@@ -283,21 +283,23 @@ export const CARD_VIEWPORT_HEIGHT = CARD.height - CARD_CHROME_HEIGHT;
 export const VIEWPORT_PADDING = 32;
 
 /**
- * Caption panel: a dark backing plate for the current spoken phrase.
+ * Caption panel: a light backing plate for the current spoken phrase.
  *
  * The panel is what keeps subtitles legible over arbitrary README content.
  * It is a separate layer from the moving yellow word pill: the panel holds the
  * phrase steady, while exactly one rounded accent pill travels behind the word
- * actually being spoken.
+ * actually being spoken. The panel is white so it never camouflages with the
+ * accent pill; caption text is therefore dark ink with a muted dark-amber
+ * emphasis (see `CAPTION_STYLE`).
  */
 export const CAPTION_PANEL_STYLE = {
-  background: "rgba(23,25,29,0.92)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.94)",
+  border: "1px solid rgba(15,17,20,0.14)",
   radiusPx: 26,
   padXPx: 24,
   /** Vertical padding is trimmed before touching the font size (tuning pass). */
   padYPx: 10,
-  shadow: "0 14px 32px rgba(0,0,0,0.25)",
+  shadow: "0 14px 32px rgba(15,17,20,0.28)",
   maxLines: 2,
 } as const;
 
