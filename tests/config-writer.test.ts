@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import fs from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
@@ -11,7 +11,7 @@ import {
   normalizePreviewConfig,
   OVERRIDES_PATH,
   readPreviewConfig,
-} from "../tools/preview/config-writer.js";
+} from "../tools/preview/shared/config-writer.js";
 import {
   DEFAULT_VISUAL_OVERRIDES,
   loadVisualOverrides,
@@ -38,19 +38,19 @@ function tempRoot(): string {
 const overridesActive = VISUAL_OVERRIDES !== null;
 const committedOnly = {
   skip: overridesActive
-    ? "visual-overrides.json is present — committed-default assertions skipped"
+    ? "visual-overrides.json is present â€” committed-default assertions skipped"
     : false,
 };
 
 describe("visual overrides", () => {
-  test("absent file → the committed composition (temp root defaults)", async () => {
+  test("absent file â†’ the committed composition (temp root defaults)", async () => {
     const root = tempRoot();
     const config = await readPreviewConfig(root);
     assert.deepEqual(config, DEFAULT_VISUAL_OVERRIDES);
   });
 
   test("src and tooling defaults never drift", () => {
-    // DEFAULT_PREVIEW_CONFIG (tools/preview/config-model.js, browser) and
+    // DEFAULT_PREVIEW_CONFIG (tools/preview/shared/config-model.js, browser) and
     // DEFAULT_VISUAL_OVERRIDES (src/visual-overrides.ts, Node) are two copies
     // of one idea; this asserts they are the same object byte-for-byte.
     assert.deepEqual(DEFAULT_PREVIEW_CONFIG, DEFAULT_VISUAL_OVERRIDES);
@@ -221,3 +221,4 @@ describe("visual overrides", () => {
     assert.ok(expected.includes("0 2px 6px rgba(25,23,20,0.140)"));
   });
 });
+

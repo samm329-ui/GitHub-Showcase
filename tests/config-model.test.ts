@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -10,12 +10,12 @@ import {
   parseVisualOverrides,
   serializeVisualOverrides,
   type PreviewConfig,
-} from "../tools/preview/config-writer.js";
+} from "../tools/preview/shared/config-writer.js";
 import { DEFAULT_VISUAL_OVERRIDES } from "../src/visual-overrides.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const MODEL_PATH = path.join(HERE, "..", "tools", "preview", "config-model.js");
-const PAGE_PATH = path.join(HERE, "..", "tools", "preview", "preview-live.html");
+const MODEL_PATH = path.join(HERE, "..", "tools", "preview", "shared", "config-model.js");
+const PAGE_PATH = path.join(HERE, "..", "tools", "preview", "github", "preview-live.html");
 
 type BrowserModel = {
   VIEWPORT_WIDTH_PX: number;
@@ -50,7 +50,7 @@ describe("shared config model", () => {
     assert.equal(
       /^\s*(import|export)\b/m.test(source),
       false,
-      "tools/preview/config-model.js must not use ESM syntax"
+      "tools/preview/shared/config-model.js must not use ESM syntax"
     );
     // Nor a dynamic import(), which is likewise blocked on file://.
     assert.equal(/\bimport\s*\(/.test(source), false);
@@ -115,7 +115,7 @@ describe("shared config model", () => {
     assert.throws(() => parseVisualOverrides("{not json"));
   });
 
-  test("serialize → parse round-trips the complete composition", () => {
+  test("serialize â†’ parse round-trips the complete composition", () => {
     const tuned = { ...DEFAULT_PREVIEW_CONFIG, captionFontSize: 58, highlightBackground: "#123ABC" };
     const text = serializeVisualOverrides(tuned);
     assert.deepEqual(parseVisualOverrides(text), tuned);
@@ -129,7 +129,7 @@ describe("shared config model", () => {
     const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
     assert.ok(inline.length >= 1, "expected an inline <script> block");
     for (const body of inline) {
-      // Parse only — the page touches `document` at runtime, never at parse time.
+      // Parse only â€” the page touches `document` at runtime, never at parse time.
       assert.doesNotThrow(
         () => new vm.Script(body, { filename: "preview-live.html" }),
         "inline preview script should parse"
@@ -151,3 +151,5 @@ describe("shared config model", () => {
     assert.ok(serverAt < folderAt && folderAt < downloadAt);
   });
 });
+
+
