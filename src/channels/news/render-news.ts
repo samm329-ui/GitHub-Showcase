@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import fsSync from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -12,6 +11,7 @@ import type {
 import type { EpisodeScript, NewsSceneEvent } from "./types.js";
 import { buildNewsSceneHtml, calloutProgress, captionHtmlAt, loadNewsAssets } from "./scene.js";
 import { sceneStateAt } from "./scene-events.js";
+import { findChromeExecutable } from "../../chrome-paths.js";
 import {
   closeTarget,
   evaluate,
@@ -75,14 +75,7 @@ async function cdpResponds(): Promise<boolean> {
 /** Spawn a headless Chromium for this render. Returns null if one is already up. */
 async function ensureChrome(): Promise<{ spawned: boolean; proc: ChildProcess | null }> {
   if (await cdpResponds()) return { spawned: false, proc: null };
-  const candidates = [
-    process.env.LAZY_NEWS_CHROME,
-    path.join(process.env.LOCALAPPDATA ?? "", "Chromium", "Application", "chrome.exe"),
-    path.join(process.env.PROGRAMFILES ?? "", "Google", "Chrome", "Application", "chrome.exe"),
-    path.join(process.env["PROGRAMFILES(X86)"] ?? "", "Microsoft", "Edge", "Application", "msedge.exe"),
-    path.join(process.env.PROGRAMFILES ?? "", "Microsoft", "Edge", "Application", "msedge.exe"),
-  ].filter(Boolean) as string[];
-  const exe = candidates.find(p => fsSync.existsSync(p));
+  const exe = findChromeExecutable(process.env.LAZY_NEWS_CHROME);
   if (!exe) throw new Error("No Chromium/Chrome/Edge found for the Lazy News renderer. Install one.");
 
   const profile = path.join(os.tmpdir(), "lazy-news-chrome-profile");
