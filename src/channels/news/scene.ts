@@ -1,6 +1,7 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import type { EpisodeScript, NewsSceneEvent } from "./types.js";
+import { bundledFontFaces } from "../../font-faces.js";
 import type { CaptionPhrase } from "../../types.js";
 
 /**
@@ -26,11 +27,11 @@ export type NewsSceneAssets = {
 };
 
 export function loadNewsAssets(root = process.cwd()): NewsSceneAssets {
-  const layersDir = path.join(root, "assets", "lazy-news", "layers");
+  const layersDir = path.join(root, "assets", "news", "layers");
   const read = (f: string): Buffer => {
     const p = path.join(layersDir, f);
     if (!fs.existsSync(p)) {
-      throw new Error(`Lazy News layer missing: ${p}. Run tools/prep_lazy_news_assets.py first.`);
+      throw new Error(`Lazy News layer missing: ${p}. Run tools/python/prep_lazy_news_assets.py first.`);
     }
     return fs.readFileSync(p);
   };
@@ -71,6 +72,7 @@ export function buildNewsSceneHtml(input: {
 <meta charset="utf-8">
 <title>Lazy News scene</title>
 <style>
+  ${bundledFontFaces()}
   :root {
     --paper-ink: #181715;
     --marker: #F7C928;
@@ -84,7 +86,7 @@ export function buildNewsSceneHtml(input: {
   .note { transition: none; }
   #paper-text {
     position: absolute; left: ${PAPER.x}px; top: ${PAPER.y}px; width: ${PAPER.w}px; height: ${PAPER.h}px;
-    font-family: "Montserrat ExtraBold Italic", "Inter ExtraBold Italic", "Arial Black", Arial, sans-serif;
+    font-family: "Montserrat", "Inter", "Arial Black", Arial, sans-serif;
     font-weight: 800; font-style: italic; color: var(--paper-ink);
     font-size: 54px; line-height: 1.18; letter-spacing: -0.5px; white-space: pre-wrap;
     padding: 6px 4px; overflow: hidden;
@@ -94,7 +96,7 @@ export function buildNewsSceneHtml(input: {
   #cap-text {
     position: absolute; left: ${CARD.x}px; top: ${CARD.y}px; width: ${CARD.w}px; height: ${CARD.h}px;
     display: flex; align-items: center; justify-content: center; text-align: center;
-    font-family: "Inter ExtraBold Italic", "Montserrat ExtraBold Italic", Arial, sans-serif;
+    font-family: "Inter", "Montserrat", Arial, sans-serif;
     font-weight: 800; font-style: italic; color: #FFFFFF; font-size: 30px; line-height: 1.3;
     padding: 10px 22px; text-shadow: 0 2px 5px rgba(0,0,0,0.4); overflow: hidden;
   }
