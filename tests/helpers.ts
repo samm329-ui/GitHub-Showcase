@@ -28,16 +28,18 @@ export function fixture(name: string): Fixture {
   if (!raw) throw new Error(`Unknown fixture: ${name}`);
   const record = raw as Record<string, unknown>;
   return {
-    repo: {
-      html_url: "",
-      description: null,
-      stargazers_count: 0,
-      forks_count: 0,
-      default_branch: "main",
-      license: null,
-      updated_at: new Date().toISOString(),
-      ...(record as unknown as Repo),
-    },
+    repo: Object.assign(
+      {
+        html_url: "",
+        description: null,
+        stargazers_count: 0,
+        forks_count: 0,
+        default_branch: "main",
+        license: null,
+        updated_at: new Date().toISOString(),
+      } as Repo,
+      record as unknown as Repo
+    ),
     readme: String(record.readme ?? ""),
     rootFiles: (record.root_files as RootEntry[]) ?? [],
     release: (record.release as GitHubRelease | null) ?? null,
