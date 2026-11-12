@@ -2,12 +2,13 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AlignedWord, AlignmentReport } from "./types.js";
+import { resolvePython } from "../../python.js";
 
 /**
  * Word-level alignment glue for the Lazy News channel.
  *
  * Contract (docs §12): the approved script is known before alignment; we run
- * tools/align_audio.py (transcript-conditioned: WhisperX preferred,
+ * tools/python/align_audio.py (transcript-conditioned: WhisperX preferred,
  * faster-whisper fallback) on the measured narration.wav and read its JSON.
  * Monotonicity and coverage are enforced here. Chunk-weighted syllable math
  * is retained ONLY as the documented fallback when this stage cannot pass.
@@ -21,7 +22,13 @@ export async function alignNarration(
   input: { audioPath: string; spokenTranscriptPath: string; segmentsJsonPath?: string; outPath: string },
   cwd = process.cwd()
 ): Promise<AlignmentReport> {
-  const script = path.join(cwd, "tools", "align_audio.py");
+  const script = path.join(cwd, "tools", "python", "align_audio.py");
+  let python;
+  try {
+    python = resolvePython(["numpy", "soundfile"]);
+  } catch (error) {
+    throw new AlignmentError((error as Error).message);
+  }
   const args = [
     script,
     "--audio", input.audioPath,
@@ -30,7 +37,7 @@ export async function alignNarration(
     ...(input.segmentsJsonPath ? ["--segments", input.segmentsJsonPath] : []),
   ];
   const { code, stderr } = await new Promise<{ code: number; stderr: string }>((resolve, reject) => {
-    const child = spawn("python", args, { windowsHide: true });
+    const child = spawn(python.command, [...python.baseArgs, ...args], { windowsHide: true });
     let stderr = "";
     child.stderr.on("data", d => { stderr += String(d); });
     child.on("error", reject);
