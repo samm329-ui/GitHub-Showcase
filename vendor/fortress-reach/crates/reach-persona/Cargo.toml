@@ -1,0 +1,12 @@
+[package]
+name = "reach-persona"
+version = "0.1.0"
+edition = "2021"
+authors = ["Fortress-Reach Contributors"]
+license = "MIT"
+description = "Deterministic, coherent browser environment profiles for Fortress-Reach"
+
+[dependencies]
+reach-core = { path = "../reach-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
