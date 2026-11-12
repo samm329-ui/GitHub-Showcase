@@ -13,8 +13,8 @@ import { createCanvas, loadImage } from "canvas";
  * the SHOWCASE_CHARACTER_*_PNG environment variables without changing code.
  */
 
-const input = path.join(process.cwd(), "assets", "character.png");
-const closeOut = path.join(process.cwd(), "assets", "character-close.png");
+const input = path.join(process.cwd(), "assets", "github", "presenter", "character.png");
+const closeOut = path.join(process.cwd(), "assets", "github", "presenter", "character-close.png");
 
 const image = await loadImage(input);
 const source = createCanvas(image.width, image.height);
