@@ -13,6 +13,7 @@ import {
   evaluate,
   navigate,
   openTarget,
+  setEmulatedColorScheme,
   setViewport,
   sleep,
   waitFor,
@@ -115,11 +116,19 @@ export function normalizeRasterSize(
 /**
  * Page validation. A 404, sign-in wall, abuse challenge or empty shell must
  * never be presented as a repository screenshot.
+ *
+ * Abuse walls are *tiny error documents* (a 429 page or an anti-bot interstitial
+ * is a few hundred characters). A real repository README is kilobytes of prose
+ * and frequently mentions "rate limit" (GitHub APIs, crawlers, quotas are a
+ * common README topic), so body-text alone can never distinguish the two. The
+ * check therefore only fires on the title, or on a <600-char body — everything
+ * else relies on the sign-in / blank-shell gates below.
  */
 export function detectFailedPage(input: FailedPageInput): string | null {
   const url = input.url.toLowerCase();
   const title = input.title.toLowerCase();
   const body = input.bodyText.toLowerCase();
+  const trimmed = input.bodyText.trim();
 
   if (/\/login|\/session|return_to=|signin|sign-in/.test(url)) {
     return "GitHub redirected to a sign-in page";
@@ -130,7 +139,12 @@ export function detectFailedPage(input: FailedPageInput): string | null {
   ) {
     return "GitHub returned a 404 page";
   }
-  if (/access denied|abuse|unusual traffic|rate limit|whoa there/.test(title + " " + body)) {
+  const ABUSE_TITLE = /access denied|abuse|unusual traffic|rate limit|whoa there|too many requests/;
+  if (ABUSE_TITLE.test(title)) {
+    return "GitHub returned an abuse or rate-limit page";
+  }
+  const ABUSE_BODY = /(access denied|unusual traffic|whoa there|too many requests|secondary rate limit|rate limit exceeded)/i;
+  if (trimmed.length < 600 && ABUSE_BODY.test(body)) {
     return "GitHub returned an abuse or rate-limit page";
   }
   if (/sign in to github|you must be signed in|create an account to continue/i.test(body)) {
@@ -548,6 +562,9 @@ export function buildFallbackMobileHtml(repo: EnrichedRepo): string {
 <style>
   ${bundledFontFaces()}
   * { box-sizing: border-box; }
+  /* GitHub's dark palette (Primer), matching the pinned prefers-color-scheme:
+     dark capture. Never re-introduce the light palette: the stage is white and
+     a light page does not sit in the composition. */
   body { margin: 0; background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; }
   header[data-anchor] { padding: 18px 16px 14px; border-bottom: 1px solid #30363d; }
   .crumb { font-size: 15px; color: #8b949e; }
@@ -621,6 +638,11 @@ async function capturePage(
     deviceScaleFactor: MOBILE_PAGE.deviceScaleFactor,
     mobile: true,
   });
+  if (CAPTURE_SCHEME) {
+    // Pin the theme before navigation so GitHub renders deterministically
+    // regardless of the OS theme on the machine running the pipeline.
+    await setEmulatedColorScheme(client, CAPTURE_SCHEME);
+  }
   await client.Page.enable();
   await client.Runtime.enable();
 
@@ -724,6 +746,22 @@ async function capturePage(
   );
   return capture;
 }
+
+/**
+ * The captured repository page theme. `dark` (the default) keeps captures
+ * identical on every OS — GitHub renders `light dark` from `prefers-color-scheme`,
+ * so following the OS theme made light-mode machines (Linux) produce light
+ * pages, which clash with the white stage. `auto` re-enables OS-following
+ * behaviour; `light` is available if ever needed but is never correct for the
+ * current composition.
+ */
+const CAPTURE_COLOR_SCHEME = (
+  process.env.SHOWCASE_CAPTURE_COLOR_SCHEME ?? "dark"
+).trim().toLowerCase();
+const CAPTURE_SCHEME =
+  CAPTURE_COLOR_SCHEME === "light" || CAPTURE_COLOR_SCHEME === "dark"
+    ? (CAPTURE_COLOR_SCHEME as "light" | "dark")
+    : null;
 
 export async function captureMobileRepositoryPage(
   repo: EnrichedRepo,
