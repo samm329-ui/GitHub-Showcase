@@ -227,28 +227,48 @@ export async function fetchFortressSearch(
 ): Promise<DiscoveredItem[]> {
   const text = await callTool(baseUrl, "search_web", { query, count: 10 }, deps);
   const now = (deps.now ?? (() => new Date()))().toISOString();
-  const urls = new Set<string>();
-  for (const match of text.matchAll(/https?:\/\/[^\s"')<>]+/g)) {
-    urls.add(match[0].replace(/[.,;:]+$/, ""));
+
+  /* Bing renders most result URLs as "host › path › slug" pseudo-URLs that are
+   * not real addresses (spaces, arrows, truncation). Only accept tokens that
+   * are full URLs, then associate the article title from the result block. */
+  const blocks = text.split(/(?=^\s*\d+\.\s+\[)/m);
+  const candidates: { title: string; url: string }[] = [];
+  for (const block of blocks) {
+    const head = block.match(/^\s*\d+\.\s+\[([^\]\n]{10,200})\]\(([^)\s]+)\)/);
+    if (!head) continue;
+    const title = head[1].replace(/\s+/g, " ").trim();
+    const url = head[2].trim();
+    if (/[\s›→|]/u.test(url)) continue; // Bing pseudo-URL — discard it
+    try {
+      const u = new URL(url);
+      if (!/^[a-z]+:\/\/[^/\s]+\/[^/\s]/.test(url)) continue; // needs at least host + path
+      if (u.hostname.includes("..")) continue;
+      candidates.push({ title, url });
+    } catch {
+      continue;
+    }
   }
+  // Sparse-block fallback: any bare full URL in the text, title = URL slug words.
+  if (candidates.length === 0) {
+    for (const match of text.matchAll(/https?:\/\/[^\s"')<>›→]+\/[^\s"')<>›→]+/g)) {
+      const url = match[0].replace(/[.,;:]+$/, "");
+      const slug = decodeURIComponent(url.replace(/^\w+:\/\/[^/]+\//, ""))
+        .replace(/[-_]+/g, " ")
+        .replace(/\.\w+$/, "")
+        .slice(0, 120);
+      candidates.push({ title: slug || url, url });
+    }
+  }
+
   const items: DiscoveredItem[] = [];
   const seen = new Set<string>();
-  for (const url of urls) {
+  for (const { title, url } of candidates) {
     let policy;
     try {
       policy = assertDiscoveryAllowed(url, registry.policies);
     } catch {
       continue; // result links out to an unregistered outlet — dropped, same discipline as GDELT
     }
-    const line = text.split("\n").find(l => l.includes(url)) ?? "";
-    const title =
-      line
-        .replace(url, "")
-        .replace(/^[\s\-–—*•|#:>·]+/, "")
-        .replace(/[^\p{L}\p{N} ,.;:!?'’&()+\-–—]/gu, " ")
-        .replace(/\s{2,}/g, " ")
-        .trim()
-        .slice(0, 180) || url;
     const id = fingerprintItem(title, url);
     if (seen.has(id)) continue;
     seen.add(id);
