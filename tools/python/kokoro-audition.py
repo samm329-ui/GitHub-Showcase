@@ -1,17 +1,17 @@
-"""Local Kokoro voice audition harness.
+﻿"""Local Kokoro voice audition harness.
 
 Generates the same short sample script through several installed voices and
 several speeds so the default voice and speed can be chosen by listening rather
-than by guessing. Nothing is uploaded; everything is written next to this file.
+than by guessing. Nothing is uploaded; output is written under `samples/voice/` (override with `--out`).
 
-    python tools/kokoro-audition.py
+    python tools/python/kokoro-audition.py
     npm run voice:audition
 
 Phase 3 audition round: am_liam (candidate), am_puck and am_michael read the
 identical script so the comparison is apples to apples. A faster harness
 invocation:
 
-    python tools/kokoro-audition.py --script-file audition-script.txt
+    python tools/python/kokoro-audition.py --script-file tools/python/audition-script-pmap.txt
 """
 
 import argparse
@@ -42,15 +42,15 @@ def load_script(args) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audition Kokoro voices locally.")
-    parser.add_argument("--model", default="tools/kokoro/kokoro-v1.0.int8.onnx")
-    parser.add_argument("--voices", default="tools/kokoro/voices-v1.0.bin")
+    parser.add_argument("--model", default="models/kokoro/kokoro-v1.0.int8.onnx")
+    parser.add_argument("--voices", default="models/kokoro/voices-v1.0.bin")
     parser.add_argument(
         "--voices-list",
         default="am_liam,am_puck,am_michael",
         help="Comma-separated voice ids to test.",
     )
     parser.add_argument("--speeds", default="1.0")
-    parser.add_argument("--out", default="tools/audition")
+    parser.add_argument("--out", default="samples/voice")
     parser.add_argument(
         "--script-file",
         default=None,
