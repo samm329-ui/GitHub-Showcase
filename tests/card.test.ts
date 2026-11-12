@@ -113,22 +113,22 @@ describe("stationary card markup", () => {
 
   test("the caption style matches the specification", () => {
     assert.match(html, new RegExp(`font-size:\\s*${CAPTION_STYLE.fontSizePx}px`));
-    assert.match(html, /color:\s*#F8F6EF/);
+    assert.match(html, /color:\s*#000000/);
     assert.match(html, new RegExp(`--caption-yellow:\\s*${ACCENT_YELLOW}`));
-    assert.match(html, /text-shadow:\s*0 3px 10px/);
-    // The dark panel is a separate layer from the moving word pill.
-    assert.match(html, /\.caption-panel\s*\{[^}]*background:\s*rgba\(23,25,29,0\.92\)/s);
+    assert.match(html, /text-shadow:\s*0 2px 6px/);
+    // The light panel is a separate layer from the moving word pill.
+    assert.match(html, /\.caption-panel\s*\{[^}]*background:\s*rgba\(255,255,255,0\.94\)/s);
     assert.match(html, /\.caption-panel\s*\{[^}]*box-shadow:/s);
     assert.ok(
       !/\.caption-overlay\s*\{[^}]*background:/s.test(html),
-      "the positioning root must stay transparent (no empty black plate)"
+      "the positioning root must stay transparent (no empty plate)"
     );
     assert.match(html, new RegExp(`\\.caption-overlay \\.w\\.current\\s*\\{\\s*color:\\s*${CAPTION_HIGHLIGHT.text}`));
     assert.match(html, new RegExp(`\\.caption-overlay \\.w\\.key-emphasis\\s*\\{\\s*color:\\s*${CAPTION_STYLE.emphasisColor}`));
     assert.ok(!/\.w\.active/.test(html), "the old combined active class is gone");
   });
 
-  test("captions sit in a fixed dark panel in the lower third", () => {
+  test("captions sit in a fixed light panel in the lower third", () => {
     // The placement is authored live in the preview, so the test follows the
     // committed CAPTION_OVERLAY instead of snapshotting tunable numbers.
     const rule = html.match(/\.caption-overlay\s*\{[^}]*\}/s)?.[0] ?? "";
