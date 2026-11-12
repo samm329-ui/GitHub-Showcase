@@ -11,9 +11,9 @@
     "showcase": "tsx src/index.ts",
     "check": "tsc --noEmit -p tsconfig.check.json",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
-    "preview": "tsx tools/preview/preview.ts",
-    "preview:live": "tsx tools/preview/preview-server.ts",
-    "preview:launch": "tsx tools/preview/launch-preview.ts",
+    "preview": "tsx tools/preview/github/preview.ts",
+    "preview:live": "tsx tools/preview/shared/preview-server.ts",
+    "preview:launch": "tsx tools/preview/shared/launch-preview.ts",
     "voice:audition": "node tools/run-python.mjs tools/python/kokoro-audition.py",
     "start:news": "tsx src/channels/news/index.ts",
     "news:prepare-assets": "node tools/run-python.mjs tools/python/prep_lazy_news_assets.py",
@@ -33,4 +33,5 @@
     "typescript": "^5.7.3"
   }
 }
+
 
