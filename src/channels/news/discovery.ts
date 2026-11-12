@@ -132,6 +132,8 @@ export const BROWSER_PAGES: Record<NewsCategory, string[]> = {
   ai: [
     "https://blog.google/technology/ai/",
     "https://deepmind.google/blog/",
+    "https://www.anthropic.com/news",
+    "https://mistral.ai/news/",
   ],
   technology: [
     "https://blog.google/technology/ai/",
@@ -180,7 +182,14 @@ export async function discoverBrowserHeadlines(
 ): Promise<DiscoveredItem[]> {
   const baseUrl = process.env.REACH_MCP_URL;
   if (!baseUrl) {
-    console.error("  discovery: REACH_MCP_URL is not set — browser lane disabled (all APIs are retired; Fortress-Reach is the only discovery transport).");
+    console.error(
+      "  discovery: REACH_MCP_URL is not set — lazy News discovery is Fortress-only.\n" +
+      "  Either pick [2] Lazy News Commentary → [1] from run.bat / run.sh (it starts the server for you),\n" +
+      "  or launch it yourself:\n" +
+      "    REACH_TUNNEL=0 REACH_PORT=8050 REACH_CDP_PORT=9226 REACH_APPLY_PROFILE=0 vendor/fortress-reach/target/release/reach-server\n" +
+      "    $env:REACH_MCP_URL='http://127.0.0.1:8050/mcp'\n" +
+      "    npm run start:news -- --topic politics --discover"
+    );
     return [];
   }
   const out: DiscoveredItem[] = [];
