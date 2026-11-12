@@ -1,17 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { DB_PATH } from "../../config.js";
-import { canonicalFullName } from "../../history.js";
+import { DB_DIR } from "../../config.js";
+
+/** Standalone Lazy News database. `NEWS_DB` overrides the default. */
+const NEWS_DB_PATH = process.env.NEWS_DB ?? path.join(DB_DIR, "news-history.db");
 
 /**
- * Lazy News persistence — additive, versioned, transactional.
+ * Lazy News persistence — standalone, versioned, transactional.
  *
+ * - Lives in its own database (`db/news-history.db`); the GitHub channel's
+ *   database (`db/showcase-history.db`) is never opened by this module.
  * - A `schema_migrations` table tracks applied migrations; no blind ALTERs.
  * - The whole migration runs inside one transaction; any failure rolls back.
  * - A timestamped backup of the live DB is written before the first migration.
- * - News tables are additive; GitHub tables and rows are never modified.
- *   `pipeline_runs` gains a `channel` column with default 'github'.
  */
 
 export type NewsEpisodeStatus =
@@ -114,6 +116,27 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       INSERT OR IGNORE INTO schema_migrations(version, name, applied_at) VALUES (1, 'news-channel-baseline', datetime('now'));
     `,
   },
+  {
+    // Fresh standalone Lazy News database: the channel tracks its own runs
+    // here (the GitHub database is never opened by this module).
+    version: 2,
+    name: "news-standalone-pipeline-runs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS pipeline_runs (
+        run_id TEXT PRIMARY KEY,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        status TEXT NOT NULL,
+        stage TEXT,
+        repository_node_id TEXT,
+        output_path TEXT,
+        error_json TEXT,
+        channel TEXT NOT NULL DEFAULT 'news'
+      );
+
+      INSERT OR IGNORE INTO schema_migrations(version, name, applied_at) VALUES (2, 'news-standalone-pipeline-runs', datetime('now'));
+    `,
+  },
 ];
 
 function backupDb(dbPath: string): string {
@@ -135,26 +158,6 @@ export function applyNewsMigrations(db: DatabaseSync, dbPath: string): string[] 
   const backup = backupDb(dbPath);
   applied.push(`backup:${path.basename(backup)}`);
 
-  // Create GitHub-side tables idempotently so the additive column works on a
-  // pristine DB without disturbing an existing one.
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pipeline_runs (
-      run_id TEXT PRIMARY KEY,
-      started_at TEXT NOT NULL,
-      finished_at TEXT,
-      status TEXT NOT NULL,
-      stage TEXT,
-      repository_node_id TEXT,
-      output_path TEXT,
-      error_json TEXT
-    );
-  `);
-  const cols = db.prepare("SELECT name FROM pragma_table_info('pipeline_runs')").all() as { name: string }[];
-  if (!cols.some(c => c.name === "channel")) {
-    db.exec("ALTER TABLE pipeline_runs ADD COLUMN channel TEXT NOT NULL DEFAULT 'github'");
-    applied.push("alter:pipeline_runs:+channel");
-  }
-
   try {
     db.exec("BEGIN");
     for (const migration of pending) {
@@ -175,21 +178,11 @@ export class NewsHistory {
   readonly dbPath: string;
   readonly migrationNotes: string[];
 
-  constructor(dbPath: string = DB_PATH) {
+  constructor(dbPath: string = NEWS_DB_PATH) {
     this.dbPath = dbPath;
     const dir = path.dirname(dbPath);
     fs.mkdirSync(dir, { recursive: true });
     this.db = new DatabaseSync(dbPath);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS repositories (
-        node_id TEXT PRIMARY KEY,
-        canonical_full_name TEXT NOT NULL,
-        html_url TEXT NOT NULL,
-        first_seen_at TEXT NOT NULL,
-        last_seen_at TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'discovered'
-      );
-    `); // harmless no-op mirror; real schema is owned by history.ts
     this.migrationNotes = applyNewsMigrations(this.db, dbPath);
   }
 
@@ -282,4 +275,4 @@ export class NewsHistory {
   }
 }
 
-export { canonicalFullName };
+
