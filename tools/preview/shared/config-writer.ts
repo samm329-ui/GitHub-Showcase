@@ -1,4 +1,4 @@
-import fs from "node:fs/promises";
+﻿import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 // Side-effect import: `config-model.js` is a classic script that publishes its
@@ -6,13 +6,13 @@ import path from "node:path";
 // duplicating the logic) keeps the Node writer and the browser folder fallback
 // on one implementation.
 import "./config-model.js";
-import type { VisualOverrides } from "../../src/visual-overrides.js";
+import type { VisualOverrides } from "../../../src/visual-overrides.js";
 
 /**
  * One-click config persistence for the live preview.
  *
  * The preview authors exactly one file: `visual-overrides.json` at the
- * repository root. All coercion/validation lives in `tools/preview/config-model.js`
+ * repository root. All coercion/validation lives in `tools/preview/shared/config-model.js`
  * so the dev server (Node) and the in-page folder fallback (browser) share one
  * implementation and can never drift apart.
  *
@@ -24,7 +24,7 @@ import type { VisualOverrides } from "../../src/visual-overrides.js";
 /** Every value the live preview can author (the shape of the file). */
 export type PreviewConfig = VisualOverrides;
 
-/** The shape published by `tools/preview/config-model.js`. */
+/** The shape published by `tools/preview/shared/config-model.js`. */
 type ConfigModel = {
   VIEWPORT_WIDTH_PX: number;
   VIEWPORT_HEIGHT_PX: number;
@@ -44,7 +44,7 @@ const model = (globalThis as unknown as { ShowcaseConfigModel: ConfigModel })
 
 if (!model) {
   throw new Error(
-    "config-writer: tools/preview/config-model.js did not publish ShowcaseConfigModel"
+    "config-writer: tools/preview/shared/config-model.js did not publish ShowcaseConfigModel"
   );
 }
 
@@ -120,3 +120,4 @@ export async function applyPreviewConfig(
   }
   return { files: [OVERRIDES_PATH], fields };
 }
+
