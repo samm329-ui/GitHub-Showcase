@@ -1,7 +1,7 @@
 ﻿/**
  * Visual overrides: optional presentation tuning authored in the live preview.
  *
- * The live preview (`tools/preview/preview-live.html`) used to rewrite literal
+ * The live preview (`tools/preview/github/preview-live.html`) used to rewrite literal
  * constants inside `src/config.ts`, `src/caption-overlay.ts` and `src/card.ts`.
  * That meant the “Save” button edited source code with regexes, and every
  * save dirtied three tracked files. Presentation tuning is now data:
@@ -106,7 +106,7 @@ export type VisualOverrides = {
 
 /** The committed composition. These equal the constants the sources carried
  * before overrides existed, so a repository without the file renders exactly
- * as it always did. `tools/preview/config-model.js` carries an identical copy
+ * as it always did. `tools/preview/shared/config-model.js` carries an identical copy
  * for the browser fallback; `tests/config-model.test.ts` asserts they match. */
 export const DEFAULT_VISUAL_OVERRIDES: VisualOverrides = {
   mascotAsset: "mascot-custom.png",
@@ -295,3 +295,4 @@ export function loadVisualOverrides(root = process.cwd()): VisualOverrides | nul
 
 /** The overrides in effect for this process, resolved once at import time. */
 export const VISUAL_OVERRIDES: VisualOverrides | null = loadVisualOverrides();
+
