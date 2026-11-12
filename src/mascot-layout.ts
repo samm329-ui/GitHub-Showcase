@@ -27,7 +27,7 @@ export type AlphaBounds = {
   maxY: number;
 };
 
-/** Visible alpha bounds of `assets/character.png` (1284x1182). */
+/** Visible alpha bounds of `assets/github/presenter/character.png` (1284x1182). */
 export const CHARACTER_ALPHA_BOUNDS: AlphaBounds = {
   srcWidth: 1284,
   srcHeight: 1182,
@@ -37,7 +37,7 @@ export const CHARACTER_ALPHA_BOUNDS: AlphaBounds = {
   maxY: 1176,
 };
 
-/** Visible alpha bounds of `assets/character-close.png` (1284x1004). */
+/** Visible alpha bounds of `assets/github/presenter/character-close.png` (1284x1004). */
 export const CHARACTER_CLOSE_ALPHA_BOUNDS: AlphaBounds = {
   srcWidth: 1284,
   srcHeight: 1004,
