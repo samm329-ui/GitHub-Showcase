@@ -1,0 +1,17 @@
+[package]
+name = "reach-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Multi-platform intelligent routing engine for Fortress-Reach"
+
+[dependencies]
+reach-core = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+feed-rs = { workspace = true }
+regex = { workspace = true }
