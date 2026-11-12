@@ -62,7 +62,7 @@ export type CaptureGeometry = {
   stage: { width: number; height: number };
   card: { left: number; top: number; width: number; height: number };
   caption?: { left: number; top: number; width: number; height: number };
-  /** The dark caption panel, present only while a phrase is on screen. */
+  /** The white caption panel, present only while a phrase is on screen. */
   captionPanel?: { left: number; top: number; width: number; height: number } | null;
   /** The callout bubble's authored box (present even while hidden). */
   callout?: { left: number; top: number; width: number; height: number };
