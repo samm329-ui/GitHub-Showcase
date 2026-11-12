@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import type { CalloutAssetProfile, DiscoveryMode, ImpactAnchor } from "./types.js";
 import { VISUAL_OVERRIDES } from "./visual-overrides.js";
@@ -22,7 +22,7 @@ export const TEMP_DIR = process.env.SHOWCASE_TEMP_DIR
 /* the measured narration audio. `TARGET_DURATION_SECONDS` is the value  */
 /* the narration planner aims for; `MAX_DURATION_SECONDS` is a hard     */
 /* product limit that nothing is allowed to exceed. Nothing clamps the   */
-/* audio down to a target — a too-long script is shortened and          */
+/* audio down to a target â€” a too-long script is shortened and          */
 /* regenerated instead.                                                */
 /* ------------------------------------------------------------------ */
 
@@ -93,7 +93,7 @@ export const RESERVATION_TIMEOUT_MINUTES = 30;
 /* grounded on the fact ledger + README excerpt the pipeline already    */
 /* collected. Rate-limit discipline: ONE request per video (plus at     */
 /* most one "shorten" follow-up), capped prompt/output, backoff with    */
-/* jitter and `Retry-After` honoured. Failure fails the run — there is  */
+/* jitter and `Retry-After` honoured. Failure fails the run â€” there is  */
 /* no silent fallback to the legacy templated writer.                   */
 /* ------------------------------------------------------------------ */
 
@@ -142,12 +142,12 @@ export const MAX_REPEATED_TEMPLATE_USAGE = 2;
 /* ------------------------------------------------------------------ */
 
 /**
- * Configurable narrator preset. `am_fenrir` is the locked baseline voice —
+ * Configurable narrator preset. `am_fenrir` is the locked baseline voice â€”
  * auditioned against `am_liam`, `am_puck` and `am_michael` on the identical
  * script in `samples/voice/`. Speed 1.0 vs 1.05 is tuned by listening; the
  * *delivery* (young, curious, conversational) comes from the writing, the
  * punctuation and the brief measured pauses between segments, not from an
- * emotion knob — Kokoro has none.
+ * emotion knob â€” Kokoro has none.
  */
 export const VOICE_PRESET = {
   id: process.env.KOKORO_VOICE ?? "am_fenrir",
@@ -256,7 +256,7 @@ export const INK = "#151619";
  * so the card can never end up off-centre or half-updated.
  *
  * With `visual-overrides.json` present, `width`/`height` come from the file
- * and `left`/`top` are re-centred here on every load — the file stores only
+ * and `left`/`top` are re-centred here on every load â€” the file stores only
  * what the preview authors.
  */
 const CARD_WIDTH = OV?.cardWidth ?? 810;
@@ -456,7 +456,7 @@ export function getCalloutAssetProfile(assetPath?: string | null): CalloutAssetP
  * Callout bubble: short, evidence-backed summaries attached to the mascot's
  * head. Geometry is derived from the mascot's head anchor and active asset
  * profile at render time; the constants here are the authored shape, bounds
- * and motion — the committed composition by default, overlaid with
+ * and motion â€” the committed composition by default, overlaid with
  * `visual-overrides.json` when present.
  *
  * Motion is a pure function of media time (see `src/callout-overlay.ts`); there
@@ -474,8 +474,8 @@ export const CALLOUT = {
   bodyHeightPx: 176,
   /**
    * Clamp bounds so the tail can track the face without leaving the canvas.
-   * `leftMinPx` sits below the right bound so the right margin — not the
-   * minimum — decides the horizontal pin, keeping the bubble tucked toward
+   * `leftMinPx` sits below the right bound so the right margin â€” not the
+   * minimum â€” decides the horizontal pin, keeping the bubble tucked toward
    * the mascot. The top band follows the measured head-top line: the body
    * stays above the head while the tail reaches down toward the glasses.
    */
@@ -610,9 +610,9 @@ export const MOBILE_PAGE = {
  * Default mascot artwork, as a filename inside `assets/`.
  *
  * This is the one asset the live preview re-pins when you pick a new
- * character image (`tools/preview/preview-live.html` → Save writes
- * `visual-overrides.json`), so the rendered pipeline — including the pose
- * fallbacks below — follows the choice. `SHOWCASE_CHARACTER_PNG` still wins
+ * character image (`tools/preview/github/preview-live.html` â†’ Save writes
+ * `visual-overrides.json`), so the rendered pipeline â€” including the pose
+ * fallbacks below â€” follows the choice. `SHOWCASE_CHARACTER_PNG` still wins
  * when set.
  */
 export const CHARACTER_PNG_FILENAME = OV?.mascotAsset ?? "mascot-custom.png";
@@ -660,7 +660,7 @@ export const CALLOUT_PNG = readCalloutPath();
 
 /**
  * Optional presenter poses. Any pose without dedicated artwork falls back to
- * `CHARACTER_PNG` — the chosen default mascot — so swapping the character in
+ * `CHARACTER_PNG` â€” the chosen default mascot â€” so swapping the character in
  * the live preview replaces every pose, not just the standing one. Supply
  * separate transparent artwork through the environment for true hand/arm
  * gestures.
@@ -674,11 +674,11 @@ export const CHARACTER_POSE_PNGS = {
 /**
  * Dedicated mascot placement config (Visual Composition Pass). The presenter
  * is sized by *width ratio of the output canvas* and anchored to the
- * lower-right corner of the stage — not the card — so it fills the marked
+ * lower-right corner of the stage â€” not the card â€” so it fills the marked
  * presentation area.
  *
  * Anchoring is alpha-aware: `offsetX` / `offsetY` are signed offsets in canvas
- * px of the *visible artwork* from the right/bottom edge — positive lifts the
+ * px of the *visible artwork* from the right/bottom edge â€” positive lifts the
  * mascot inside the frame so the sliders can move it up and down anywhere over
  * the stage, negative lets it extend past the edge where the 1080x1920
  * viewport clips it. The transparent PNG padding is subtracted first by
@@ -688,9 +688,9 @@ export type MascotLayout = {
   anchor: "bottom-right";
   /** Fraction of the 1080 px canvas width, applied to the PNG rectangle. */
   widthRatio: number;
-  /** Signed visible offset from the right edge (+ = inside, − = past edge). */
+  /** Signed visible offset from the right edge (+ = inside, âˆ’ = past edge). */
   offsetX: number;
-  /** Signed visible offset from the bottom edge (+ = lifted up, − = past edge). */
+  /** Signed visible offset from the bottom edge (+ = lifted up, âˆ’ = past edge). */
   offsetY: number;
   /** Guarantee the head stays inside the canvas (guards against extreme sizes). */
   keepFaceVisible: boolean;
@@ -714,7 +714,7 @@ export const MASCOT_LAYOUT: MascotLayout = {
 };
 
 /**
- * The character is a whole cut-out: only its body moves. Motion values only —
+ * The character is a whole cut-out: only its body moves. Motion values only â€”
  * size and placement live in `MASCOT_LAYOUT`. The presenter is sized by width
  * so every pose keeps the same apparent scale on the canvas.
  */
