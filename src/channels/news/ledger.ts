@@ -3,6 +3,7 @@ import pathMod from "node:path";
 import type { ClaimKind, ClaimStatus, EvidenceLedger, EvidenceRecord, FactRecord, ContentClass } from "./types.js";
 import { assertEvidenceAllowed, assertDiscoveryAllowed, type RegistryLoadResult } from "./sources.js";
 import { findChromeExecutable } from "../../chrome-paths.js";
+import { fetchPageMarkdown } from "./fortress-reach.js";
 
 /**
  * Evidence collection + claim-level fact ledger.
@@ -25,7 +26,7 @@ import { findChromeExecutable } from "../../chrome-paths.js";
 /* ------------------------------------------------------------------ */
 
 export type FetchImpl = typeof fetch;
-export type LedgerDeps = { fetchImpl?: FetchImpl; now?: () => Date };
+export type LedgerDeps = { fetchImpl?: FetchImpl; now?: () => Date; fortressUrl?: string };
 
 const USER_AGENT = "LazyNews/1.0 (+non-commercial research; obey terms)";
 const EVIDENCE_CDP_PORT = Number(process.env.NEWS_EVIDENCE_PORT ?? 9223);
@@ -136,6 +137,25 @@ export function selectExcerpts(text: string, keywords: string[], maxExcerpts = 8
 }
 
 async function fetchText(url: string, deps: LedgerDeps): Promise<string> {
+  // Owner rule: evidence collection goes through Fortress-Reach, never through
+  // a direct HTTP fetch. NEWS_EVIDENCE_DIRECT=1 is an explicit, loud opt-out
+  // for debugging only; unset, Fortress is mandatory and fails closed.
+  if (process.env.NEWS_EVIDENCE_DIRECT !== "1") {
+    const baseUrl = deps.fortressUrl ?? process.env.REACH_MCP_URL;
+    if (!baseUrl) {
+      throw new LedgerError(
+        "Evidence collection requires Fortress-Reach. Set REACH_MCP_URL to a running server " +
+          "(see docs/lazy-news.md §6.4), or set NEWS_EVIDENCE_DIRECT=1 to acknowledge direct fetching (discouraged)."
+      );
+    }
+    const text = await fetchPageMarkdown(baseUrl, url, deps);
+    if (text.trim().length < CONTENT_MIN_CHARS) {
+      throw new LedgerError(
+        `Fortress 'read_page' returned only ${text.trim().length} chars for ${url} — below the ${CONTENT_MIN_CHARS}-char floor. No fallback.`
+      );
+    }
+    return text;
+  }
   const f = deps.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
@@ -231,9 +251,17 @@ export async function collectEvidence(
   deps: LedgerDeps = {}
 ): Promise<EvidenceRecord[]> {
   const records: EvidenceRecord[] = [];
+  const skipped: string[] = [];
   for (const url of urls) {
     const policy = assertEvidenceAllowed(url, registry.policies);
-    const text = await fetchText(url, deps);
+    let text: string;
+    try {
+      text = await fetchText(url, deps);
+    } catch (error) {
+      // Permitted source refused/short/blocked — never fetch it another way.
+      skipped.push(`${policy.sourceId} ${url} — ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      continue;
+    }
     const now = (deps.now ?? (() => new Date()))().toISOString();
     const excerpts = selectExcerpts(text, storyKeywords, 8);
     records.push({
@@ -251,6 +279,7 @@ export async function collectEvidence(
       fetchedAt: now,
     });
   }
+  for (const line of skipped) console.error(`  evidence skipped (fail closed): ${line}`);
   return records;
 }
 
