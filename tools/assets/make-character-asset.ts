@@ -12,8 +12,8 @@ import { createCanvas, loadImage } from "canvas";
  * dark outlines.
  */
 
-const input = path.join(process.cwd(), "Character", "image.png");
-const output = path.join(process.cwd(), "assets", "character.png");
+const input = path.join(process.cwd(), "assets", "github", "presenter", "character-source.png");
+const output = path.join(process.cwd(), "assets", "github", "presenter", "character.png");
 
 const image = await loadImage(input);
 const canvas = createCanvas(image.width, image.height);
