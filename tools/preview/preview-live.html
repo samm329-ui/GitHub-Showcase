@@ -1,9 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>GitHub Showcase — Live Composition Preview</title>
 <style>
+  @font-face{font-family:"Roboto";font-style:normal;font-weight:400;font-display:block;src:url("../assets/shared/fonts/roboto-latin-400-normal.woff2") format("woff2");}
+  @font-face{font-family:"Roboto";font-style:normal;font-weight:700;font-display:block;src:url("../assets/shared/fonts/roboto-latin-700-normal.woff2") format("woff2");}
+  @font-face{font-family:"Roboto";font-style:normal;font-weight:900;font-display:block;src:url("../assets/shared/fonts/roboto-latin-900-normal.woff2") format("woff2");}
+  @font-face{font-family:"Roboto Mono";font-style:normal;font-weight:400;font-display:block;src:url("../assets/shared/fonts/roboto-mono-latin-400-normal.woff2") format("woff2");}
+  @font-face{font-family:"Inter";font-style:normal;font-weight:700;font-display:block;src:url("../assets/shared/fonts/inter-latin-700-normal.woff2") format("woff2");}
+  @font-face{font-family:"Inter";font-style:italic;font-weight:800;font-display:block;src:url("../assets/shared/fonts/inter-latin-800-italic.woff2") format("woff2");}
+  @font-face{font-family:"Inter";font-style:normal;font-weight:900;font-display:block;src:url("../assets/shared/fonts/inter-latin-900-normal.woff2") format("woff2");}
+  @font-face{font-family:"Montserrat";font-style:italic;font-weight:800;font-display:block;src:url("../assets/shared/fonts/montserrat-latin-800-italic.woff2") format("woff2");}
   :root {
     --stage-bg: #F2EFE9; --card-bg: #0D1117; --surface-2: #161B22; --border: #30363D;
     --text-primary: #F0F6FC; --text-secondary: #8B949E; --github-blue: #58A6FF;
@@ -13,7 +21,7 @@
     --caption-shadow: 0 3px 10px rgba(0,0,0,0.95); --caption-ls: -1.1px;
     --hl-bg: #FFD500; --hl-text: #FFFFFF; --hl-radius: 9px; --hl-pad-x: 9px; --hl-pad-y: 4px;
     --hl-transition: 70ms;
-    --mascot-width: 681px; --mascot-right: -62.65px; --mascot-bottom: 459.35px;
+    --mascot-width: 681px; --mascot-right: -60px; --mascot-bottom: 462px;
     --mascot-shadow: drop-shadow(0 24px 54px rgba(0,0,0,1));
     --card-shadow: 0 2px 5px rgba(25,23,20,0.420), 0 10px 19px rgba(25,23,20,0.360), 0 24px 38px rgba(25,23,20,0.540), 0 48px 77px rgba(25,23,20,0.420);
     --card-radius: 60px;
@@ -173,9 +181,9 @@
   </div>
 
   <svg id="impact-rear" class="impact-layer" viewBox="0 0 1080 1920" style="position:absolute; inset:0; width:1080px; height:1920px; pointer-events:none; z-index:2;"></svg>
-  <img class="character" id="mascot" src="../assets/mascot-custom.png" alt="mascot" onerror="this.style.opacity='0.9'; this.style.background='rgba(255,0,0,0.35)'">
+  <img class="character" id="mascot" src="../assets/github/presenter/mascot-custom.png" alt="mascot" onerror="this.style.opacity='0.9'; this.style.background='rgba(255,0,0,0.35)'">
   <div class="callout-overlay" id="callout">
-    <img class="callout-sticker" src="../assets/callout-bubble.png" onerror="this.src='../assets/Comic%20Speech%20Bubble%20Sticker.png'" alt="callout bubble">
+    <img class="callout-sticker" src="../assets/github/callout/callout-bubble.png" onerror="this.src='../assets/github/callout/comic-speech-bubble.png'" alt="callout bubble">
     <div class="callout-text" id="callout-text">Turns long videos<br>into short clips!</div>
   </div>
   <svg id="impact-front" class="impact-layer" viewBox="0 0 1080 1920" style="position:absolute; inset:0; width:1080px; height:1920px; pointer-events:none; z-index:4;"></svg>
@@ -214,19 +222,19 @@
 
 <div class="panel">
   <h3>Full Composition Preview</h3>
-  <div class="note">Edit numbers directly or drag sliders — every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>src/config.ts</code>, <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>.</div>
+  <div class="note">Edit numbers directly or drag sliders — every control updates the canvas live, and <b>Save (one click)</b> writes the exact same values into <code>visual-overrides.json</code>.</div>
 
   <section>
     <h4>Mascot image (character)</h4>
     <label>Pick PNG file<input type="file" id="mascot-file" accept="image/png"></label>
-    <label>Or URL<input type="text" id="mascot-url" value="../assets/mascot-custom.png"></label>
+    <label>Or URL<input type="text" id="mascot-url" value="../assets/github/presenter/mascot-custom.png"></label>
     <div class="row">
       <button id="load-url">Load URL</button>
-      <button id="load-default">Load committed default (assets/mascot-custom.png)</button>
+      <button id="load-default">Load committed default (assets/github/presenter/mascot-custom.png)</button>
     </div>
-    <label>Saved asset (written to src/config.ts)<input type="text" id="s-masset" value="mascot-custom.png" readonly></label>
+    <label>Saved asset (written to visual-overrides.json)<input type="text" id="s-masset" value="mascot-custom.png" readonly></label>
     <div class="note" id="mascot-status" style="color:#FFE66D">mascot status: loading…</div>
-    <div class="note">“Pick PNG file” copies the image into <code>assets/mascot-custom.png</code>; Save writes that filename into <code>src/config.ts</code>, so rendered videos use your character for every pose.</div>
+    <div class="note">“Pick PNG file” copies the image into <code>assets/github/presenter/mascot-custom.png</code>; Save writes that filename into <code>visual-overrides.json</code>, so rendered videos use your character for every pose.</div>
   </section>
 
   <section>
@@ -389,10 +397,9 @@
       <button id="savecfg" class="primary" onclick="window.__saveToCodebase && window.__saveToCodebase()">Save (one click)</button>
     </div>
     <div class="note" id="save-status">
-      Writes every value on this page straight into <code>src/config.ts</code>,
-      <code>src/caption-overlay.ts</code> and <code>src/card.ts</code>. The box below
+      Writes every value on this page into <code>visual-overrides.json</code> (the one file the preview owns). The box below
       shows the exact JSON that gets sent — nothing hidden, nothing reordered.
-      <code>Save My Edits.vbs</code> / <code>Save My Edits.cmd</code> start the helper for you.
+      Run <code>npm run preview:launch</code> in a terminal to start the helper for you.
     </div>
     <div class="row">
       <button id="reloadcfg" onclick="window.__reloadFromCodebase && window.__reloadFromCodebase()">Reload from codebase</button>
@@ -412,13 +419,11 @@
 
   <div class="note">
     <strong>One-click save, three ways</strong> (all equivalent — pick whichever works):
-    <code>Save My Edits.vbs</code> or <code>Save My Edits.cmd</code> start the helper and open this
-    page (double-click in the project folder) · or run <code>npm run preview:launch</code> /
-    <code>npm run preview:live</code> · or serve this file from any static server and Save writes
+    run <code>npm run preview:launch</code> (starts the helper and opens this
+    page) · or <code>npm run preview:live</code> and open the printed URL · or serve this file from any static server and Save writes
     to your project folder (browser asks once).<br>
-    Config paths: <code>src/config.ts</code> (MASCOT_LAYOUT, CAPTION_OVERLAY, CARD) ·
-    <code>src/caption-overlay.ts</code> (CAPTION_STYLE, CAPTION_HIGHLIGHT, CAPTION_MOTION) ·
-    <code>src/card.ts</code> (CARD_SHADOW_TUNING).<br>
+    Config: <code>visual-overrides.json</code> — merged over the committed composition at pipeline startup
+    (mascot, card, captions, callout, impact accents, highlight colours). Delete the file to return to the committed look.<br>
     Env overrides: <code>SHOWCASE_MASCOT_WIDTH_RATIO</code>, <code>SHOWCASE_MASCOT_OFFSET_X/Y</code>,
     <code>SHOWCASE_CAPTION_HIGHLIGHT_BG/TEXT</code>, <code>SHOWCASE_CHARACTER_PNG</code>.
   </div>
@@ -433,9 +438,9 @@
   /* ------------------------------------------------------------------ */
   /* One-click save.                                                     */
   /*                                                                     */
-  /* Save tries, in order: the helper server (tools/preview-server.ts,   */
-  /* started by the "Save My Edits" launcher), then a picked project     */
-  /* folder via the shared tools/config-model.js, then a text download.  */
+  /* Save tries, in order: the helper server (tools/preview/preview-server.ts,  */
+  /* started by `npm run preview:launch`), then a picked project folder via   */
+  /* the shared tools/preview/config-model.js, then a text download.          */
   /*                                                                     */
   /* Defined early and exposed on `window` so the buttons keep working   */
   /* even if anything later in this file throws.                          */
@@ -572,8 +577,8 @@
   /*                                                                     */
   /* Used only when the helper server is unreachable (e.g. the page was  */
   /* opened straight from disk). The first Save asks the browser for the */
-  /* project folder once; afterwards Save writes the same rewrites via   */
-  /* the shared `config-model.js`. The chosen handle is remembered in    */
+  /* project folder once; afterwards Save writes visual-overrides.json   */
+  /* via the shared config-model.js. The chosen handle is remembered in  */
   /* IndexedDB when the browser allows it.                               */
   /* ------------------------------------------------------------------ */
   const FOLDER_SUPPORTED = typeof window.showDirectoryPicker === 'function';
@@ -613,21 +618,22 @@
     });
   }
 
-  async function resolveFile(root, relPath) {
+  async function resolveFile(root, relPath, create = false) {
     const parts = relPath.split('/');
     let dir = root;
     for (let i = 0; i < parts.length - 1; i += 1) dir = await dir.getDirectoryHandle(parts[i]);
-    return dir.getFileHandle(parts[parts.length - 1]);
+    return dir.getFileHandle(parts[parts.length - 1], create ? { create: true } : undefined);
   }
 
-  /** Read the three source files out of a picked project folder. */
-  async function readFolderSources(handle) {
-    const sources = {};
-    for (const key of Object.keys(MODEL.CONFIG_PATHS)) {
-      const fh = await resolveFile(handle, MODEL.CONFIG_PATHS[key]);
-      sources[key] = await (await fh.getFile()).text();
+  /** Read `visual-overrides.json` out of a picked project folder (absent = defaults). */
+  async function readFolderOverrides(handle) {
+    try {
+      const fh = await resolveFile(handle, MODEL.OVERRIDES_FILENAME);
+      return await (await fh.getFile()).text();
+    } catch (error) {
+      if (error && error.name === 'NotFoundError') return null;
+      throw error;
     }
-    return sources;
   }
 
   /** Ask for the project folder once and remember it. */
@@ -661,30 +667,27 @@
     const perm = await handle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') throw new Error('folder permission was not granted');
     if (!dirValidated) {
-      // Fail loudly on the wrong folder instead of writing into the void.
-      await readFolderSources(handle);
+      // Fail loudly on the wrong folder instead of writing into the void:
+      // a real project root always has package.json.
+      await resolveFile(handle, 'package.json');
       dirValidated = true;
     }
     return handle;
   }
 
-  /** Write the config through a picked folder handle. */
+  /** Write visual-overrides.json through a picked folder handle. */
   async function saveViaFolder(config) {
     if (!MODEL) throw new Error('the shared save engine did not load');
     if (!FOLDER_SUPPORTED) throw new Error('this browser cannot save to a folder');
     const handle = await ensureFolder();
-    const sources = await readFolderSources(handle);
-    const next = MODEL.writePreviewConfig(sources, config);
-    const files = [];
-    for (const key of Object.keys(MODEL.CONFIG_PATHS)) {
-      if (sources[key] === next[key]) continue;
-      const fh = await resolveFile(handle, MODEL.CONFIG_PATHS[key]);
-      const writable = await fh.createWritable();
-      await writable.write(next[key]);
-      await writable.close();
-      files.push(MODEL.CONFIG_PATHS[key]);
-    }
-    return { files };
+    // Serialize through the shared model: the file the browser writes is
+    // byte-identical to the file the helper server writes.
+    const next = MODEL.normalizePreviewConfig(config, MODEL.DEFAULT_PREVIEW_CONFIG);
+    const fh = await resolveFile(handle, MODEL.OVERRIDES_FILENAME, true);
+    const writable = await fh.createWritable();
+    await writable.write(MODEL.serializeVisualOverrides(next));
+    await writable.close();
+    return { files: [MODEL.OVERRIDES_FILENAME] };
   }
 
   function setStatus(html, tone) {
@@ -767,14 +770,14 @@
     const handle = await storedFolder();
     if (handle && MODEL) {
       try {
-        const sources = await readFolderSources(handle);
-        applyConfig(MODEL.parsePreviewConfig(sources));
-        setStatus('Loaded the committed values from your folder.', 'ok');
+        const text = await readFolderOverrides(handle);
+        applyConfig(text ? MODEL.parseVisualOverrides(text) : MODEL.DEFAULT_PREVIEW_CONFIG);
+        setStatus('Loaded the saved overrides from your folder.', 'ok');
         return;
       } catch (error) { /* fall back to the local copy already applied */ }
     }
     // No helper and no folder: the localStorage copy is already on screen.
-    setStatus('Showing your last values. Open the <strong>Save My Edits</strong> launcher to save to the files.', '');
+    setStatus('Showing your last values. Run <code>npm run preview:launch</code> to save to the file.', '');
     if (FOLDER_SUPPORTED) {
       const connect = $('connectfolder');
       if (connect) connect.style.display = '';
@@ -883,8 +886,8 @@
   pair('s-callout-mc','n-callout-mc','--callout-max-cues','');
 
   // Card geometry: width/height are authored; left/top are re-centred on the
-  // 1080x1920 stage exactly the way tools/config-model.js re-centres them on
-  // save, so the preview never shows a position the render won't produce.
+  // 1080x1920 stage exactly the way the renderer re-centres them at load, so
+  // the preview never shows a position the render won't produce.
   function applyCardGeometry() {
     const w = parseFloat($('s-cardw').value || 810);
     const h = parseFloat($('s-cardh').value || 1668);
@@ -1062,11 +1065,11 @@
     setPairValue('s-ct', 1546);
   });
 
-  // mascot image — a picked PNG is copied into assets/ and saved as the
+  // mascot image — a picked PNG is copied into assets/github/presenter/ and saved as the
   // default character, so rendered videos use it too (not just this page).
   const mascotEl2 = $('mascot');
   const MASCOT_UPLOAD_NAME = 'mascot-custom.png';
-  function mascotAssetUrl(name) { return '../assets/' + encodeURIComponent(name); }
+  function mascotAssetUrl(name) { return '../assets/github/presenter/' + encodeURIComponent(name); }
   function setMascotSrc(src) {
     const st = $('mascot-status');
     if (st) st.textContent = 'mascot status: loading…';
@@ -1083,7 +1086,7 @@
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const st = $('mascot-status');
     if (st) st.textContent = 'mascot status: uploading…';
-    // 1. The helper server stores the PNG in assets/ and reports the path.
+    // 1. The helper server stores the PNG in assets/github/presenter/ and reports the path.
     try {
       const data = await apiFetch('/api/mascot', { method: 'POST', body: f });
       setMascotAsset(data.asset.split('/').pop(), data.url);
@@ -1093,7 +1096,9 @@
     try {
       const handle = await ensureFolder();
       const bytes = new Uint8Array(await f.arrayBuffer());
-      const dir = await handle.getDirectoryHandle('assets', { create: true });
+      const dir = await (await (await handle.getDirectoryHandle('assets', { create: true }))
+        .getDirectoryHandle('github', { create: true }))
+        .getDirectoryHandle('presenter', { create: true });
       const fh = await dir.getFileHandle(MASCOT_UPLOAD_NAME, { create: true });
       const writable = await fh.createWritable();
       await writable.write(bytes);
@@ -1103,18 +1108,18 @@
     } catch (folderError) { /* preview-only below */ }
     // 3. Preview-only: show the picked file; Save cannot persist it.
     setMascotSrc(URL.createObjectURL(f));
-    if (st) st.textContent = 'mascot status: shown in preview only — the file could not be copied into the project (open the Save My Edits launcher and reload)';
+    if (st) st.textContent = 'mascot status: shown in preview only — the file could not be copied into the project (run `npm run preview:launch` and reload)';
   });
   $('load-url').addEventListener('click', () => {
     const u = $('mascot-url').value.trim(); if (!u) return;
     // A file inside assets/ becomes the saved default; anything else is a
     // preview-only URL (the render pipeline serves assets/ files only).
-    const match = u.match(/assets\/([^/?#]+\.png)$/i);
+    const match = u.match(/assets\/(?:[^/?#]+\/)*([^/?#]+\.png)$/i);
     if (match) { setMascotAsset(decodeURIComponent(match[1]), u); return; }
     setMascotSrc(u);
     if ($('mascot-status')) $('mascot-status').textContent = 'mascot status: previewing an outside URL — renders only use files inside assets/';
   });
-  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/mascot-custom.png'; setMascotAsset('mascot-custom.png'); });
+  $('load-default').addEventListener('click', () => { $('mascot-url').value = '../assets/github/presenter/mascot-custom.png'; setMascotAsset('mascot-custom.png'); });
   setMascotSrc(mascotAssetUrl(($('s-masset') && $('s-masset').value) || 'mascot-custom.png'));
 
   // moving highlight
