@@ -22,6 +22,8 @@ export type ScriptOptions = {
   log?: (line: string) => void;
   /** Allow one Groq repair retry when the first draft fails the validator. Default true. */
   repair?: boolean;
+  /** Balance brief lines from computePerspectiveCoverage — context for framing, never facts. */
+  perspectiveBrief?: string[];
 };
 
 export class ScriptError extends Error {
@@ -90,10 +92,21 @@ export function buildScriptSystemPrompt(targetSeconds: number): string {
   ].join("\n");
 }
 
-export function buildScriptUserPrompt(ledger: EvidenceLedger, workingTitle: string): string {
+export function buildScriptUserPrompt(ledger: EvidenceLedger, workingTitle: string, perspectiveBrief?: string[]): string {
+  const balanceSection =
+    perspectiveBrief && perspectiveBrief.length > 0
+      ? [
+          "",
+          "Editorial balance map (framing context only — never a source of facts, never verbatim outlet prose):",
+          ...perspectiveBrief.map(line => `- ${line}`),
+          "",
+          "If the evidence spans perspectives, the script may attribute each side in its own words ('according to…') and state plainly where they disagree. If one perspective is absent, say so — explicitly, in one dry line. Sarcasm targets the absurdity of the situation, never the existence of the other side's view.",
+          "",
+        ]
+      : ["", "Editorial balance map: not computed for this run — keep attribution explicit and flag any framing the ledger cannot support.", ""];
   return [
     `Story: ${workingTitle}`,
-    "",
+    ...balanceSection,
     "Approved ledger (the ONLY permitted factual inputs):",
     serializeLedger(ledger),
     "",
@@ -108,7 +121,7 @@ export async function draftScript(
 ): Promise<ScriptDraft> {
   const target = options.targetSeconds ?? 65;
   const system = buildScriptSystemPrompt(target);
-  const user = buildScriptUserPrompt(ledger, workingTitle);
+  const user = buildScriptUserPrompt(ledger, workingTitle, options.perspectiveBrief);
   const attempt = async (messages: { role: "system" | "user"; content: string }[]) => {
     const completion = await groqChatCompletion(
       messages,
