@@ -72,7 +72,10 @@ legacy offline writer instead (no key needed).
 src/            the pipeline engine (TypeScript, ESM)
   channels/     channel-specific code (news/)
 tools/
-  preview/      live preview: server, page, shared model, writer
+  preview/
+    shared/       channel-agnostic tuner engine: config model, writer, server, launcher
+    github/       GitHub Showcase tuner: page, capture-path preview, Save GitHub Frame.*
+    news/         Lazy News scene tuner (placeholder)
   python/       Kokoro wrapper, audio aligner, asset prep
   assets/       media-processing utilities
   windows/      Chrome launcher helpers
@@ -286,7 +289,13 @@ scroll, QA all work unchanged. Example:
   reproducible seeded jitter at semantically meaningful beats (idea presentation,
   bubble entrance), rendering on independent rear and front SVG layers without
   obscuring text or mascot facial features.
-- **Live Preview & Visual Tuning**: run `npm run preview:launch` to tweak
+- **Live Preview & Visual Tuning**: double-click `tools/preview/github/Save GitHub Frame.bat`
+  (Windows), `tools/preview/github/Save GitHub Frame.command` (macOS) or
+  `Save GitHub Frame.sh` (Linux) — a browser preview opens with sliders, no terminal
+  required, and changes
+  auto-save 1.5 seconds after you stop moving (or click **Save (one click)** to save
+  immediately); `npm run preview:launch` remains as the manual path to tweak the
+  visual composition —
   mascot sizing, shadow, caption panel, callout typography, timing and impact
   strokes with deterministic sliders, one-click save, live Instagram Reels safe
   zones and a mock Reels overlay (top bar, action rail, caption bar) — the
