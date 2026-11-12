@@ -1,0 +1,11 @@
+This repository bundles third-party source code:
+
+vendor/fortress-reach/
+  Fortress-Reach — an MCP server that reads public web pages and drives a
+  Chromium-based browser. MIT License. See vendor/fortress-reach/NOTICE and
+  vendor/fortress-reach/README.md for attribution and usage boundaries.
+  Vendored from fortress-reach.zip (workspace content, no agent tooling or
+  logs). Its anti-detection machinery exists to defeat fingerprint-based
+  bot defences and is NOT used against outlets in this project; it is wired
+  in as an optional, read-only retrieval backend (see docs/lazy-news.md,
+  "Fortress-Reach browser lane"). Never pointed at a site that forbids it.
