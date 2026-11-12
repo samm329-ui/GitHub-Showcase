@@ -56,6 +56,44 @@ rem ---- direct invocations ----
 rem   run.bat github --repo owner/name     : GitHub channel, Chrome on 9222
 rem   run.bat news --topic ai --discover   : Lazy News channel (its own Chromium)
 rem   run.bat --discover                   : legacy shorthand = github --discover
+
+:ensure_fortress
+rem Lazy News discovery is Fortress-Reach only. Start the MCP server if it is
+rem not running; REACH_MCP_URL stays exported for the rest of this process.
+if defined REACH_MCP_URL exit /b 0
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "try { (Invoke-WebRequest -Uri 'http://127.0.0.1:8050/health' -TimeoutSec 2 -UseBasicParsing).StatusCode; exit 0 } catch { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+  set "REACH_MCP_URL=http://127.0.0.1:8050/mcp"
+  exit /b 0
+)
+set "RS_EXE=vendor\fortress-reach\target\release\reach-server.exe"
+if not exist "%RS_EXE%" (
+  echo [Lazy News] Fortress-Reach is not built. Build it once with: npm run fortress:build
+  pause
+  exit /b 1
+)
+echo [Lazy News] Starting the Fortress-Reach server (one-time for this session) ...
+set "REACH_TUNNEL=0"
+set "REACH_PORT=8050"
+set "REACH_CDP_PORT=9226"
+set "REACH_APPLY_PROFILE=0"
+start "Fortress-Reach MCP" /MIN "%RS_EXE%"
+set /a fort_tries=0
+:fortress_wait
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "try { (Invoke-WebRequest -Uri 'http://127.0.0.1:8050/health' -TimeoutSec 2 -UseBasicParsing).StatusCode; exit 0 } catch { exit 1 }" >nul 2>&1
+  if not errorlevel 1 (
+    set "REACH_MCP_URL=http://127.0.0.1:8050/mcp"
+    echo [Lazy News] Fortress-Reach ready: %REACH_MCP_URL%
+    exit /b 0
+  )
+  timeout /t 1 /nobreak >nul
+  set /a fort_tries+=1
+  if %fort_tries% lss 25 goto fortress_wait
+echo [Lazy News] Fortress-Reach did not answer on 8050 within 25 seconds.
+pause
+exit /b 1
 if /I "%~1"=="github" (
   set "GH_ARGS=%~2 %~3 %~4 %~5 %~6 %~7 %~8 %~9"
   if "!GH_ARGS!"=="" set "GH_ARGS=--discover"
@@ -193,6 +231,8 @@ echo LAZY NEWS - gates A (facts) and B (script) require explicit approval.
 echo Lazy News uses its own headless Chromium (render port 9224, evidence port 9223).
 echo The GitHub Showcase Chrome on 9222 is not used or required by this channel.
 echo With --dry-run it prints candidates without rendering.
+echo %NEWS_ARGS% | findstr /I /C:"--approve" >nul || call :ensure_fortress
+if errorlevel 1 exit /b 1
 call npm run start:news -- !NEWS_ARGS!
 set "EXITCODE=!ERRORLEVEL!"
 echo.
