@@ -44,7 +44,7 @@ import { formatCount } from "./facts.js";
  *       .viewport       overflow hidden, static box, 1584px tall
  *         .document     the ONLY scrolling layer: one tall page screenshot
  *     .callout-overlay  stage-level white bubble, z-index 4
- *     .caption-overlay  stage-level dark caption panel, z-index 5
+ *     .caption-overlay  stage-level light caption panel, z-index 5
  *     .character        optional transparent PNG, stage-level, independent
  *
  * The callout and caption panel live *outside* `<article id="card">`: the card
@@ -657,7 +657,7 @@ export function buildCardHtml(input: EnrichedRepo | CardComposition): string {
     stroke-linecap: round;
   }
 
-  /* ---- captions: stable dark panel + one moving accent pill ---- */
+  /* ---- captions: stable light panel + one moving accent pill ---- */
   .caption-overlay {
     position: absolute; z-index: 5;
     left: ${captionGeometry.leftPx}px;
