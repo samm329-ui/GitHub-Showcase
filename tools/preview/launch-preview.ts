@@ -5,10 +5,9 @@ import { fileURLToPath } from "node:url";
 /**
  * Double-click launcher for the live preview.
  *
- * Reached only through `Save My Edits.vbs` / `.cmd` in the repo root, which run
- * this file with the console window hidden. It does the one thing a plain
- * shortcut cannot: work out whether the preview server is already up, and if
- * not start it quietly before opening the browser.
+ * Reached through `npm run preview:launch` (or a desktop shortcut to it). It
+ * does the one thing a plain shortcut cannot: work out whether the preview
+ * server is already up, and if not start it quietly before opening the browser.
  *
  *   - server already running  → just open the preview (idempotent re-clicks)
  *   - server not running      → start it detached + windowless, wait until it
@@ -19,13 +18,13 @@ import { fileURLToPath } from "node:url";
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "..");
+const ROOT = path.resolve(HERE, "..", "..");
 const SERVER = path.join(HERE, "preview-server.ts");
 const FIRST_PORT = Number(process.env.PREVIEW_PORT ?? 5178);
 const MAX_PORT_TRIES = 10;
 const PORTS = Array.from({ length: MAX_PORT_TRIES + 1 }, (_, i) => FIRST_PORT + i);
 
-const PAGE_PATH = "/tools/preview-live.html";
+const PAGE_PATH = "/tools/preview/preview-live.html";
 
 function pageUrl(port: number): string {
   return `http://127.0.0.1:${port}${PAGE_PATH}`;
@@ -33,8 +32,7 @@ function pageUrl(port: number): string {
 
 /** True when a preview server answers `GET /api/config` on this port. */
 const log = (line: string): void => {
-  // Always visible when run from a terminal; the VBS/CMD parents capture this
-  // output into temp/preview-launch.log for troubleshooting when hidden.
+  // Always visible when run from a terminal (e.g. `npm run preview:launch`).
   console.log(`[preview] ${line}`);
 };
 
@@ -152,8 +150,7 @@ async function main(): Promise<number> {
 
   console.error(
     "[preview] the helper server did not answer within 20 seconds. " +
-      "Check temp/preview-launch.log for details, or run `npm run preview:launch` " +
-      "in a terminal to see the error directly."
+      "Run `npm run preview:launch` in a terminal to see the error directly."
   );
   // Fall back to the first port so the user still gets a page; if the server
   // needed longer than 20s it will be up by the time they click Save.
