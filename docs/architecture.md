@@ -1,6 +1,6 @@
-# Architecture
+﻿# Architecture
 
-One engine, two channels. Both render a 1080×1920 (9:16) narrated, captioned
+One engine, two channels. Both render a 1080Ã—1920 (9:16) narrated, captioned
 Reel with the same rules: Kokoro TTS locally, measured-audio timeline, real
 mobile-width browser screenshots driven over Chrome DevTools Protocol, FFmpeg
 H.264 export, QA gates, SQLite run history.
@@ -9,17 +9,17 @@ H.264 export, QA gates, SQLite run history.
 
 | Channel | Entry point | Flow |
 | --- | --- | --- |
-| GitHub Repository Showcase | `npm run start -- --repo owner/name` | discover → fetch → fact ledger → Groq script → Kokoro → render |
-| Lazy News Commentary | `npm run start:news -- --discover --topic ai` | discover (RSS/GDELT/Bluesky) → evidence ledger → Gates A/B → Kokoro → render |
+| GitHub Repository Showcase | `npm run start -- --repo owner/name` | discover â†’ fetch â†’ fact ledger â†’ Groq script â†’ Kokoro â†’ render |
+| Lazy News Commentary | `npm run start:news -- --discover --topic ai` | discover (RSS/GDELT/Bluesky) â†’ evidence ledger â†’ Gates A/B â†’ Kokoro â†’ render |
 
 Lazy News is **not** a genre fork: it is the same pipeline with a different
-content-intelligence stage (corroborate → claim ledger → script) and a different
+content-intelligence stage (corroborate â†’ claim ledger â†’ script) and a different
 presenter (the lazy office commentator from `assets/news/`). See
 [`lazy-news.md`](lazy-news.md) for the channel spec.
 
 ## Runtime environment (cross-OS)
 
-- **Installers** (`install/`): `node` checks Node ≥ 22.5, `npm install`, type-check;
+- **Installers** (`install/`): `node` checks Node â‰¥ 22.5, `npm install`, type-check;
   `python` run-tests `python`/`python3`/`py` (the Windows Store stub is skipped
   because it isn't an interpreter), creates a repo-local `.venv`, installs
   `requirements.txt`, and downloads the Kokoro v1.0 models into `models/kokoro/`.
@@ -28,12 +28,12 @@ presenter (the lazy office commentator from `assets/news/`). See
 - **Runners** (repo root): `run.bat` (Windows), `run.sh` (Linux/macOS),
   `run.command` (macOS double-click). Same interactive menu; direct invocation
   via arguments passes straight to the pipeline.
-- **Python resolution** (`src/python.ts`): `PYTHON` → repo `.venv` (POSIX or
-  Windows layout) → `python` → `python3`, probed by importing the required
+- **Python resolution** (`src/python.ts`): `PYTHON` â†’ repo `.venv` (POSIX or
+  Windows layout) â†’ `python` â†’ `python3`, probed by importing the required
   modules. npm scripts route Python through `tools/run-python.mjs`, the same
   resolution, so `npm run voice:audition` works on every OS.
 - **Chrome/Edge discovery** (`src/chrome-paths.ts`): env override (`CHROME_BIN`
-  / `LAZY_NEWS_CHROME`) → well-known install locations per OS → `which`/`where`
+  / `LAZY_NEWS_CHROME`) â†’ well-known install locations per OS â†’ `which`/`where`
   on PATH. Shared by the GitHub CDP harness and the Lazy News Chromium pair.
 - **Fonts** (`assets/shared/fonts/`): the latin subsets the renderers use
   (Roboto 400/700/900, Inter 700/900, Inter ExtraBold Italic, Montserrat
@@ -43,22 +43,22 @@ presenter (the lazy office commentator from `assets/news/`). See
 
 ## Pipeline stages (GitHub channel)
 
-1. **Selection** (`src/github.ts`) — rotating discovery modes with hard rejection
-   gates and a transparent 0–100 score; never-before-completed repositories only.
-2. **Facts** (`src/facts.ts`) — typed fact ledger with provenance and confidence.
+1. **Selection** (`src/github.ts`) â€” rotating discovery modes with hard rejection
+   gates and a transparent 0â€“100 score; never-before-completed repositories only.
+2. **Facts** (`src/facts.ts`) â€” typed fact ledger with provenance and confidence.
 3. **Script** (`src/llm-script.ts`, default; `src/script-composer.ts` for
-   `SHOWCASE_SCRIPTER=rule`) — Groq writes grounded JSON segments; sanitized and
+   `SHOWCASE_SCRIPTER=rule`) â€” Groq writes grounded JSON segments; sanitized and
    mapped onto the same `NarrationPlan` the rest of the pipeline consumes.
-4. **Speech** (`src/voice.ts` → `tools/python/kokoro-tts.py`) — Kokoro `am_fenrir`
+4. **Speech** (`src/voice.ts` â†’ `tools/python/kokoro-tts.py`) â€” Kokoro `am_fenrir`
    locally; speech passes through `src/tts-text.ts` which expands versions,
    dates, acronyms etc. Captions use the authored `captionText` untouched.
-5. **Alignment & timeline** (`src/timeline.ts`) — measured per-chunk audio durations
+5. **Alignment & timeline** (`src/timeline.ts`) â€” measured per-chunk audio durations
    are authoritative; captions, scroll and gestures are rebuilt from them. A too-long
    script is shortened and regenerated, never sped up.
-6. **Render** (`src/card.ts`, `src/browser-capture.ts`, `src/render.ts`) — real
+6. **Render** (`src/card.ts`, `src/browser-capture.ts`, `src/render.ts`) â€” real
    mobile-width screenshot of the public GitHub page inside a stationary card;
    FFmpeg crops/composes; `-16 LUFS` loudnorm.
-7. **QA** (`src/qa.ts`) — per-run `qa.json`; history in `db/showcase-history.db`.
+7. **QA** (`src/qa.ts`) â€” per-run `qa.json`; history in `db/showcase-history.db`.
 
 ## Visual composition & the preview
 
@@ -67,15 +67,15 @@ caption style/motion, callout bubble, impact accents, highlight colours) is
 authored in the live preview:
 
 - `npm run preview:launch` starts the helper server and opens
-  `tools/preview/preview-live.html` in your browser.
-- Save writes **`visual-overrides.json`** at the repo root — the one file the
-  preview owns — via `tools/preview/config-writer.ts` (server path) or the
-  shared `tools/preview/config-model.js` (browser folder fallback).
+  `tools/preview/github/preview-live.html` in your browser.
+- Save writes **`visual-overrides.json`** at the repo root â€” the one file the
+  preview owns â€” via `tools/preview/shared/config-writer.ts` (server path) or the
+  shared `tools/preview/shared/config-model.js` (browser folder fallback).
 - The pipeline merges that file over the committed composition at startup
-  (`src/visual-overrides.ts`). Precedence: env var → file → committed default.
+  (`src/visual-overrides.ts`). Precedence: env var â†’ file â†’ committed default.
   Invalid files are ignored with a warning; the card re-centres from the
   stored width/height.
-- The two halves never touch — `tests/config-writer.test.ts` asserts the
+- The two halves never touch â€” `tests/config-writer.test.ts` asserts the
   preview and the renderer consume the same defaults.
 
 ## Repository layout
@@ -98,15 +98,16 @@ samples/        voice auditions (gitignored)
 models/kokoro/  Kokoro model files (gitignored, download separately)
 temp/           per-run artifacts + scratch/ for experiments
 output/         final MP4s
-db/             SQLite history DBs (one per pipeline — see db/README.md)
+db/             SQLite history DBs (one per pipeline â€” see db/README.md)
 dataset/        archived narration scripts, one per channel (see dataset/README.md)
 ```
 
 ## Cross-cutting rules
 
 - One timeline: measured audio is the single source for captions, scroll and
-  gestures — nothing else schedules time.
+  gestures â€” nothing else schedules time.
 - Nothing is invented: Groq writes only from the fact ledger/README excerpt;
   Lazy News facts must pass the claim-level verifier before reaching the script.
 - Failures are loud. There is no silent fallback between writers, and no
   bypass for the Lazy News human gates.
+
