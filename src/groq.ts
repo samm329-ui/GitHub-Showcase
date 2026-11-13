@@ -122,18 +122,74 @@ async function responseExcerpt(response: Response): Promise<string> {
   }
 }
 
+/**
+ * Groq API keys, evaluated at call time so tests can set/unset them.
+ * GROQ_API_KEYS (comma-separated) enables rotation: when a key's quota is
+ * exhausted (HTTP 429 after all retries), the next key is tried. Falls back to
+ * GROQ_API_KEY. With a single key the behaviour is identical to the original
+ * single-key path.
+ */
+function groqApiKeys(): string[] {
+  const multi = (process.env.GROQ_API_KEYS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (multi.length > 0) return multi;
+  const single = process.env.GROQ_API_KEY;
+  return single ? [single] : [];
+}
+
+/* Module-level cursor: successive calls in one process continue from the key
+ * that last succeeded instead of hammering the exhausted one. */
+let keyCursor = 0;
+
 export async function groqChatCompletion(
   messages: GroqChatMessage[],
   options: GroqChatOptions = {}
 ): Promise<GroqCompletion> {
-  // Read at call time so tests can set/unset the key per case.
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
+  const keys = groqApiKeys();
+  if (keys.length === 0) {
     throw new GroqError(
       "GROQ_API_KEY is not set. Add it to .env (see .env.example) or export it in the shell.",
       null
     );
   }
+  const start = ((keyCursor % keys.length) + keys.length) % keys.length;
+  let lastError: GroqError | null = null;
+
+  for (let offset = 0; offset < keys.length; offset += 1) {
+    const idx = (start + offset) % keys.length;
+    try {
+      const result = await attemptWithKey(keys[idx], messages, options);
+      keyCursor = idx;
+      return result;
+    } catch (error) {
+      if (
+        error instanceof GroqError &&
+        error.status === 429 &&
+        keys.length > 1 &&
+        offset < keys.length - 1
+      ) {
+        const log = options.log ?? ((line: string) => console.error(line));
+        log(
+          `  groq: key #${idx + 1}/${keys.length} rate-limited beyond retries; ` +
+            `rotating to key #${((idx + 1) % keys.length) + 1} (GROQ_API_KEYS).`
+        );
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError ?? new GroqError("All GROQ_API_KEYS rate-limited beyond retries.", 429);
+}
+
+async function attemptWithKey(
+  apiKey: string,
+  messages: GroqChatMessage[],
+  options: GroqChatOptions = {}
+): Promise<GroqCompletion> {
+  // Read at call time so tests can set/unset the key per case.
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? defaultSleep;
   const log = options.log ?? ((line: string) => console.error(line));
