@@ -171,6 +171,22 @@ export function prepareTtsText(input: string): string {
   // Emoji and pictographs are not speakable; drop them before any other work.
   text = text.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, " ");
 
+  // Exotic dashes (non-breaking hyphen, en/em/minus, figure dash) confuse both
+  // the synthesizer and the aligner — normalise all of them to ASCII "-" first.
+  text = text.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-");
+
+  // Number-word compounds with hyphens defeat both the synthesizer and the
+  // aligner's tokenizer, which splits them. Make the hyphen a space — only
+  // inside number-words, so identifiers like "pipeshub-ai" are untouched.
+  text = text.replace(
+    /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)-(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\b/gi,
+    "$1 $2"
+  );
+  text = text.replace(
+    /\b([a-z]*hundred|[a-z]*thousand)-(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/gi,
+    "$1 $2"
+  );
+
   // Drop parenthetical URL route paths like (/admin/) or (/api/v1/)
   // which otherwise get stripped of slashes and cause duplicate speech ("API api v1", "admin admin").
   text = text.replace(/\(\s*\/[a-zA-Z0-9_./-]+\s*\)/g, " ");
