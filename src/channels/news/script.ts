@@ -93,6 +93,19 @@ export function buildScriptSystemPrompt(targetSeconds: number): string {
 }
 
 export function buildScriptUserPrompt(ledger: EvidenceLedger, workingTitle: string, perspectiveBrief?: string[]): string {
+  const aggregated = ledger.facts.some(f => (f.evidence ?? []).some(e => e.sourceId === "inshorts.com"));
+  const attributionSection = aggregated
+    ? [
+        "",
+        "ATTRIBUTION REQUIRED (Inshorts lane):",
+        "- The FIRST or SECOND narration sentence MUST name the source, e.g. 'According to Inshorts…' (or 'Inshorts reports…'). Naming only the underlying outlet is NOT enough — Inshorts must be named.",
+        "- EVERY factual claim must be voiced as reported — never as independently verified fact.",
+        "- Cite at least TWO distinct ledger factIds across your segments (e.g. a segment whose factIds: [\"F001\",\"F002\"]).",
+        "- The evidence is Inshorts' 60-word summary of the outlet's reporting. Credit Inshorts AND name the underlying outlet when the evidence does ('According to Inshorts, citing The Hindu…').",
+        "- Do not quote the Inshorts summary verbatim.",
+        "",
+      ]
+    : [];
   const balanceSection =
     perspectiveBrief && perspectiveBrief.length > 0
       ? [
@@ -107,6 +120,7 @@ export function buildScriptUserPrompt(ledger: EvidenceLedger, workingTitle: stri
   return [
     `Story: ${workingTitle}`,
     ...balanceSection,
+    ...attributionSection,
     "Approved ledger (the ONLY permitted factual inputs):",
     serializeLedger(ledger),
     "",
@@ -261,9 +275,12 @@ const COMMON_OPENERS = new Set([
   "surprisingly", "understandably", "noticeably", "wildly", "predictably", "of course",
   "seriously", "yikes", "geez", "alas", "odly", "more", "less", "higher", "lower", "fewer",
   "older", "younger", "bigger", "smaller", "cheaper", "dearer", "newer", "fresher",
+  "according", "reportedly", "seemingly", "likely", "unsurprisingly",
   "larger", "wider", "deeper", "longer", "shorter", "quicker", "stronger", "weaker",
   "safer", "richer", "poorer", "greater", "fewer", "other", "another", "next", "last",
   "every", "some", "all", "most", "many", "several", "this", "that",
+  "such", "these", "those", "it", "its", "they", "them", "each",
+  "inshorts", // source attribution the ledger cannot carry but the channel must
 ]);
 
 function properNounSequences(text: string): string[] {
@@ -283,7 +300,7 @@ function properNounSequences(text: string): string[] {
         else if (cleaned.length === 1) {
           const w = cleaned[0];
           if (/[A-Z][a-z]{2,}/.test(w) && !COMMON_OPENERS.has(w.toLowerCase())
-              && !/^(Apparently|Whether|So|There|Yes|No|What|When|Where|While|Meanwhile|Still|Yet|And|But|Or|How|Why|This|That|It|They|He|She|We|You|I)$/i.test(w)) {
+              && !/^(Apparently|Whether|So|There|Yes|No|What|When|Where|While|Meanwhile|Still|Yet|And|But|Or|How|Why|This|That|It|They|He|She|We|You|I|According|Reportedly|Seemingly|Likely|Unsurprisingly)$/i.test(w)) {
             out.push(w);
           }
         }
