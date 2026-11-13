@@ -112,6 +112,7 @@ export const BROWSER_PAGES: Record<NewsCategory, string[]> = {
     "https://www.hindustantimes.com",
     "https://indianexpress.com",
     "https://www.thehindu.com",
+    "https://economictimes.indiatimes.com/news",
     "https://www.thequint.com",
     "https://swarajyamag.com",
     "https://www.foxnews.com",
@@ -130,15 +131,20 @@ export const BROWSER_PAGES: Record<NewsCategory, string[]> = {
     "https://nypost.com",
   ],
   ai: [
+    "https://www.thehindu.com/sci-tech/technology/",
     "https://blog.google/technology/ai/",
     "https://deepmind.google/blog/",
     "https://www.anthropic.com/news",
     "https://mistral.ai/news/",
   ],
   technology: [
+    "https://www.thehindu.com/sci-tech/",
+    "https://www.thehindu.com/sci-tech/technology/",
+    "https://indianexpress.com/section/technology/",
+    "https://www.hindustantimes.com/technology",
+    "https://economictimes.indiatimes.com/tech",
     "https://blog.google/technology/ai/",
     "https://deepmind.google/blog/",
-    "https://www.thehindu.com",
   ],
   finance: [
     "https://timesofindia.indiatimes.com",
@@ -219,6 +225,16 @@ export async function discoverBrowserHeadlines(
   return out;
 }
 
+/**
+ * Discovery lane selector. Default is `inshorts` (owner decision 2026-11-13);
+ * `fortress` restores the retired browser lane for a reversible comparison.
+ */
+export type NewsLane = "inshorts" | "fortress";
+export function newsLane(env: NodeJS.ProcessEnv = process.env): NewsLane {
+  const value = (env.NEWS_SOURCE ?? "inshorts").toLowerCase().trim();
+  return value === "fortress" ? "fortress" : "inshorts";
+}
+
 export async function discoverCategory(
   category: NewsCategory,
   registry: RegistryLoadResult,
@@ -232,6 +248,17 @@ export async function discoverCategory(
     seen.add(item.fingerprint);
     out.push(item);
   };
+
+  if (newsLane() === "inshorts") {
+    const { discoverInshorts } = await import("./inshorts.js");
+    try {
+      for (const item of await discoverInshorts(category, registry, deps)) push(item);
+    } catch (error) {
+      console.error(`  discovery: inshorts lane failed closed (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`);
+    }
+    const cap = options.maxItems ?? 300;
+    return out.slice(0, cap);
+  }
 
   for (const item of await discoverBrowserHeadlines(category, registry, deps)) push(item);
 
