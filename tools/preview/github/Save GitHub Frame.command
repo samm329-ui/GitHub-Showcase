@@ -1,8 +1,7 @@
 ﻿#!/bin/bash
-# Save GitHub Frame â€” double-click this on macOS to open the frame tuner.
-# macOS double-clicking a .command file opens Terminal automatically.
+# Save GitHub Frame — double-click this on macOS to open the frame tuner.
 set -e
-cd "$(dirname "cd "$(dirname "$0")/../.."")/../../.."
+cd "$(dirname "$0")/../../.."
 
 echo
 echo "  ========================================"
@@ -33,20 +32,25 @@ echo "  1. A preview window opens in your browser."
 echo "  2. Drag the sliders until the frame looks right."
 echo "  3. Changes auto-save 1.5 seconds after you stop moving -"
 echo "     or click \"Save (one click)\" to save right now."
-echo "  4. Close the preview tab when you are happy."
+echo "  4. When you are happy, close the browser tab, then press"
+echo "     Ctrl+C in THIS window (or close it) to stop the server."
 echo "  5. Double-click run.command -> [1] GitHub Repository"
 echo "     Showcase to render with your frame."
 echo
-echo "  Starting the preview (Ctrl+C to quit)..."
+echo "  Starting the preview server..."
 echo
 
-npm run preview:launch
+( for i in $(seq 1 20); do
+    sleep 0.5
+    if curl -fsS -m 2 http://127.0.0.1:5178/api/config -o /dev/null 2>&1; then
+      open "http://127.0.0.1:5178/tools/preview/github/preview-live.html"
+      break
+    fi
+  done ) &
+npm run preview:live
 
 echo
 echo "  Save GitHub Frame closed."
 echo "  Your frame is saved in visual-overrides.json."
 echo
 read -r -p "  Press Enter to close... "
-
-
-
