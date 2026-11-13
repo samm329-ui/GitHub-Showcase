@@ -534,6 +534,9 @@ export function verifyLedger(facts: FactRecord[], storyId: string): EvidenceLedg
   const warnings: string[] = [];
 
   const core = facts.filter(f => f.importance === "core");
+  if (core.length === 0) {
+    errors.push("No core claim in the extracted set — the story cannot be narrated from this evidence.");
+  }
   const usable = (f: FactRecord) => f.contentClass !== "fact" || f.status === "verified" || f.status === "attributed";
   for (const fact of core) {
     if (!usable(fact)) {
@@ -586,6 +589,27 @@ export function promptInjectionGuard(text: string): boolean {
   const lowered = text.toLowerCase();
   const patterns = ["ignore previous", "ignore all previous", "system prompt", "new instructions", "disregard the above", "you are now"];
   return patterns.some(p => lowered.includes(p));
+}
+
+/**
+ * Origin identity for corroboration counting (wire-lineage aware):
+ *  - a shared wire service counts as ONE origin across every outlet fed by it
+ *    (two outlets reprinting the same PTI copy are not two sources);
+ *  - otherwise the publisher group is the identity (Times-of-India and
+ *    Economic Times are the same group, not two outlets);
+ *  - only when neither applies do we fall back to the outlet id.
+ * Used by both Gate A and the research-agent's origin analysis so the rule
+ * can never drift between them.
+ */
+/** Self-declared pseudo-wire markers that are NOT shared newsrooms; these must
+ * not collapse distinct publishers into one lineage. */
+const NON_WIRE_ORIGINS = new Set(["", "none", "release", "self", "na"]);
+
+export function originKeyOf(record: { wireOrigin?: string; parentPublisherGroup: string; sourceId: string }): string {
+  const wire = (record.wireOrigin ?? "").trim().toLowerCase();
+  if (wire && !NON_WIRE_ORIGINS.has(wire)) return `wire:${wire}`;
+  if (record.parentPublisherGroup && record.parentPublisherGroup.trim()) return `group:${record.parentPublisherGroup.trim().toLowerCase()}`;
+  return `outlet:${record.sourceId}`;
 }
 
 export function fingerprintText(text: string): string {
