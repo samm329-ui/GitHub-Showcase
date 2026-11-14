@@ -9,6 +9,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "showcase": "tsx src/index.ts",
+    "start:longform": "tsx src/longform/index.ts",
+    "benchmark:longform": "tsx tools/longform-benchmark.ts",
     "check": "tsc --noEmit -p tsconfig.check.json",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "preview": "tsx tools/preview/github/preview.ts",
