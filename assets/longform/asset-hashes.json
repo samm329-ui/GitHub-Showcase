@@ -1,0 +1,146 @@
+[
+  {
+    "internal": "mascot/mascot-intro-escort-cutout.png",
+    "original": "intro mascot.png (WebP encoded, mislabeled .png) — BLACK background cutout via border flood-fill, border=0 alpha feather 1px",
+    "type": "image",
+    "role": "escort",
+    "sha256": "39bde165ae0f180fdabaf65d871ed4dbe56427ba9046ca3de526cf03a77ac160",
+    "bytes": 1330437
+  },
+  {
+    "internal": "mascot/mascot-explainer-point.png",
+    "original": "explainer mascot.png (WebP encoded, mislabeled .png) — already-transparent RGBA, re-encoded losslessly",
+    "type": "image",
+    "role": "explainer",
+    "sha256": "83ab79637a65792b49535a5657a89023346bc855bf20db70fad76bc5a20ce3a7",
+    "bytes": 1012849
+  },
+  {
+    "internal": "mascot/mascot-explainer-present-cutout.png",
+    "original": "Explainer 02.png (WebP encoded, mislabeled .png) — checkerboard background cutout via border flood-fill",
+    "type": "image",
+    "role": "explainer",
+    "sha256": "8e1111930247efdad6aa80a995ae1eefac2cc2d39d180ac9a7a5b16eaca1eeeb",
+    "bytes": 1541216
+  },
+  {
+    "internal": "music/longform_background_bed.mp3",
+    "original": "BGM/LongFormBGM.mp3",
+    "type": "audio/music",
+    "role": "music-bed",
+    "sha256": "64b6e4fd0c719877a894a5787b13fff62f383daed3858242cbd3104ce62460c7",
+    "bytes": 5806615
+  },
+  {
+    "internal": "sfx/sfx_mascot_entry_whoosh.mp3",
+    "original": "sfx/sfx_mascot_entry_whoosh.mp3",
+    "type": "audio/sfx",
+    "role": "mascot-entry",
+    "sha256": "90215be54d4656e65fcd02d60ae4c9a11d0b045075cdad642b9ee2a9800fdfa2",
+    "bytes": 257280
+  },
+  {
+    "internal": "sfx/sfx_mascot_land_impact.mp3",
+    "original": "sfx/sfx_mascot_land_impact.mp3 (BYTE-IDENTICAL to sfx_caption_impact.mp3)",
+    "type": "audio/sfx",
+    "role": "mascot-landing",
+    "sha256": "ac9ff0628580ef9bb969c9e8282e299016fc563352ae2d86bd82070f3fee8926",
+    "bytes": 167100
+  },
+  {
+    "internal": "sfx/sfx_mascot_exit_whoosh.wav",
+    "original": "sfx/sfx_mascot_exit_whoosh.wav (BYTE-IDENTICAL to sfx_card_reveal.wav; MJPEG video stream stripped, audio-only derivative)",
+    "type": "audio/sfx",
+    "role": "mascot-exit",
+    "sha256": "805df68dd59e8c2030832dc249bae4958cbea1a713795a4850565f4ca7eda33b",
+    "bytes": 32130
+  },
+  {
+    "internal": "sfx/sfx_callout_pop.wav",
+    "original": "sfx/sfx_callout_pop.wav",
+    "type": "audio/sfx",
+    "role": "callout-appear",
+    "sha256": "248312c2ef619427ef7024126a846e4210fe37e39038cfd32c73b1fb854a8086",
+    "bytes": 35918
+  },
+  {
+    "internal": "sfx/sfx_caption_tick.wav",
+    "original": "sfx/sfx_caption_tick.wav",
+    "type": "audio/sfx",
+    "role": "caption-accent-tick",
+    "sha256": "9136caeb750756176bd696d639ec74261523fa1f9d8312be6ccd673a506e0a2b",
+    "bytes": 195014
+  },
+  {
+    "internal": "sfx/sfx_caption_impact.mp3",
+    "original": "sfx/sfx_caption_impact.mp3 (BYTE-IDENTICAL to sfx_mascot_land_impact.mp3)",
+    "type": "audio/sfx",
+    "role": "caption-impact",
+    "sha256": "ac9ff0628580ef9bb969c9e8282e299016fc563352ae2d86bd82070f3fee8926",
+    "bytes": 167100
+  },
+  {
+    "internal": "sfx/sfx_caption_pop.wav",
+    "original": "sfx/sfx_caption_pop.wav (contained an MJPEG video stream; stripped to 44.1kHz pcm_s16le stereo)",
+    "type": "audio/sfx",
+    "role": "caption-pop",
+    "sha256": "f4755c59d284523f07c4a19d7798a92aea901ce1abb2bbd6b33cf95e925eca21",
+    "bytes": 84806
+  },
+  {
+    "internal": "sfx/sfx_repository_card_hit.mp3",
+    "original": "sfx/sfx_repository_card_hit.mp3 (BYTE-IDENTICAL to sfx_outro_soft_hit.mp3)",
+    "type": "audio/sfx",
+    "role": "reveal-hit",
+    "sha256": "ad1e275980bc3cccc770908bb8bb3921f9274e4593fd35b0b33385dd247ee778",
+    "bytes": 75232
+  },
+  {
+    "internal": "sfx/sfx_card_reveal.wav",
+    "original": "sfx/sfx_card_reveal.wav (BYTE-IDENTICAL to sfx_mascot_exit_whoosh.wav; MJPEG stripped)",
+    "type": "audio/sfx",
+    "role": "title-reveal",
+    "sha256": "805df68dd59e8c2030832dc249bae4958cbea1a713795a4850565f4ca7eda33b",
+    "bytes": 32130
+  },
+  {
+    "internal": "sfx/sfx_camera_push.wav",
+    "original": "sfx/sfx_camera_push.wav",
+    "type": "audio/sfx",
+    "role": "camera-push",
+    "sha256": "fdc4f87eb2c6d29ec3567b299fdc3b2aeea2432afe27801db80c496bda084499",
+    "bytes": 614126
+  },
+  {
+    "internal": "sfx/sfx_zoom_impact.wav",
+    "original": "sfx/sfx_zoom_impact.wav",
+    "type": "audio/sfx",
+    "role": "significant-zoom",
+    "sha256": "6097c4b9350beb3f6af7cc078bc81c0dd28ba381315eca066063a1cf85507db2",
+    "bytes": 612052
+  },
+  {
+    "internal": "sfx/sfx_code_highlight.wav",
+    "original": "sfx/sfx_code_highlight.wav",
+    "type": "audio/sfx",
+    "role": "code-highlight",
+    "sha256": "5766caeb6cd55650d84ebc0656876c09773f03fb8889e67496429f1e72cf2551",
+    "bytes": 379336
+  },
+  {
+    "internal": "sfx/sfx_feature_reveal.wav",
+    "original": "sfx/sfx_feature_reveal.wav",
+    "type": "audio/sfx",
+    "role": "feature-reveal",
+    "sha256": "60f46edb1c5eee3fad5f0e5ecabd960317a17cb6286e0e3e9f1e1402c60e9d7a",
+    "bytes": 195766
+  },
+  {
+    "internal": "sfx/sfx_outro_soft_hit.mp3",
+    "original": "sfx/sfx_outro_soft_hit.mp3 (BYTE-IDENTICAL to sfx_repository_card_hit.mp3)",
+    "type": "audio/sfx",
+    "role": "outro",
+    "sha256": "ad1e275980bc3cccc770908bb8bb3921f9274e4593fd35b0b33385dd247ee778",
+    "bytes": 75232
+  }
+]
