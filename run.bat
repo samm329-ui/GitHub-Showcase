@@ -3,8 +3,8 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 rem =========================================
-rem  Video Automation Studio — two channels
-rem    [1] GitHub Repository Showcase  (launches Chrome on 9222, as before)
+rem  Video Automation Studio — two channels + Long-form
+rem    [1] GitHub Repository Showcase  → [1] Short-form (9:16) | [2] Long-form (16:9)
 rem    [2] Lazy News Commentary        (own headless Chromium: 9224; evidence: 9223)
 rem =========================================
 
@@ -68,6 +68,12 @@ if /I "%~1"=="github" (
   call npm run showcase -- !GH_ARGS!
   goto finished
 )
+if /I "%~1"=="longform" (
+  call :launch_github_chrome
+  if errorlevel 1 exit /b 1
+  call npm run start:longform
+  goto longform_finished
+)
 if /I "%~1"=="news" (
   if "%~2"=="" (
     echo Usage: run.bat news --topic politics --discover ^| --url URL ^| --approve A --run-dir DIR
@@ -89,6 +95,7 @@ if not "%~1"=="" (
 )
 
 rem ---- interactive main menu ----
+:menu
 echo.
 echo ========================================
 echo     VIDEO AUTOMATION STUDIO
@@ -100,23 +107,13 @@ echo  [0] Exit
 echo.
 set "CHANNEL="
 set /p "CHANNEL=Choose pipeline: "
-if "%CHANNEL%"=="1" goto github_interactive
-if "%CHANNEL%"=="2" goto news_interactive
-if "%CHANNEL%"=="0" goto done
+if "!CHANNEL:~0,1!"=="1" goto github_interactive
+if "!CHANNEL:~0,1!"=="2" goto news_interactive
+if "!CHANNEL:~0,1!"=="0" goto done
 echo No valid option.
 goto done
 
-rem NOTE: Chrome is launched with a VISIBLE window on purpose.
-rem The news channel uses its own headless Chromium (9224/9223) - never this one.
-:launch_github_chrome
-echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "tools\windows\launch-github-chrome.ps1" -ChromeExe "!CHROME!"
-if errorlevel 1 (
-  pause
-  exit /b 1
-)
-goto :eof
-
+rem ---- interactive GitHub channel: format submenu (Short-form unchanged) ----
 :github_interactive
 
 if "%GITHUB_TOKEN%"=="" (
@@ -127,6 +124,17 @@ if "%GITHUB_TOKEN%"=="" (
     > .env echo GITHUB_TOKEN=!TOKEN!
   )
 )
+
+echo GITHUB REPOSITORY SHOWCASE
+echo --------------------------
+echo  [1] Short-form Video (9:16)
+echo  [2] Long-form Video  (16:9)
+echo  [0] Back
+echo.
+set "FORMAT="
+set /p "FORMAT=Choose format: "
+if "!FORMAT!"=="2" goto longform_interactive
+if not "!FORMAT!"=="1" goto menu
 
 echo GitHub Showcase Pipeline
 echo -----------------------
@@ -152,6 +160,27 @@ call :launch_github_chrome
 if errorlevel 1 exit /b 1
 call npm run showcase -- !GH_ARGS!
 goto finished
+
+:longform_interactive
+echo.
+echo Starting Long-form production...
+echo (1920x1080 16:9, five repositories, countdown order 05 to 01)
+echo.
+call :launch_github_chrome
+if errorlevel 1 exit /b 1
+call npm run start:longform
+goto longform_finished
+
+rem NOTE: Chrome is launched with a VISIBLE window on purpose.
+rem The news channel uses its own headless Chromium (9224/9223) - never this one.
+:launch_github_chrome
+echo.
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\windows\launch-github-chrome.ps1" -ChromeExe "!CHROME!"
+if errorlevel 1 (
+  pause
+  exit /b 1
+)
+goto :eof
 
 :news_interactive
 echo.
@@ -208,6 +237,13 @@ echo Finished with exit code !EXITCODE!.
 echo Episodes: output\news\
 pause
 exit /b !EXITCODE!
+
+:longform_finished
+echo.
+echo Finished with exit code !ERRORLEVEL!.
+echo Long-form videos: output\longform\
+pause
+exit /b !ERRORLEVEL!
 
 :finished
 echo.
