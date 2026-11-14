@@ -1,0 +1,26 @@
+{
+  "mascot-intro-escort-cutout.png": {
+    "source": "intro mascot.png",
+    "removed_px": 1095712,
+    "size": [
+      1324,
+      1188
+    ]
+  },
+  "mascot-explainer-present-cutout.png": {
+    "source": "Explainer 02.png",
+    "removed_px": 851624,
+    "size": [
+      1536,
+      1024
+    ]
+  },
+  "mascot-explainer-point.png": {
+    "source": "explainer mascot.png",
+    "size": [
+      1536,
+      1024
+    ],
+    "note": "already transparent RGBA, re-encoded only"
+  }
+}
