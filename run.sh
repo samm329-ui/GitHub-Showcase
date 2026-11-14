@@ -1,6 +1,6 @@
 #!/bin/bash
-# Video Automation Studio — two channels (Linux & macOS)
-#   [1] GitHub Repository Showcase  (launches a visible Chrome on 9222)
+# Video Automation Studio — two channels + Long-form (Linux & macOS)
+#   [1] GitHub Repository Showcase  → [1] Short-form (9:16) | [2] Long-form (16:9)
 #   [2] Lazy News Commentary        (its own headless Chromium: 9224 / evidence 9223)
 # Windows: use run.bat
 set -uo pipefail
@@ -55,6 +55,11 @@ launch_github() {
   npm run showcase -- "$@"
 }
 
+launch_github_longform() {
+  bash tools/launch-github-chrome.sh || exit 1
+  npm run start:longform
+}
+
 news_usage() {
   echo "Usage: ./run.sh news --topic politics --discover | --url URL | --approve A --run-dir DIR"
 }
@@ -69,6 +74,13 @@ if [ "$#" -ge 1 ]; then
       ARGS=("$@"); [ "${#ARGS[@]}" -eq 0 ] && ARGS=(--discover)
       launch_github "${ARGS[@]}"
       echo "Finished. Videos: output/"
+      pause
+      exit 0 ;;
+    longform)
+      checks
+      load_env
+      launch_github_longform
+      echo "Finished. Long-form videos: output/longform/"
       pause
       exit 0 ;;
     news)
@@ -107,22 +119,41 @@ read -r -p "Choose pipeline: " choice
 case "$choice" in
   1)
     load_env
-    echo "GitHub Showcase Pipeline"
-    echo "-----------------------"
-    echo "1) Discover a repository automatically"
-    echo "2) Use a repository URL or owner/repo"
+    echo "GITHUB REPOSITORY SHOWCASE"
+    echo "--------------------------"
+    echo " [1] Short-form Video (9:16)"
+    echo " [2] Long-form Video  (16:9)"
+    echo " [0] Back"
     echo
-    read -r -p "Choose 1 or 2: " mode
-    if [ "$mode" = "1" ]; then
-      ARGS=(--discover)
-    else
-      read -r -p "GitHub repository URL or owner/repo: " repo
-      [ -z "$repo" ] && { echo "No repository given."; exit 1; }
-      ARGS=(--repo "$repo")
-    fi
-    launch_github "${ARGS[@]}"
-    echo "Finished. Videos: output/"
-    pause ;;
+    read -r -p "Choose format: " format
+    case "$format" in
+      2)
+        echo
+        echo "Starting Long-form production..."
+        echo "(1920x1080 16:9, five repositories, countdown order 05 to 01)"
+        echo
+        launch_github_longform
+        echo "Finished. Long-form videos: output/longform/"
+        pause ;;
+      1)
+        echo "GitHub Showcase Pipeline"
+        echo "-----------------------"
+        echo "1) Discover a repository automatically"
+        echo "2) Use a repository URL or owner/repo"
+        echo
+        read -r -p "Choose 1 or 2: " mode
+        if [ "$mode" = "1" ]; then
+          ARGS=(--discover)
+        else
+          read -r -p "GitHub repository URL or owner/repo: " repo
+          [ -z "$repo" ] && { echo "No repository given."; exit 1; }
+          ARGS=(--repo "$repo")
+        fi
+        launch_github "${ARGS[@]}"
+        echo "Finished. Videos: output/"
+        pause ;;
+      *) exit 0 ;;
+    esac ;;
   2)
     echo
     echo "LAZY NEWS COMMENTARY"
