@@ -24,6 +24,7 @@ WhisperX is optional; without it the faster_whisper fallback runs and sets
 
 import argparse
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -128,7 +129,8 @@ def align_with_faster_whisper(audio_path, transcript_tokens, language="en"):
     from faster_whisper import WhisperModel
 
     audio = load_audio_16k(audio_path)
-    model = WhisperModel("base.en", device="cpu", compute_type="int8")
+    model_name = os.environ.get("ALIGN_WHISPER_MODEL", "base.en")
+    model = WhisperModel(model_name, device="cpu", compute_type="int8")
     segments, _info = model.transcribe(audio, language=language, word_timestamps=True, vad_filter=False)
     words = []
     for seg in segments:
@@ -189,12 +191,19 @@ def lcs_align(transcript_tokens, recognized):
         return d2.SequenceMatcher(None, a, b).ratio()
 
     leftover_rec = [i for i in range(len(recognized)) if i not in used_rec]
+    cursor = -1  # recognized index of the last matched word — order is mandatory
+    for ti, ri in pairs:
+        if ri > cursor:
+            cursor = ri
     for i, tok in enumerate(transcript_tokens):
         if aligned[i]["matched"]:
             continue
         best_j = None
         best_score = 0.0
         for j in leftover_rec:
+            if j <= cursor:
+                # Never assign an earlier recognized word to a later transcript token.
+                continue
             r = ratio(tok, recognized[j]["norm"])
             if r >= 0.6 and r > best_score:
                 best_score = r
@@ -203,6 +212,7 @@ def lcs_align(transcript_tokens, recognized):
             w = recognized[best_j]
             aligned[i] = {"word": tok, "start": w["start"], "end": w["end"], "prob": min(w["prob"], 0.6), "matched": True}
             leftover_rec.remove(best_j)
+            cursor = best_j
     return aligned
 
 
