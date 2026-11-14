@@ -435,7 +435,51 @@ See [docs/lazy-news.md](docs/lazy-news.md) (FINAL IMPLEMENTATION SPECIFICATION)
 for the full specification, legal source policies, gates, acceptance criteria and
 phase plan.
 
-## 14. Known limitations
+## 14. Long-form Video (16:9) — Octavia
+
+A third production mode inside the same application: five open-source GitHub
+repositories per episode, presented countdown-style (weakest first → strongest
+as #1, ranks never shown on screen), one continuous ~5-minute landscape video.
+
+```bash
+npm run start:longform            # console entry; press any key at the end
+run.bat longform                  # Windows helper
+./run.sh longform                 # Linux/macOS
+# or interactively: [1] GitHub Repository Showcase → [2] Long-form Video (16:9)
+```
+
+How it works (all stages additive; Short-form and News are untouched):
+
+- **Selection** — deterministic quality-based ranking over `dataset/github/*.json`
+  (completed Short-form script archives). Five repos per episode, strongest
+  selected last, `node_id` identity, committed atomically in
+  `db/longform-history.db` with `UNIQUE(repository_node_id)` — a repository
+  used once can never enter another Long-form episode. Resume with
+  `--resume` picks up an interrupted episode with its original five.
+- **Script** — one cohesive Groq-written episode built from evidence packets
+  (fact ledgers + README excerpts), validated (word floor, factIds ⊆ packet,
+  repo-name present, exact presentation order) and regenerable once on failure.
+- **Media** — local Kokoro narration (measured, forced word alignment via
+  faster-whisper/WhisperX), deterministic asset pipeline (authentic desktop
+  captures of each repository, no mock fallback), camera keyframes, exact-text
+  highlight engine, typography-reveal intros (no countdown cards), kinetically
+  animated word-timed captions, licensed SFX set and one ducked BGM bed.
+- **Render** — hybrid compositor: authentic capture files + FFmpeg crop/scale
+  cameras, per-scene bounded MP4 segments joined with the concat demuxer, then
+  one AAC mux. Segment reuse across resumes is content-hash based.
+- **Recovery** — every expensive stage is fingerprinted
+  (`temp/longform/<episodeId>/checkpoints/`); `--resume` reuses anything the
+  unchanged inputs can prove valid.
+
+Output: `output/longform/<episodeId>/` with `final.mp4`, `episode-metadata.json`,
+`chapters.json`, `captions.srt|.ass`, `scene-manifest.json`, `asset-licenses-used.json`
+and `qa-report.json`.
+
+Environment: `LONGFORM_ALLOW_UNVERIFIED_ASSETS=1` (development only — permits
+unverified BGM/SFX/mascot assets; the episode MUST NOT be published in that
+state). See `assets/longform/asset-licenses.json`.
+
+## 15. Known limitations
 
 - Narration is written by Groq (`SHOWCASE_SCRIPTER=llm`, the default). It is
   grounded on the typed fact ledger and the README excerpt, but unlike the
