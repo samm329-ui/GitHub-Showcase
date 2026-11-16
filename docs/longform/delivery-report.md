@@ -16,7 +16,7 @@
 ### 3. Test status
 
 - `npm run check` — clean.
-- `npm test` — 560 passing (baseline 532 + new `tests/longform.test.ts` covering camera math, caption engine, selection determinism + diversity penalty, master-script validation, DB ledger incl. reservation blocks, checkpoints, licence gate, short-form isolation).
+- `npm test` - 556 passing (baseline 532 + new `tests/longform.test.ts` covering camera math, caption engine, selection determinism + diversity penalty, master-script validation, DB ledger incl. reservation blocks, checkpoints, licence gate, short-form isolation). (An earlier version of this report said 560; the reproducible count is 556 — verified on a clean checkout of 189df50 and with current working-tree changes.)
 
 ### 4. Benchmark
 
