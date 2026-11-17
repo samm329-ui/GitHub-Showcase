@@ -19,6 +19,24 @@ re-centred on the stage from the stored width/height.
 
 ## GitHub Showcase channel & shared engine
 
+**Priority discovery.** Repositories in the spaces the audience rewards are
+selected more often, in three tiers (single best match per repo, added to the
+score, capped at +12; hard gates never move):
+
+| Tier | Categories | Bonus |
+| --- | --- | --- |
+| S — proven winners | `ai-agents` (agentic automation, MCP), `ai` (RAG, LLM, transformers, MLOps) | +12 |
+| A — mainstream blow-ups | `finance`, `cybersecurity` (defensive/ethical hacking), `life-tools` (self-hosted, privacy, habits), `media-studio` (audio/video editing, podcasts), `graphics-3d` (3D modeling, Blender, CAD), `scrapers` (scraping, extraction, visualizers) | +10 |
+| B — useful, not audience-moving | `innovation`, `dev-tools` | +6 |
+
+A match also lowers the eligibility floor from 65 to `SHOWCASE_PRIORITY_MIN_SCORE`
+(55 by default), and a repository matching none of the S/A/B zones cannot win a
+`mainstream` sweep at all. `mainstream` is the default discovery mode (override
+with `SHOWCASE_DISCOVER_MODE`); it sweeps one `topic:` query per S/A zone ranked
+by stars, e.g. `npm run start -- --discover` or `--mode mainstream`.
+Matched categories are recorded on every run (`selection.priorityCategories` in
+the dataset) so tiers can be re-weighted from real view counts.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SHOWCASE_TARGET_SECONDS` | 35 | Target narration length (`--length` wins when set) |
@@ -29,6 +47,8 @@ re-centred on the stage from the stored width/height.
 | NEWS_DB | db/news-history.db | SQLite history database (Lazy News channel) |
 | SHOWCASE_DB_DIR | db/ | Directory holding both channel databases |
 | `SHOWCASE_MIN_SCORE` | 65 | Eligibility threshold for discovery |
+| `SHOWCASE_PRIORITY_MIN_SCORE` | 55 | Eligibility threshold when the repository matches a priority category (see below) |
+| `SHOWCASE_DISCOVER_MODE` | `mainstream` | Discovery mode when `--mode` is not passed (`mainstream` / `practical` / `popular` / `underdog` / `emerging` / `topic`). A non-priority repository cannot win a `mainstream` sweep |
 | `GROQ_API_KEY` | (none) | **Required** (default writer) Groq API key from console.groq.com |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq chat model (free tier: try `openai/gpt-oss-20b` if you hit 429s) |
 | `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq API base URL |
