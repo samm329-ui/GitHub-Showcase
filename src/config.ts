@@ -72,14 +72,25 @@ export const CHROME_DEBUG_URL =
 /* ------------------------------------------------------------------ */
 
 export const MIN_SCORE = readNumber(process.env.SHOWCASE_MIN_SCORE, 65);
+/**
+ * Eligibility floor for repositories that match a priority category. The
+ * hard gates and the usefulness/documentation floors never move; only the
+ * total-score bar dips for categories the audience demonstrably rewards.
+ */
+export const PRIORITY_MIN_SCORE = readNumber(
+  process.env.SHOWCASE_PRIORITY_MIN_SCORE,
+  55
+);
+/**
+ * Discovery mode used when `--mode` is not passed. Defaults to the
+ * `mainstream` sweep (the zones the audience rewards); set
+ * `SHOWCASE_DISCOVER_MODE` to restore another default.
+ */
+export const DEFAULT_DISCOVER_MODE: DiscoveryMode =
+  (process.env.SHOWCASE_DISCOVER_MODE as DiscoveryMode | undefined) ??
+  "mainstream";
 export const MAX_CANDIDATES_PER_RUN = 50;
 export const MAX_CANDIDATES_ENRICHED = 12;
-export const MODE_ROTATION: DiscoveryMode[] = [
-  "practical",
-  "underdog",
-  "popular",
-  "emerging",
-];
 /** `null` means "never re-use a completed repository". */
 export const ALLOW_REVISIT_AFTER_DAYS: number | null = null;
 export const MAX_ATTEMPTS = 3;
