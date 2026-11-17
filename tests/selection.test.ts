@@ -136,6 +136,93 @@ describe("candidate scoring", () => {
   });
 });
 
+describe("priority eligibility floor", () => {
+  function scoreWeak(topics: string[], mode: DiscoveryMode = "practical") {
+    const { repo, rootFiles } = fixture("useful-underdog");
+    const weak =
+      "# My Tool\n\nMy Tool takes a small task off your hands every day. " +
+      "It does one thing quietly, from the terminal, and it has been running " +
+      "in the field for a while now with real users relying on it daily.\n";
+    const hydrated = toEnriched({ ...repo, topics }, {
+      readmeText: weak,
+      languages: {},
+      release: null,
+      rootFiles,
+    });
+    return scoreCandidate({
+      repo: hydrated,
+      mode,
+      readmeText: weak,
+      release: null,
+      momentum: {
+        previousStars: null,
+        previousCapturedAt: null,
+        currentStars: repo.stargazers_count,
+      },
+    });
+  }
+
+  function scoreMid(topics: string[], mode: DiscoveryMode = "practical") {
+    const { repo, rootFiles } = fixture("useful-underdog");
+    const mid =
+      "# My Tool\n\nMy Tool takes a small task off your hands every day. It does one thing " +
+      "quietly, from the terminal, and it has been running in the field for a while now " +
+      "with real users relying on it daily.\n\n## Usage\n\nRun it and point it at your " +
+      "folder. It walks the tree, finds the copies, and keeps the newest.\n";
+    const hydrated = toEnriched({ ...repo, topics }, {
+      readmeText: mid,
+      languages: {},
+      release: null,
+      rootFiles,
+    });
+    return scoreCandidate({
+      repo: hydrated,
+      mode,
+      readmeText: mid,
+      release: null,
+      momentum: {
+        previousStars: null,
+        previousCapturedAt: null,
+        currentStars: repo.stargazers_count,
+      },
+    });
+  }
+
+  test("a priority-category match clears the 55 floor", () => {
+    const result = scoreWeak(["finance"]);
+    assert.ok(
+      result.totalScore >= 55 && result.totalScore < 65,
+      `total was ${result.totalScore}`
+    );
+    assert.equal(result.eligible, true);
+    assert.deepEqual(result.priorityCategories, ["finance"]);
+    assert.ok(result.reasons.some(reason => /priority category: finance/.test(reason)));
+  });
+
+  test("a non-priority repo in the same band is not eligible", () => {
+    const result = scoreMid(["zz-no-match"]);
+    assert.ok(
+      result.totalScore >= 55 && result.totalScore < 65,
+      `total was ${result.totalScore}`
+    );
+    assert.equal(result.eligible, false);
+    assert.equal(result.breakdown.priority, 0);
+  });
+
+  test("a generic repository cannot win a mainstream sweep", () => {
+    const result = scoreWeak(["zz-no-match"], "mainstream");
+    assert.equal(result.eligible, false);
+    assert.ok(
+      result.warnings.some(warning => /outside the mainstream priority zones/.test(warning))
+    );
+  });
+
+  test("a priority match can win a mainstream sweep", () => {
+    const result = scoreWeak(["finance"], "mainstream");
+    assert.equal(result.eligible, true);
+  });
+});
+
 describe("momentum requires dated snapshots", () => {
   test("no snapshot means zero momentum", () => {
     assert.equal(
@@ -185,7 +272,7 @@ describe("momentum requires dated snapshots", () => {
 
 describe("discovery queries", () => {
   test("each mode builds date-bounded search shapes", () => {
-    for (const mode of ["practical", "popular", "underdog", "emerging", "topic"] as DiscoveryMode[]) {
+    for (const mode of ["practical", "popular", "underdog", "emerging", "topic", "mainstream"] as DiscoveryMode[]) {
       const queries = buildSearchQueries(mode, "cli");
       assert.ok(queries.length > 0);
       for (const query of queries) {
@@ -211,6 +298,20 @@ describe("discovery queries", () => {
       buildSearchQueries("popular")[0],
       buildSearchQueries("underdog")[0]
     );
+  });
+
+  test("mainstream sweeps the winning zones", () => {
+    const queries = buildSearchQueries("mainstream");
+    assert.ok(queries.length >= 10, `mainstream must sweep many zones, got ${queries.length}`);
+    for (const zone of ["rag", "llm", "ai-agents", "fintech", "cybersecurity", "video-editor", "3d-modeling", "scraper", "self-hosted"]) {
+      assert.ok(
+        queries.some(query => query.includes(`topic:${zone}`)),
+        `mainstream must include topic:${zone}`
+      );
+    }
+    for (const query of queries) {
+      assert.match(query, /stars:\d+\.\.\d+/, "mainstream must bound the star range");
+    }
   });
 });
 
