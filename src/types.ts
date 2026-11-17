@@ -105,7 +105,8 @@ export type DiscoveryMode =
   | "popular"
   | "underdog"
   | "emerging"
-  | "topic";
+  | "topic"
+  | "mainstream";
 
 export type ScoreDimension =
   | "usefulness"
@@ -132,6 +133,8 @@ export type CandidateEvaluation = {
   warnings: string[];
   /** Populated only for enriched candidates. */
   enriched: EnrichedRepo | null;
+  /** Priority categories this repository matched (best first), e.g. ["ai", "agents"]. */
+  priorityCategories?: string[];
 };
 
 /* ------------------------------------------------------------------ */
