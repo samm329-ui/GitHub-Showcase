@@ -253,6 +253,13 @@ async function main(): Promise<void> {
     const audioDir = path.join(workDir, "narration");
     await fs.mkdir(audioDir, { recursive: true });
     const synthFingerprint = fingerprint(synth.map(s => s.spokenText));
+    // Voice generation is the slowest quiet phase on CPU; report per-chunk progress so "working" is visible.
+    const voiceStartedAt = Date.now();
+    const onVoiceProgress = (done: number, total: number, segmentId: string): void => {
+      const pct = Math.floor((done / total) * 100);
+      const elapsed = (Date.now() - voiceStartedAt) / 1000;
+      log(`    voice ${String(pct).padStart(3)}% (${done}/${total} chunks, ${elapsed.toFixed(0)}s elapsed) — ${segmentId}`);
+    };
     const narrationCheckpoint = await checkpoints.get<{ narrationWav: string; durationMs: number; sampleRate: number }>("narration");
     let narrationWav = path.join(audioDir, "narration.wav");
     let audioSeconds: number;
@@ -277,7 +284,7 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         log(`    narration snapshot unusable (${error instanceof Error ? error.message : String(error)}); synthesizing again.`);
-        const chunks: SynthesizedChunk[] = await synthesizeSegments(synth, path.join(audioDir, "chunks"), {});
+        const chunks: SynthesizedChunk[] = await synthesizeSegments(synth, path.join(audioDir, "chunks"), { onProgress: onVoiceProgress });
         await concatChunks(chunks, narrationWav, 120, synth);
         const { probeAudio } = await import("../voice.js");
         const measurement = await probeAudio(narrationWav);
@@ -288,7 +295,7 @@ async function main(): Promise<void> {
       }
     } else {
       log(`    synthesizing ${synth.length} chunks (Kokoro am_fenrir @ 1.0)...`);
-      const chunks: SynthesizedChunk[] = await synthesizeSegments(synth, path.join(audioDir, "chunks"), {});
+      const chunks: SynthesizedChunk[] = await synthesizeSegments(synth, path.join(audioDir, "chunks"), { onProgress: onVoiceProgress });
       await concatChunks(chunks, narrationWav, 120, synth);
       const { probeAudio } = await import("../voice.js");
       const measurement = await probeAudio(narrationWav);
