@@ -99,7 +99,7 @@ function buildSystemPrompt(): string {
     "- Never speak repository URLs, commands, or file paths character-by-character. Describe them.",
     "- Start each repository section with the repository's actual name (e.g. \"agentes-chat is …\"). Never say \"repository number five\" or any rank.",
     "- Spoken text: plain English, short sentences, contractions, no markdown, no emoji, no URLs. Max 18 words per sentence.",
-    "- captionText mirrors spokenText (same words, screen-appropriate spelling).",
+    "- Do NOT emit captionText. Captions are derived automatically from spokenText. Emit ONLY the fields in the shape below — every dropped field saves output tokens and protects the budget.",
     "- Visual variety per section is welcome; keep one editorial voice.",
     "- Spoken narration pace: ~155 words per minute. TOTAL spoken words: 700-900. HARD MINIMUM TOTAL: 600 words (enforced; a short episode will be rejected).",
     "- Every spokenText MUST be at least 25 words long (one or two full sentences).",
@@ -115,7 +115,7 @@ function buildSystemPrompt(): string {
     '  "repositories": [',
     '    { "nodeId": "...", "fullName": "owner/name", "segments": [',
     '      { "purpose": "identify|explain|feature|demo|install|caveat|summary",',
-    '        "spokenText": "<one or two full sentences, at least 25 words>", "captionText": "<the same words, screen spelling>",',
+    '        "spokenText": "<one or two full sentences, at least 25 words>",',
     '        "factIds": ["fact-id-1"],',
     '        "visualTarget": { "type": "overview|readme-section|install|code-file", "detail": "short label" },',
     '        "highlight": { "enabled": true, "targetText": "verbatim fragment" },',
@@ -221,9 +221,7 @@ export function validateMasterScript(
       if (!ALLOWED_PURPOSES.has(purpose)) errors.push(`${fullName} seg ${segIndex + 1}: bad purpose ${purpose}`);
       if (purpose === "identify") hasIdentify = true;
       const spoken = String(segment.spokenText ?? "").trim();
-      const caption = String(segment.captionText ?? "").trim();
       if (!spoken) errors.push(`${fullName} seg ${segIndex + 1}: empty spokenText`);
-      if (!caption) warnings.push(`${fullName} seg ${segIndex + 1}: empty captionText`);
       const words = spoken.split(/\s+/).filter(Boolean).length;
       segWords += words;
       totalWords += words;
