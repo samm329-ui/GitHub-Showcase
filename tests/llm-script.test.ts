@@ -190,6 +190,9 @@ describe("llm prompt construction", () => {
     assert.match(prompt, /116 spoken words/);
     assert.match(prompt, /"segments"/);
     assert.match(prompt, /hard limit/i);
+    assert.match(prompt, /A sentence that would fit any repository is deleted/);
+    assert.match(prompt, /Five sharp segments beat/);
+    assert.match(prompt, /designed to/);
   });
 
   test("user prompt embeds repo metadata, facts and a truncated README", () => {
@@ -375,7 +378,7 @@ describe("priority categories", () => {
       full_name: "acme/agent-x",
     } as Repo);
     assert.equal(matches[0]?.id, "agents");
-    assert.equal(priorityBonus({ topics: ["ai-agent"], description: "x", name: "x", full_name: "a/x" } as unknown as Repo), 10);
+    assert.equal(priorityBonus({ topics: ["ai-agent"], description: "x", name: "x", full_name: "a/x" } as unknown as Repo), 12);
   });
 
   test("a finance repository matches by keyword even without topics", () => {
@@ -385,7 +388,7 @@ describe("priority categories", () => {
       name: "ledgerline",
       full_name: "acme/ledgerline",
     } as unknown as Repo);
-    assert.equal(bonus, 8);
+    assert.equal(bonus, 10);
   });
 
   test("an AI repository matches by topic", () => {
@@ -395,20 +398,32 @@ describe("priority categories", () => {
       name: "ragkit",
       full_name: "acme/ragkit",
     } as Repo);
-    assert.equal(bonus, 8);
+    assert.equal(bonus, 12);
   });
 
-  test("matching several categories takes the best bonus, capped at 10", () => {
+  test("matching several categories takes the best bonus, capped at 12", () => {
     const bonus = priorityBonus({
       topics: ["llm", "ai-agent", "finance"],
       description: "Agentic LLM trading system",
       name: "tradebot",
       full_name: "acme/tradebot",
     } as Repo);
-    assert.equal(bonus, 10);
+    assert.equal(bonus, 12);
   });
 
-  test("a generic repository gets no bonus", () => {
+  test("a truly generic repository gets no bonus", () => {
+    assert.equal(
+      priorityBonus({
+        topics: ["zz-no-match"],
+        description: "A very specific internal housekeeping helper",
+        name: "zzz-helper",
+        full_name: "acme/zzz-helper",
+      } as Repo),
+      0
+    );
+  });
+
+  test("a cli repository matches the dev-tools tier B category", () => {
     assert.equal(
       priorityBonus({
         topics: ["cli"],
@@ -416,7 +431,7 @@ describe("priority categories", () => {
         name: "util",
         full_name: "acme/util",
       } as Repo),
-      0
+      6
     );
   });
 
@@ -429,7 +444,7 @@ describe("priority categories", () => {
       release: null,
       momentum: { previousStars: null, previousCapturedAt: null, currentStars: 1200 },
     });
-    assert.equal(result.breakdown.priority, 10);
+    assert.equal(result.breakdown.priority, 12);
     assert.ok(result.reasons.some(reason => /priority category: AI agents/.test(reason)));
   });
 });
