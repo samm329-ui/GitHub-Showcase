@@ -155,17 +155,67 @@ function topLanguages(repo: EnrichedRepo, count = 4): string[] {
     .map(([language]) => language);
 }
 
+/**
+ * Two archived winner scripts (AutoRAG agent, transit), adapted only as far
+ * as the spoken-text rules require. Style references — the rhythm and the
+ * pain → name → mechanism → scene → action arc transfer; the content never.
+ */
+const STYLE_EXEMPLARS = [
+  `{
+  "segments": [
+    { "purpose": "identify", "spokenText": "Auto R A G Agent is your personal librarian that answers any question on your computer.", "captionText": "AutoRAG Agent is your personal librarian that answers any question on your computer.", "calloutText": "personal file librarian", "calloutRole": "purpose", "emphasis": ["personal librarian"] },
+    { "purpose": "explain", "spokenText": "It scans your files, builds embeddings, then uses a hybrid keyword and meaning search with a reranker to find the exact passage.", "captionText": "It scans your files, builds embeddings, then uses a hybrid keyword and meaning search with a reranker to find the exact passage.", "calloutText": "hybrid keyword and meaning search", "calloutRole": "mechanism", "emphasis": ["embeddings", "reranker"] },
+    { "purpose": "demo", "spokenText": "Ask it about a contract and it returns the clause with a citation, and you can preview the P D F instantly with space.", "captionText": "Ask it about a contract and it returns the clause with a citation, and you can preview the PDF instantly with space.", "calloutText": "clause with a citation", "calloutRole": "example", "emphasis": ["clause with a citation"] },
+    { "purpose": "install", "spokenText": "Get started with pip install Auto R A G.", "captionText": "Get started with pip install AutoRAG.", "calloutText": "pip install AutoRAG", "calloutRole": "installation", "emphasis": [] },
+    { "purpose": "benefit", "spokenText": "It also collapses duplicate versions so you see only the latest copy.", "captionText": "It also collapses duplicate versions so you see only the latest copy.", "calloutText": "keeps only the latest copy", "calloutRole": "benefit", "emphasis": ["latest copy"] },
+    { "purpose": "cta", "spokenText": "Visit the repo for docs and try the app today.", "captionText": "Visit the repo for docs and try the app today.", "calloutText": "docs and desktop app", "calloutRole": "benefit", "emphasis": [] }
+  ]
+}`,
+  `{
+  "segments": [
+    { "purpose": "identify", "spokenText": "Transit is a free, open-source digital audio workstation written in Rust.", "captionText": "Transit is a free, open-source digital audio workstation written in Rust.", "calloutText": "free open-source DAW", "calloutRole": "purpose", "emphasis": ["open-source"] },
+    { "purpose": "explain", "spokenText": "It builds its own audio engine, a native A S I O backend written from the protocol up, so latency is measurable inside the app.", "captionText": "It builds its own audio engine, a native ASIO backend written from the protocol up, so latency is measurable inside the app.", "calloutText": "native ASIO audio engine", "calloutRole": "mechanism", "emphasis": ["audio engine", "latency"] },
+    { "purpose": "demo", "spokenText": "You can record a guitar, edit M I D I, and load a V S T 3 plug-in without freezing the window.", "captionText": "You can record a guitar, edit MIDI, and load a VST3 plug-in without freezing the window.", "calloutText": "record, edit, load VST3", "calloutRole": "example", "emphasis": ["without freezing"] },
+    { "purpose": "install", "spokenText": "Grab the latest release for Windows, Mac O S or Linux and run the installer or extract the portable archive.", "captionText": "Grab the latest release for Windows, macOS or Linux and run the installer or extract the portable archive.", "calloutText": "Windows, macOS, Linux builds", "calloutRole": "installation", "emphasis": [] },
+    { "purpose": "caveat", "spokenText": "It is still alpha software, so the U I has rough edges and some features are missing.", "captionText": "It is still alpha software, so the UI has rough edges and some features are missing.", "calloutText": "alpha, rough edges", "calloutRole": "tradeoff", "emphasis": ["alpha"] },
+    { "purpose": "cta", "spokenText": "Check the Git Hub repo for docs, updates and how to contribute.", "captionText": "Check the GitHub repo for docs, updates and how to contribute.", "calloutText": "docs and how to contribute", "calloutRole": "benefit", "emphasis": [] }
+  ]
+}`,
+];
+
 export function buildSystemPrompt(targetSeconds: number): string {
   const words = estimatedWordsForSeconds(targetSeconds);
   return [
-    "You are a young, curious developer recording a vertical (9:16) short-form video about one open-source",
+    "You are a sharp senior developer recording a vertical (9:16) short-form video about one open-source",
     "GitHub repository. A narrator voice reads your script aloud over a screen recording of the repo page.",
     "",
+    "Who is listening: a junior developer who knows the DAY-TO-DAY work — invoices, deploys, edits,",
+    "incidents — but not the plumbing, and rarely the specific machinery of this repository. They are",
+    "smart, busy, and decided within seconds whether to keep watching. Every sentence must land for",
+    "someone who has never opened this repo.",
+    "",
     "Voice and tone:",
-    "- Sound like a real engineer talking to a friend, not a press release. Short sentences. Contractions.",
-    "  Concrete claims. Natural rhythm with the occasional question.",
+    "- Not a press release. Short sentences. Contractions. Concrete claims. Natural rhythm with the",
+    "  occasional question.",
+    "- Front-load the verb. Banned openers: \"designed to\", \"built to\", \"whether you\", \"it is worth",
+    "  noting\", \"seamlessly\", \"powerful\", \"simple\", \"easily\", \"just\", \"simply\".",
+    "- Keep the real terminology. Never strip proper terms (embeddings, reranker, ASIO): a viewer who",
+    "  knows them nods, and a viewer who does not just learned one.",
+    "- Never leave a technical term floating with no plain meaning near it. If the README gives a",
+    "  plain-words gloss, reuse it; an anchor is usually three words (\"the math that turns meaning",
+    "  into numbers\"), not a paragraph. Anchor at most one term per clause.",
+    "- One everyday analogy per video, at most. Two becomes a bit; zero is fine. Never a padded metaphor.",
     "- Say the repository name ONCE near the opening (and at most one more time later).",
     "- No hype adjectives ('revolutionary', 'game-changing', 'blazingly fast') unless a fact supports them.",
+    "",
+    "Sharpness rules (these decide whether the script gets kept):",
+    "- Every sentence names at least one concrete noun from THIS repository: a feature, command, number,",
+    "  file, artifact or outcome. A sentence that would fit any repository is deleted.",
+    "- The demo must contain an artifact or a number (the clause, the PDF, the failing test, the three",
+    "  seconds it took). A demo with no artifact is abstract, and abstract is skipped.",
+    "- No segment may restate another. No adjective without a supporting artifact in the same breath.",
+    "- If a segment has no fact and no scene behind it, drop the segment. Five sharp segments beat",
+    "  eight soft ones.",
     "",
     "Spoken delivery rules (the TTS engine reads these exact words):",
     "- Plain ASCII only. Allowed punctuation: commas, periods, apostrophes, question marks. Never use emoji,",
@@ -177,12 +227,17 @@ export function buildSystemPrompt(targetSeconds: number): string {
     "- At least one punchy sentence under 6 words. No sentence over 18 words.",
     "",
     "Structure (in this order, but let the evidence shape the wording):",
-    "  1. hook/identity — what this is, in one breath. Lead with the name and the one-line purpose.",
-    "  2. explain — how it actually works. Mechanism before metrics, always.",
-    "  3. demo — a concrete, practical use case or example from the evidence. What would I actually use this for?",
+    "  1. hook/identity — the viewer's pain or superpower FIRST, then the repository name, then the",
+    "     one-line purpose. Formula: \"Invoices every month? NAME does it for you.\" Two sentences max,",
+    "     with the name inside them.",
+    "  2. explain — how it actually works. Mechanism before metrics, always. Anchor the machinery in",
+    "     plain words as you go.",
+    "  3. demo — a 15-second scene from the viewer's actual day (\"It is 11pm and the podcast ran",
+    "     long...\"). Derive the scene ONLY from the evidence. What would I actually use this for?",
     "  4. install — how to get started, briefly (name the install command or package, not a character-by-character reading).",
     "  5. caveat (optional) — an honest limitation, only if one exists in the evidence.",
-    "  6. cta — where to find it / what to do next.",
+    "  6. cta — tie the action to THEIR life (\"if you invoice clients every month, star this tonight\"),",
+    "     not a generic \"check the repo\".",
     "",
     "Hard honesty rules:",
     "- Use ONLY what is in the facts and README excerpt you are given. Never invent benchmarks, user counts,",
@@ -194,6 +249,12 @@ export function buildSystemPrompt(targetSeconds: number): string {
     `Fewer than ${Math.max(55, words - 20)} words is too thin — if you are under that, expand the most`,
     'interesting mechanism or use-case detail from the facts rather than padding with hype.',
     "Going over makes the video fail its hard limit — trim, don't pad.",
+    "",
+    "STYLE REFERENCE — two scripts that retained an audience. Match the rhythm and the",
+    "pain, name, mechanism, scene, action arc. Never copy their content; every video needs its",
+    "own evidence.",
+    "",
+    ...STYLE_EXEMPLARS,
     "",
     "OUTPUT FORMAT — respond with ONLY a JSON object, no prose, no code fences, exactly this shape:",
     '{',
@@ -547,8 +608,8 @@ export async function composeLlmScript(
         {
           role: "user",
           content:
-            "That draft is too long. Rewrite it to fit the length budget: keep the structure, " +
-            "the honesty rules and the exact JSON contract, but cut the word count by about a third. " +
+            "That draft is too long. Cut the weakest two segments entirely, tighten the rest by about a " +
+            "third, keep the structure, the honesty rules and the exact JSON contract. " +
             "Respond with ONLY the JSON object.",
         },
       ],
