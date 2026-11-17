@@ -150,6 +150,12 @@ export type SynthesizeOptions = {
   voice?: string;
   speed?: number;
   lang?: string;
+  /**
+   * Optional progress reporter. Fired once per completed chunk with
+   * (chunksDone, chunksTotal, segmentId). Additive: callers that do not pass it
+   * see exactly the same behavior as before.
+   */
+  onProgress?: (completed: number, total: number, segmentId: string) => void;
 };
 
 export type SynthesizedChunk = AudioChunk & {
@@ -338,6 +344,11 @@ export async function synthesizeSegments(
     const file = path.join(audioDir, `segment-${String(index + 1).padStart(3, "0")}.wav`);
     const chunk = await synthesizeChunk(segment.spokenText, file, options);
     chunks.push({ ...chunk, index, segmentId: segment.id });
+    try {
+      options.onProgress?.(index + 1, segments.length, segment.id);
+    } catch {
+      /* a failing reporter must never break narration */
+    }
   }
   return chunks;
 }
