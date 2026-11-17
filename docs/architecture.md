@@ -45,6 +45,12 @@ presenter (the lazy office commentator from `assets/news/`). See
 
 1. **Selection** (`src/github.ts`) â€” rotating discovery modes with hard rejection
    gates and a transparent 0â€“100 score; never-before-completed repositories only.
+   Tiered priority categories (S: AI; A: finance, cybersecurity, life tools,
+   media studio, 3D graphics, scrapers; B: innovation, dev tools) add +12/+10/+6
+   and lower the eligibility floor to `SHOWCASE_PRIORITY_MIN_SCORE` (55); the
+   `mainstream` mode sweeps one `topic:` query per S/A zone ranked by stars and
+   is the default discovery mode (`SHOWCASE_DISCOVER_MODE` overrides); a
+   repository matching no priority zone cannot win it.
 2. **Facts** (`src/facts.ts`) â€” typed fact ledger with provenance and confidence.
 3. **Script** (`src/llm-script.ts`, default; `src/script-composer.ts` for
    `SHOWCASE_SCRIPTER=rule`) â€” Groq writes grounded JSON segments; sanitized and
