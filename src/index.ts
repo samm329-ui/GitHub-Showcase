@@ -7,7 +7,7 @@ import {
   MAX_CANDIDATES_ENRICHED,
   MAX_CANDIDATES_PER_RUN,
   MIN_SCORE,
-  MODE_ROTATION,
+  DEFAULT_DISCOVER_MODE,
   OUTPUT_DIR,
   TEMP_DIR,
   FPS,
@@ -294,7 +294,8 @@ async function main(): Promise<void> {
     console.log("Commands:");
     console.log("  npm run start -- --repo https://github.com/owner/repo");
     console.log("  npm run start -- --repo owner/repo");
-    console.log("  npm run start -- --discover [--mode practical|popular|underdog|emerging|topic]");
+    console.log("  npm run start -- --discover                      (default: mainstream sweep; SHOWCASE_DISCOVER_MODE overrides)");
+    console.log("  npm run start -- --discover [--mode practical|popular|underdog|emerging|topic|mainstream]");
     console.log("  npm run start -- --discover --dry-run   (select and report, do not render)");
     console.log("  npm run start -- --repo owner/repo --length 45   (target seconds, 18-58)");
     console.log("");
@@ -323,7 +324,7 @@ async function main(): Promise<void> {
       const runsSeen = history
         .completedFullNames()
         .length;
-      const mode = modeArg ?? MODE_ROTATION[runsSeen % MODE_ROTATION.length];
+      const mode = modeArg ?? DEFAULT_DISCOVER_MODE;
       selection = await selectCandidate(history, mode, runsSeen);
       if (!selection) {
         history.finishRun(runId, "failed", { stage: "discovery", error: "no eligible candidate" });
