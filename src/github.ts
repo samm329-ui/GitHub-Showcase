@@ -9,7 +9,7 @@ import type {
   ScoreBreakdown,
   ScoreDimension,
 } from "./types.js";
-import { MIN_SCORE } from "./config.js";
+import { MIN_SCORE, PRIORITY_MIN_SCORE } from "./config.js";
 
 /* ------------------------------------------------------------------ */
 /* Licenses                                                            */
@@ -242,7 +242,8 @@ function isoDaysAgo(days: number): string {
 
 /**
  * Search shapes per mode. Dates are computed at runtime — these are templates,
- * not fixed strings.
+ * not fixed strings. `mainstream` sweeps the winning mainstream zones (see
+ * PRIORITY_CATEGORIES) ranked by stars.
  */
 export function buildSearchQueries(
   mode: DiscoveryMode,
@@ -274,6 +275,32 @@ export function buildSearchQueries(
       return [
         `stars:50..20000 pushed:>=${isoDaysAgo(180)} archived:false fork:false${topicFilter}`,
       ];
+    case "mainstream": {
+      // One topic-scoped query per winning mainstream zone (see
+      // PRIORITY_CATEGORIES). Stars-bounded, but wider ceilings than the
+      // engineering-quality modes — these spaces blow up with usage, not
+      // just commits. Date windows are generous for slower-moving media/3D.
+      const one = (topic: string, floor: number, days: number, ceiling = 40000) =>
+        `topic:${topic} stars:${floor}..${ceiling} pushed:>=${isoDaysAgo(days)} archived:false fork:false${topicFilter}`;
+      return [
+        one("ai", 100, 365),
+        one("llm", 100, 365),
+        one("rag", 50, 365),
+        one("ai-agents", 50, 365),
+        one("mcp", 50, 365),
+        one("fintech", 50, 365),
+        one("trading", 50, 365),
+        one("personal-finance", 30, 365),
+        one("cybersecurity", 50, 365),
+        one("pentesting", 20, 365),
+        one("video-editor", 20, 730, 50000),
+        one("audio", 50, 545, 50000),
+        one("podcast", 20, 545, 30000),
+        one("3d-modeling", 20, 545, 50000),
+        one("scraper", 20, 545, 50000),
+        one("self-hosted", 100, 365),
+      ];
+    }
     default:
       return [
         `stars:50..20000 pushed:>=${isoDaysAgo(180)} archived:false fork:false${topicFilter}`,
@@ -281,50 +308,84 @@ export function buildSearchQueries(
   }
 }
 
+/**
+ * Winning mainstream zones first (see PRIORITY_CATEGORIES): AI, money,
+ * cybersecurity, creative/media tooling, 3D, scrapers and everyday utility.
+ * The rest of the core rotation follows for coverage.
+ */
 export const TOPIC_ROTATION = [
+  "ai-agents",
+  "llm",
+  "rag",
+  "mcp",
+  "fintech",
+  "trading",
+  "cybersecurity",
+  "pentesting",
+  "video-editor",
+  "audio",
+  "3d-modeling",
+  "scraper",
+  "self-hosted",
+  "finance",
+  "machine-learning",
+  // Core rotation kept for coverage.
   "developer-tools",
   "cli",
   "automation",
-  "self-hosted",
-  "testing",
   "productivity",
   "security",
+  "testing",
   "database",
   "observability",
   "static-site-generator",
-  // Priority categories: repositories in these spaces earn reach.
-  "finance",
-  "fintech",
-  "llm",
-  "ai-agents",
 ];
 
 /* ------------------------------------------------------------------ */
 /* Priority categories                                                 */
 /*                                                                     */
-/* Some repositories reliably earn reach — finance tooling, AI-native  */
-/* projects, agent frameworks, and genuinely innovative technology.   */
-/* They are BOOSTED in scoring (never allowed to bypass the hard       */
-/* rejection gates), so borderline candidates from these spaces are    */
-/* selected over equally-matched generic ones.                        */
+/* Some repositories reliably earn reach — the spaces a mainstream     */
+/* viewer plugs into: AI agents and AI generally, money, defensive     */
+/* cybersecurity, everyday life tooling, media production, 3D and      */
+/* scraping/visualizing. They are BOOSTED in scoring (never allowed to */
+/* bypass the hard rejection gates), and they may clear a lower        */
+/* eligibility floor (`PRIORITY_MIN_SCORE`) so a strong-but-imperfect  */
+/* match beats a generic repository.                                   */
+/*                                                                     */
+/* Tier S — proven channel winners (AI).                               */
+/* Tier A — mainstream blow-ups observed (finance, security, life,     */
+/* media, 3D, scrapers). Tier B — useful but not audience-moving.      */
 /* ------------------------------------------------------------------ */
 
 export type PriorityCategory = {
-  id: "finance" | "ai" | "agents" | "innovation";
+  id:
+    | "agents"
+    | "ai"
+    | "finance"
+    | "cybersecurity"
+    | "life-tools"
+    | "media-studio"
+    | "graphics-3d"
+    | "scrapers"
+    | "innovation"
+    | "dev-tools";
   label: string;
   /** Exact topic matches (case-insensitive). */
   topics: string[];
   /** Description/name keyword patterns, case-insensitive. */
   keywords: RegExp[];
   bonus: number;
+  tier: "S" | "A" | "B";
 };
 
 export const PRIORITY_CATEGORIES: PriorityCategory[] = [
   {
     id: "agents",
     label: "AI agents",
+    tier: "S",
     topics: [
       "ai-agent",
+      "ai-agents",
       "agents",
       "agentic",
       "multi-agent",
@@ -333,15 +394,51 @@ export const PRIORITY_CATEGORIES: PriorityCategory[] = [
       "model-context-protocol",
       "agent-framework",
       "tool-use",
+      "workflow-automation",
+      "ai-automation",
+      "ai-assistant",
     ],
     keywords: [
-      /\b(ai[\s-]?agents?|agentic|multi-agent|autonomous agents?|mcp server|agent framework|agentic workflow)\b/i,
+      /\b(ai[\s-]?agents?|agentic|multi-agent|autonomous agents?|mcp server|agent framework|agentic workflow|ai automation|autonomous ai|ai employees?)\b/i,
     ],
-    bonus: 10,
+    bonus: 12,
+  },
+  {
+    id: "ai",
+    label: "AI",
+    tier: "S",
+    topics: [
+      "ai",
+      "artificial-intelligence",
+      "machine-learning",
+      "deep-learning",
+      "llm",
+      "large-language-models",
+      "generative-ai",
+      "nlp",
+      "computer-vision",
+      "neural-networks",
+      "rag",
+      "llmops",
+      "mlops",
+      "retrieval-augmented-generation",
+      "embeddings",
+      "vector-search",
+      "transformers",
+      "stable-diffusion",
+      "fine-tuning",
+      "gpt",
+      "llama",
+    ],
+    keywords: [
+      /\b(llm|llms|gpt-?\d?|openai|anthropic|machine learning|deep learning|neural network|transformer model|diffusion model|generative ai|\brag\b|retrieval augmented|large language model|vector (database|search)|embedding(s)?\b|fine.?tun)\b/i,
+    ],
+    bonus: 12,
   },
   {
     id: "finance",
     label: "finance",
+    tier: "A",
     topics: [
       "finance",
       "fintech",
@@ -353,36 +450,143 @@ export const PRIORITY_CATEGORIES: PriorityCategory[] = [
       "budgeting",
       "banking",
       "personal-finance",
+      "algorithmic-trading",
+      "algo-trading",
+      "quant-trading",
+      "stock-market",
+      "invoicing",
+      "expense-tracking",
+      "ledger",
+      "cryptocurrency",
     ],
     keywords: [
-      /\b(fintech|trading|quantitative trading|quant(itative)?\b|portfolio|personal finance|budget(ing)? app|accounting|invoicing|payment(s)? processing|stock(s)? (api|data)|market data)\b/i,
+      /\b(fintech|trading|quantitative trading|quant(itative)?\b|(?:investment|stock|trading) portfolio|personal finance|budget(ing)? app|accounting|invoicing|expense track|payment(s)? processing|stock(s)? (api|data)|market data|algorithmic trading|crypto(currency)?\b)\b/i,
     ],
-    bonus: 8,
+    bonus: 10,
   },
   {
-    id: "ai",
-    label: "AI",
+    id: "cybersecurity",
+    label: "cybersecurity",
+    tier: "A",
     topics: [
-      "ai",
-      "artificial-intelligence",
-      "machine-learning",
-      "deep-learning",
-      "llm",
-      "generative-ai",
-      "nlp",
-      "computer-vision",
-      "neural-networks",
-      "rag",
-      "llmops",
+      "cybersecurity",
+      "security",
+      "pentesting",
+      "penetration-testing",
+      "ethical-hacking",
+      "infosec",
+      "ctf",
+      "osint",
+      "vulnerability-scanning",
+      "red-team",
+      "blue-team",
+      "web-security",
+      "network-security",
+      "malware-analysis",
+      "threat-intelligence",
+      "security-tools",
     ],
     keywords: [
-      /\b(llm|llms|gpt-?\d?|openai|anthropic|machine learning|deep learning|neural network|transformer model|diffusion model|generative ai|\brag\b|large language model)\b/i,
+      /\b(pentest|pen.?test|penetration test|ctf\b|vulnerabilit|exploit|red team|blue team|osint|security audit|ethical hack|malware analysis|threat intel|intrusion detect|firewall)\b/i,
     ],
-    bonus: 8,
+    bonus: 10,
+  },
+  {
+    id: "life-tools",
+    label: "life tools",
+    tier: "A",
+    topics: [
+      "productivity",
+      "self-hosted",
+      "privacy",
+      "home-automation",
+      "quantified-self",
+      "wellbeing",
+      "habit-tracker",
+      "todo",
+      "notes",
+      "lifehack",
+    ],
+    keywords: [
+      /\b(self.?host|privacy.?focused|private (app|software|tool)|habit tracker|to.?do|note.?taking|home automation|quantified self|wellbeing|budget tracker|focus timer|pomodoro)\b/i,
+    ],
+    bonus: 10,
+  },
+  {
+    id: "media-studio",
+    label: "media studio",
+    tier: "A",
+    topics: [
+      "audio",
+      "video-editor",
+      "video-editing",
+      "audio-editing",
+      "daw",
+      "digital-audio-workstation",
+      "podcast",
+      "ffmpeg",
+      "video-production",
+      "image-editing",
+      "photo-editor",
+      "transcoding",
+      "subtitles",
+      "screen-recording",
+      "music-production",
+    ],
+    keywords: [
+      /\b(video edit|video editor|audio edit|daw\b|podcast|ffmpeg|color grad|subtitle|screen record|image edit|photo edit|music production|audio workstation|video editing|audio editing)\b/i,
+    ],
+    bonus: 10,
+  },
+  {
+    id: "graphics-3d",
+    label: "3D graphics",
+    tier: "A",
+    topics: [
+      "3d-modeling",
+      "3d-printing",
+      "blender",
+      "cad",
+      "mesh",
+      "stl",
+      "gcode",
+      "slicer",
+    ],
+    keywords: [
+      /\b(blender|stl\b|g.?code|3d.?print|slicer|3d.?model|mesh\b|cad\b)\b/i,
+    ],
+    bonus: 10,
+  },
+  {
+    id: "scrapers",
+    label: "scrapers",
+    tier: "A",
+    topics: [
+      "scraper",
+      "scraping",
+      "web-scraper",
+      "crawler",
+      "web-crawler",
+      "data-extraction",
+      "playwright",
+      "selenium",
+      "puppeteer",
+      "web-automation",
+      "rpa",
+      "data-visualization",
+      "visualization",
+      "dashboard",
+      "charts",
+    ],
+    keywords: [
+      /\b(scrap(e|ing)|crawl(er|ing)?|visuali[sz]|dashboard|data extraction|rpa\b|web scraping)\b/i,
+    ],
+    bonus: 10,
   },
   {
     id: "innovation",
     label: "innovation",
+    tier: "B",
     topics: [
       "wasm",
       "webassembly",
@@ -399,10 +603,30 @@ export const PRIORITY_CATEGORIES: PriorityCategory[] = [
     ],
     bonus: 6,
   },
+  {
+    id: "dev-tools",
+    label: "dev tools",
+    tier: "B",
+    topics: [
+      "developer-tools",
+      "cli",
+      "testing",
+      "database",
+      "observability",
+      "devops",
+      "ci-cd",
+      "kubernetes",
+      "docker",
+    ],
+    keywords: [
+      /\b(cli\b|command.line|developer tool|test runner|observability)\b/i,
+    ],
+    bonus: 6,
+  },
 ];
 
 /** Hard ceiling for the combined priority bonus. */
-export const MAX_PRIORITY_BONUS = 10;
+export const MAX_PRIORITY_BONUS = 12;
 
 /**
  * Match a repository against the priority categories. Returns the matched
@@ -446,9 +670,12 @@ export async function discoverRepos(options: {
   const found = new Map<string, Repo>();
 
   for (const query of queries) {
+    // Mainstream sweeps rank by stars (utility blow-ups); the other modes
+    // rank by recent activity.
+    const sort = options.mode === "mainstream" ? "stars" : "updated";
     const url =
       `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}` +
-      `&sort=updated&order=desc&per_page=${perQuery}`;
+      `&sort=${sort}&order=desc&per_page=${perQuery}`;
     let body: string;
     try {
       body = await fetchImpl(url);
@@ -689,6 +916,7 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
   const readme = analyzeReadme(readmeText);
   const maintenance = maintenanceScore(repo);
   const maturity = maturityScore(repo, release);
+  const priorityMatches = matchPriorityCategories(repo);
 
   const breakdown: ScoreBreakdown = {
     usefulness: usefulnessScore(repo, readme),
@@ -745,7 +973,6 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
   } else {
     warnings.push("no star-history snapshot yet, so no trend claim is possible");
   }
-  const priorityMatches = matchPriorityCategories(repo);
   if (priorityMatches.length > 0) {
     const best = priorityMatches[0];
     reasons.push(
@@ -761,8 +988,20 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
     warnings.push("license not identified by the API; will not be called open source");
   }
 
+  // Mainstream sweeps are structural: a repository that matches none of the
+  // priority zones cannot win them, no matter how high it scores. The floor
+  // for priority matches is `PRIORITY_MIN_SCORE`; the hard gates and the
+  // usefulness/documentation floors never move.
+  const outsideMainstream = mode === "mainstream" && priorityMatches.length === 0;
+  if (outsideMainstream) {
+    warnings.push(
+      "outside the mainstream priority zones; a generic repository cannot win a mainstream sweep"
+    );
+  }
+  const priorityFloor = priorityMatches.length > 0 ? PRIORITY_MIN_SCORE : MIN_SCORE;
   const eligible =
-    total >= MIN_SCORE &&
+    !outsideMainstream &&
+    total >= priorityFloor &&
     breakdown.usefulness > 0 &&
     breakdown.documentation > 0;
 
@@ -777,6 +1016,7 @@ export function scoreCandidate(input: ScoreInput): CandidateEvaluation {
     reasons,
     warnings,
     enriched: null,
+    priorityCategories: priorityMatches.map(match => match.id),
   };
 }
 
