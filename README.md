@@ -133,18 +133,24 @@ npm run start -- --discover --length 58
 npm run start -- --discover
 ```
 
-It runs a rotating set of discovery modes (practical, underdog, popular, emerging,
-topic-specific), applies hard rejection gates and a transparent 0-100 score, and
+It runs the **mainstream sweep** by default (one `topic:` query per winning
+mainstream zone, ranked by stars; `SHOWCASE_DISCOVER_MODE` overrides, `--mode`
+forces another), applies hard rejection gates and a transparent 0-100 score, and
 picks the best eligible, never-before-completed repository. Repositories in
-**priority categories** — AI agents, finance, AI/ML, and innovative technology —
-receive a score boost (up to +10) so they surface more often; the boost never
-bypasses the hard rejection gates. Use `--dry-run` to
+**priority categories** — AI (Tier S, +12); finance, cybersecurity, life tools,
+media studio, 3D graphics, scrapers (Tier A, +10); innovation, dev tools
+(Tier B, +6) — receive a score boost and may clear a lower eligibility floor
+(+55 by default). A repository matching no priority zone **cannot** win a
+`mainstream` sweep; see
+[docs/configuration.md](docs/configuration.md#github-showcase-channel--shared-engine).
+Use `--dry-run` to
 report the selection and narration without rendering, and `--mode` to force a
 mode:
 
 ```bash
 npm run start -- --discover --dry-run
 npm run start -- --discover --mode underdog
+npm run start -- --discover --mode mainstream
 ```
 
 ## 7. One-command run (every OS)
@@ -211,9 +217,11 @@ scroll, QA all work unchanged. Example:
   ledger feeds a constrained story grammar (`identity → value → proof/demo →
   setup → availability → caveat → cta`), evidence-ranked clauses and a quality
   gate before TTS.
-- Priority categories: finance, AI/ML, AI agents and innovative technology
-  repositories receive a discovery score boost (max +10, `priority`
-  breakdown dimension). The boost never bypasses the hard rejection gates.
+- Priority categories: tiered score boosts (S: AI agents, AI/ML +12; A: finance,
+  cybersecurity, life tools, media studio, 3D graphics, scrapers +10; B:
+  innovation, dev tools +6) added via the `priority` breakdown dimension, plus a
+  lower eligibility floor for priority matches (`SHOWCASE_PRIORITY_MIN_SCORE`,
+  default 55). The boost never bypasses the hard rejection gates.
 - Kokoro TTS runs locally with `am_fenrir` at speed `1.0` in American English.
   The preset is configured in one place (`VOICE_PRESET` in `src/config.ts`)
   and recorded into every run's `render-metadata.json`. `am_fenrir` won the
@@ -493,7 +501,9 @@ state). See `assets/longform/asset-licenses.json`.
   stable per output, not per input.
 - Priority discovery is heuristic (topics + description keywords); a priority
   repository with an unparsable README can still lose to a stronger generic
-  one, and a non-priority repository can still win outright.
+  one, and a non-priority repository can still win outright. Tier bonuses are
+  editorial judgements weighted by past channel performance and can be
+  re-tuned from the `priorityCategories` recorded in each dataset entry.
 - "Trending" is never claimed without dated star snapshots.
 - Primary mode uses a real mobile-width screenshot of the public repository
   page. The DOM fallback (used only when that capture fails) is built from
