@@ -44,7 +44,9 @@ presenter (the lazy office commentator from `assets/news/`). See
 ## Pipeline stages (GitHub channel)
 
 1. **Selection** (`src/github.ts`) â€” rotating discovery modes with hard rejection
-   gates and a transparent 0â€“100 score; never-before-completed repositories only.
+   gates and a transparent 0â€“100 score; never-before-used repositories only,
+   excluded by full name and node ID from both the history ledger and the
+   video archive (`--force` with `--repo` deliberately overrides).
    Tiered priority categories (S: AI; A: finance, cybersecurity, life tools,
    media studio, 3D graphics, scrapers; B: innovation, dev tools) add +12/+10/+6
    and lower the eligibility floor to `SHOWCASE_PRIORITY_MIN_SCORE` (55); the
