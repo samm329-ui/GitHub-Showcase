@@ -194,8 +194,10 @@ export function prepareTtsText(input: string): string {
   // Clean owner/repo where owner and repo are identical across slash (e.g. "Opendray/opendray" -> "Opendray")
   text = text.replace(/\b([a-zA-Z0-9_-]+)\/(\1)\b/gi, "$1");
 
-  // Collapse duplicate words across slash or dash, e.g. "API/API" or "API-API"
-  text = text.replace(/\b([a-zA-Z0-9]+)[\s/\\-]+(\1)\b/gi, "$1");
+  // Collapse duplicate words across slash or dash, e.g. "API/API" or "API-API".
+  // Multi-character only: repeated single letters are spelled acronyms
+  // ("L L M", "C S S" in hyphens) and collapsing them says "L M" / "C S".
+  text = text.replace(/\b([a-zA-Z0-9]{2,})[\s/\\-]+(\1)\b/gi, "$1");
 
   text = text
     // Fenced code, front matter and HTML are not speech.
