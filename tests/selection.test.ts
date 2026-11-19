@@ -40,6 +40,17 @@ describe("hard rejection gates", () => {
     assert.equal(rejection?.rule, "history");
   });
 
+  test("a renamed repository is rejected by its node id", () => {
+    const { repo } = fixture("high-quality-popular");
+    const nodeId = repo.node_id;
+    assert.ok(nodeId, "the fixture must carry a GitHub node id");
+    const rejection = hardReject(
+      { ...repo, full_name: "new-owner/new-name" },
+      { excluded: new Set(), excludedNodeIds: new Set([nodeId!]) }
+    );
+    assert.equal(rejection?.rule, "history");
+  });
+
   test("a repository without a usable description is rejected", () => {
     const { repo } = fixture("high-quality-popular");
     const rejection = hardReject({ ...repo, description: "  x  " }, { excluded: new Set() });
