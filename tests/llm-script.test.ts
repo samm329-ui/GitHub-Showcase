@@ -7,6 +7,7 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
   composeLlmScript,
+  normalizeGeneratedText,
 } from "../src/llm-script.js";
 import { resolveTargetSeconds, estimatedWordsForSeconds } from "../src/config.js";
 import {
@@ -180,6 +181,26 @@ function completionResponse(segmentCount: number, wordsPerSegment: number) {
   };
 }
 
+function completionWithPurposes(purposes: string[]) {
+  const segments = purposes.map((purpose, index) => {
+    const text = `Rocket CLI does concrete thing number ${index + 1} with a real artifact.`;
+    return {
+      purpose,
+      spokenText: text,
+      captionText: text,
+      visualAnchor: "repo-header",
+      calloutText: null as string | null,
+      calloutRole: null,
+      emphasis: [] as string[],
+    };
+  });
+  return {
+    model: "llama-3.3-70b-versatile",
+    choices: [{ message: { content: JSON.stringify({ segments }) } }],
+    usage: { prompt_tokens: 900, completion_tokens: 300, total_tokens: 1200 },
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Prompt construction                                                  */
 /* ------------------------------------------------------------------ */
@@ -191,8 +212,22 @@ describe("llm prompt construction", () => {
     assert.match(prompt, /"segments"/);
     assert.match(prompt, /hard limit/i);
     assert.match(prompt, /A sentence that would fit any repository is deleted/);
-    assert.match(prompt, /Five sharp segments beat/);
+    assert.match(prompt, /Never omit the demo/);
+    assert.match(prompt, /normal casing/i);
+    assert.doesNotMatch(prompt, /It is 11pm|Five sharp segments beat/);
     assert.match(prompt, /designed to/);
+    assert.match(prompt, /NEVER ask a question/);
+    assert.match(prompt, /Never speak an install command/);
+    assert.doesNotMatch(prompt, /occasional question/);
+    assert.doesNotMatch(prompt, /pip install|go install github/);
+  });
+
+  test("generated question marks are neutralised before TTS and captions", () => {
+    assert.equal(normalizeGeneratedText("Sound familiar?"), "Sound familiar.");
+    assert.equal(
+      normalizeGeneratedText("Want to know how? Here is the mechanism."),
+      "Want to know how. Here is the mechanism."
+    );
   });
 
   test("user prompt embeds repo metadata, facts and a truncated README", () => {
@@ -288,6 +323,31 @@ describe("composeLlmScript", () => {
     assert.equal(result.completions.length, 2);
   });
 
+  test("a draft missing the demo triggers exactly one expansion retry", async () => {
+    let n = 0;
+    const { fetchImpl, calls } = mockFetch(() => {
+      n += 1;
+      return {
+        status: 200,
+        body:
+          n === 1
+            ? completionWithPurposes(["identify", "explain", "install", "cta"])
+            : completionWithPurposes([
+                "identify", "explain", "demo", "install", "benefit", "cta",
+              ]),
+      };
+    });
+    const result = await composeLlmScript(fakeEnriched(), fakeLedger(), {
+      targetDurationSeconds: 35,
+      fetchImpl,
+      log: () => {},
+    });
+    assert.equal(calls.length, 2);
+    assert.equal(result.completions.length, 2);
+    assert.ok(result.plan.segments.some(segment => segment.purpose === "demo"));
+    assert.equal(result.warnings.some(warning => /core beats/.test(warning)), false);
+  });
+
   test("a draft still over the ceiling after the retry fails the run", async () => {
     const { fetchImpl } = mockFetch(() => ({
       status: 200,
@@ -309,7 +369,7 @@ describe("composeLlmScript", () => {
       if (index === 0) {
         return { status: 429, body: { error: { message: "rate limited" } }, headers: { "retry-after": "1" } };
       }
-      return { status: 200, body: completionResponse(4, 6) };
+      return { status: 200, body: completionResponse(5, 6) };
     });
     const result = await composeLlmScript(fakeEnriched(), fakeLedger(), {
       targetDurationSeconds: 35,
