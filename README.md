@@ -136,7 +136,10 @@ npm run start -- --discover
 It runs the **mainstream sweep** by default (one `topic:` query per winning
 mainstream zone, ranked by stars; `SHOWCASE_DISCOVER_MODE` overrides, `--mode`
 forces another), applies hard rejection gates and a transparent 0-100 score, and
-picks the best eligible, never-before-completed repository. Repositories in
+picks the best eligible repository that has **never been used** — strict
+exclusion covers every previously attempted repository plus every script/video
+in `dataset/github/`, matched by both name and GitHub node ID (so renames can't
+slip through). To deliberately regenerate one, pass `--force` with `--repo`. Repositories in
 **priority categories** — AI (Tier S, +12); finance, cybersecurity, life tools,
 media studio, 3D graphics, scrapers (Tier A, +10); innovation, dev tools
 (Tier B, +6) — receive a score boost and may clear a lower eligibility floor
