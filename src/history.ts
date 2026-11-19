@@ -350,30 +350,39 @@ export class HistoryStore {
     return Number(result.changes);
   }
 
-  /** Canonical full names that must never be auto-selected again. */
-  excludedFullNames(): Set<string> {
+  /**
+   * STRICT no-repeat ledger. A repository that has ever been touched by the
+   * pipeline (processing, completed, failed or skipped) is excluded — not only
+   * completed ones. Failed runs previously remained retryable, which allowed
+   * the same repository to produce several videos. `discovered` rows are the
+   * only ones still eligible.
+   *
+   * Both identity keys are returned: full name for the search pool and node ID
+   * for repositories that were renamed on GitHub after their first video.
+   */
+  excludedIdentities(): { fullNames: Set<string>; nodeIds: Set<string> } {
     const rows = this.db
       .prepare(
-        `SELECT canonical_full_name, status, attempt_count, completed_at
+        `SELECT node_id, canonical_full_name, status, completed_at
            FROM repositories`
       )
-      .all() as Pick<
-      RepositoryRow,
-      "canonical_full_name" | "status" | "attempt_count" | "completed_at"
-    >[];
-    const excluded = new Set<string>();
+      .all() as Array<
+      Pick<RepositoryRow, "node_id" | "canonical_full_name" | "status" | "completed_at">
+    >;
+    const fullNames = new Set<string>();
+    const nodeIds = new Set<string>();
     for (const row of rows) {
-      if (row.status === "processing") {
-        excluded.add(row.canonical_full_name);
-      } else if (row.status === "completed") {
-        if (!this.revisitAllowed(row.completed_at)) {
-          excluded.add(row.canonical_full_name);
-        }
-      } else if (row.status === "failed" && row.attempt_count >= MAX_ATTEMPTS) {
-        excluded.add(row.canonical_full_name);
-      }
+      if (row.status === "discovered") continue;
+      if (row.status === "completed" && this.revisitAllowed(row.completed_at)) continue;
+      fullNames.add(row.canonical_full_name);
+      nodeIds.add(row.node_id);
     }
-    return excluded;
+    return { fullNames, nodeIds };
+  }
+
+  /** Canonical full names that must never be auto-selected again. */
+  excludedFullNames(): Set<string> {
+    return this.excludedIdentities().fullNames;
   }
 
   /* ------------------------ star snapshots ------------------------ */
