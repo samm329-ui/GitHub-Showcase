@@ -79,6 +79,14 @@ describe("speech text normalisation", () => {
     assert.ok(!/Next\.js|50%|v1\.2\.0/.test(speech), speech);
   });
 
+  test("spelled acronyms survive speech normalisation", () => {
+    assert.equal(prepareTtsText("L L M s and C S S"), "L L M s and C S S");
+    assert.equal(prepareTtsText("V L L M and H T T P"), "V L L M and H T T P");
+    assert.equal(prepareTtsText("M C P and A S I O"), "M C P and A S I O");
+    // Multi-character duplicate words across a slash still collapse.
+    assert.equal(prepareTtsText("API/API is one entry"), "A P I is one entry");
+  });
+
   test("lowercase acronyms are spelled for the voice, not the captions", () => {
     assert.equal(prepareTtsText("A cli for llms."), "A C L I for L L M s.");
     assert.equal(
