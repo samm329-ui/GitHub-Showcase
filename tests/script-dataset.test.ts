@@ -15,6 +15,7 @@ import {
   getDatasetRecord,
   listDatasetRecords,
   ScriptDatasetError,
+  archivedIdentities,
 } from "../src/script-dataset.js";
 
 function tempDataset(): string {
@@ -38,6 +39,17 @@ function base(overrides: Record<string, unknown> = {}) {
 }
 
 describe("script dataset", () => {
+  test("archived identities expose produced repositories by name and node id", async () => {
+    const dir = tempDataset();
+    await saveDatasetRecord(
+      base({ selection: { repo: { node_id: "N42", full_name: "owner/repo" } } }),
+      dir
+    );
+    const ids = await archivedIdentities(dir);
+    assert.ok(ids.fullNames.has("owner/repo"));
+    assert.ok(ids.nodeIds.has("N42"));
+  });
+
   test("pending → completed ratchets the phase and merges across phases", async () => {
     const dir = tempDataset();
     const first = await saveDatasetRecord(
