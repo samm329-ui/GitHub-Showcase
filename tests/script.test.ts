@@ -312,6 +312,20 @@ describe("pronunciation", () => {
     assert.equal(toSpoken("cargo"), "cargo", "'cargo' is not the entry 'Cargo'");
   });
 
+  test("acronym casing and plurals never change the spoken letters", () => {
+    assert.equal(toSpoken("LLM, llm and Llm"), "L L M, L L M and L L M");
+    assert.equal(toSpoken("cli CLI Cli"), "C L I C L I C L I");
+    assert.equal(toSpoken("llms and APIs"), "L L M s and A P I s");
+    assert.equal(toSpoken("mcp servers and pdfs"), "M C P servers and P D F s");
+    assert.equal(toSpoken("a vllm server"), "a V L L M server");
+  });
+
+  test("ordinary lowercase words that look like acronyms stay words", () => {
+    assert.equal(toSpoken("a rag doll"), "a rag doll");
+    assert.equal(toSpoken("go routines"), "go routines");
+    assert.equal(toSpoken("the rest of it"), "the rest of it");
+  });
+
   test("the dictionary has no duplicate display keys", () => {
     const seen = new Set<string>();
     for (const entry of pronunciationEntries()) {
