@@ -206,6 +206,50 @@ export async function listDatasetRecords(
   }
 }
 
+/**
+ * Repositories that already have a generated script/video in the archive.
+ * This is the source of truth for "already created": a run can fail after
+ * rendering (leaving its history row `failed` or `processing`) while the
+ * video is still published. The archive catches those cases.
+ * Best-effort — a missing or corrupt archive returns an empty set.
+ */
+export async function archivedIdentities(
+  datasetDirOverride?: string
+): Promise<{ fullNames: Set<string>; nodeIds: Set<string> }> {
+  const fullNames = new Set<string>();
+  const nodeIds = new Set<string>();
+  const dir = channelDir(root(datasetDirOverride), "github");
+  let files: string[];
+  try {
+    files = (await fs.readdir(dir)).filter(file => file.endsWith(".json"));
+  } catch {
+    return { fullNames, nodeIds };
+  }
+  for (const file of files) {
+    const record = await readExisting(path.join(dir, file));
+    if (!record) continue;
+    const name = String(record.title ?? "")
+      .trim()
+      .replace(/^\/+|\/+$/g, "")
+      .toLowerCase();
+    if (name.includes("/")) fullNames.add(name);
+    const selection = record.selection as {
+      repo?: { node_id?: unknown };
+      enriched?: { nodeId?: unknown };
+      nodeId?: unknown;
+    } | null;
+    const ids = [
+      selection?.repo?.node_id,
+      selection?.enriched?.nodeId,
+      selection?.nodeId,
+    ];
+    for (const id of ids) {
+      if (typeof id === "string" && id) nodeIds.add(id);
+    }
+  }
+  return { fullNames, nodeIds };
+}
+
 async function upsertIndex(dir: string, record: ScriptDatasetRecord): Promise<void> {
   const file = indexPath(dir, record.channel);
   let entries: DatasetIndexEntry[] = [];
