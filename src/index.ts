@@ -39,6 +39,7 @@ import {
   scoreCandidate,
 } from "./github.js";
 import { HistoryStore, canonicalFullName } from "./history.js";
+import { archivedIdentities } from "./script-dataset.js";
 import { buildFactLedger } from "./facts.js";
 import { composeScript } from "./script-composer.js";
 import { composeLlmScript } from "./llm-script.js";
@@ -129,10 +130,23 @@ type Selection = {
   mode: DiscoveryMode;
 };
 
+type Exclusions = { fullNames: Set<string>; nodeIds: Set<string> };
+
+/** History + video archive: the strict "never produce this repository twice" set. */
+async function collectExclusions(history: HistoryStore): Promise<Exclusions> {
+  const ledger = history.excludedIdentities();
+  const archive = await archivedIdentities();
+  return {
+    fullNames: new Set([...ledger.fullNames, ...archive.fullNames]),
+    nodeIds: new Set([...ledger.nodeIds, ...archive.nodeIds]),
+  };
+}
+
 async function selectCandidate(
   history: HistoryStore,
   mode: DiscoveryMode,
-  runIndex: number
+  runIndex: number,
+  exclusions: Exclusions
 ): Promise<Selection | null> {
   const topic = mode === "topic" ? TOPICS[runIndex % TOPICS.length] : null;
   log(`Stage 1/9: Discovering candidates (mode: ${mode}${topic ? `, topic: ${topic}` : ""})...`);
@@ -140,7 +154,7 @@ async function selectCandidate(
   const pool = await discoverRepos({ mode, perQuery: 25, topic });
   log(`  ${pool.length} raw results from the search endpoint.`);
 
-  const excluded = history.excludedFullNames();
+  const { fullNames: excluded, nodeIds: excludedNodeIds } = exclusions;
   const seen = new Set<string>();
   const survivors: CandidateEvaluation[] = [];
 
@@ -148,7 +162,7 @@ async function selectCandidate(
     const key = canonicalFullName(repo.full_name);
     if (seen.has(key)) continue;
     seen.add(key);
-    const rejection = hardReject(repo, { excluded });
+    const rejection = hardReject(repo, { excluded, excludedNodeIds });
     if (rejection) {
       log(`  rejected ${repo.full_name}: ${rejection.reason} (${rejection.rule})`);
       continue;
@@ -183,7 +197,7 @@ async function selectCandidate(
       log(`  rejected ${enriched.full_name}: README has too little usable text.`);
       continue;
     }
-    if (hardReject(enriched, { excluded })) {
+    if (hardReject(enriched, { excluded, excludedNodeIds })) {
       log(`  rejected ${enriched.full_name}: failed a gate after hydration.`);
       continue;
     }
@@ -289,6 +303,7 @@ async function main(): Promise<void> {
     );
   }
   const dryRun = args.includes("--dry-run");
+  const forceFlag = args.includes("--force");
 
   if (!discoverMode && !repoArg) {
     console.log("Commands:");
@@ -297,6 +312,7 @@ async function main(): Promise<void> {
     console.log("  npm run start -- --discover                      (default: mainstream sweep; SHOWCASE_DISCOVER_MODE overrides)");
     console.log("  npm run start -- --discover [--mode practical|popular|underdog|emerging|topic|mainstream]");
     console.log("  npm run start -- --discover --dry-run   (select and report, do not render)");
+    console.log("  npm run start -- --repo owner/repo --force   (regenerate an already-created repo)");
     console.log("  npm run start -- --repo owner/repo --length 45   (target seconds, 18-58)");
     console.log("");
     console.log("Narration is written by Groq (GROQ_API_KEY in .env). Set SHOWCASE_SCRIPTER=rule for the legacy writer.");
@@ -306,6 +322,7 @@ async function main(): Promise<void> {
 
   const runId = randomUUID().slice(0, 8);
   const history = new HistoryStore();
+  const exclusions = await collectExclusions(history);
   history.startRun(runId);
 
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
@@ -325,7 +342,7 @@ async function main(): Promise<void> {
         .completedFullNames()
         .length;
       const mode = modeArg ?? DEFAULT_DISCOVER_MODE;
-      selection = await selectCandidate(history, mode, runsSeen);
+      selection = await selectCandidate(history, mode, runsSeen, exclusions);
       if (!selection) {
         history.finishRun(runId, "failed", { stage: "discovery", error: "no eligible candidate" });
         await flushLog(runDir, runId);
@@ -334,7 +351,18 @@ async function main(): Promise<void> {
       }
     } else {
       const fullName = parseRepoArg(repoArg!);
+      if (!forceFlag && exclusions.fullNames.has(canonicalFullName(fullName))) {
+        throw new Error(
+          `${fullName} already has a video in this channel. Pass --force to regenerate it deliberately.`
+        );
+      }
       const repo = await getRepo(fullName);
+      if (!forceFlag && repo.node_id && exclusions.nodeIds.has(repo.node_id)) {
+        throw new Error(
+          `${fullName} was already used under another name (node ${repo.node_id}). ` +
+            "Pass --force to regenerate it deliberately."
+        );
+      }
       const enriched = await enrichRepo(repo, { force: true });
       history.upsertRepository({
         nodeId: enriched.nodeId,
@@ -377,7 +405,7 @@ async function main(): Promise<void> {
     const existing = history.getRepository(repo.nodeId);
     const reserved = dryRun
       ? existing
-      : history.reserveRepository(repo.nodeId, runId, { force: !discoverMode });
+      : history.reserveRepository(repo.nodeId, runId, { force: forceFlag });
     if (!dryRun) {
       if (!reserved) {
         throw new Error(
