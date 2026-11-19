@@ -91,6 +91,7 @@ const WEIRD_CHAR_MAP: [RegExp, string][] = [
   [/[\u2018\u2019\u02BC\u0060]/g, "'"], // curly quotes/backtick → straight apostrophe
   [/[\u201C\u201D]/g, "\""], // curly double quotes
   [/\u2026/g, "."], // ellipsis
+  [/\?/g, "."], // no rising intonation: the TTS voice cannot deliver questions
   [/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, ""], // zero-width chars, BOM, soft hyphen
   [/[\u00A0\u202F\u2007\u1680\u205F]/g, " "], // non-breaking spaces
 ];
@@ -163,10 +164,10 @@ function topLanguages(repo: EnrichedRepo, count = 4): string[] {
 const STYLE_EXEMPLARS = [
   `{
   "segments": [
-    { "purpose": "identify", "spokenText": "Auto R A G Agent is your personal librarian that answers any question on your computer.", "captionText": "AutoRAG Agent is your personal librarian that answers any question on your computer.", "calloutText": "personal file librarian", "calloutRole": "purpose", "emphasis": ["personal librarian"] },
+    { "purpose": "identify", "spokenText": "AutoRAG Agent is your personal librarian that answers any question on your computer.", "captionText": "AutoRAG Agent is your personal librarian that answers any question on your computer.", "calloutText": "personal file librarian", "calloutRole": "purpose", "emphasis": ["personal librarian"] },
     { "purpose": "explain", "spokenText": "It scans your files, builds embeddings, then uses a hybrid keyword and meaning search with a reranker to find the exact passage.", "captionText": "It scans your files, builds embeddings, then uses a hybrid keyword and meaning search with a reranker to find the exact passage.", "calloutText": "hybrid keyword and meaning search", "calloutRole": "mechanism", "emphasis": ["embeddings", "reranker"] },
-    { "purpose": "demo", "spokenText": "Ask it about a contract and it returns the clause with a citation, and you can preview the P D F instantly with space.", "captionText": "Ask it about a contract and it returns the clause with a citation, and you can preview the PDF instantly with space.", "calloutText": "clause with a citation", "calloutRole": "example", "emphasis": ["clause with a citation"] },
-    { "purpose": "install", "spokenText": "Get started with pip install Auto R A G.", "captionText": "Get started with pip install AutoRAG.", "calloutText": "pip install AutoRAG", "calloutRole": "installation", "emphasis": [] },
+    { "purpose": "demo", "spokenText": "Ask it about a contract and it returns the clause with a citation, and you can preview the PDF instantly with space.", "captionText": "Ask it about a contract and it returns the clause with a citation, and you can preview the PDF instantly with space.", "calloutText": "clause with a citation", "calloutRole": "example", "emphasis": ["clause with a citation"] },
+    { "purpose": "install", "spokenText": "The repo readme has the setup steps and a quick start.", "captionText": "The repo readme has the setup steps and a quick start.", "calloutText": "readme quick start", "calloutRole": "installation", "emphasis": [] },
     { "purpose": "benefit", "spokenText": "It also collapses duplicate versions so you see only the latest copy.", "captionText": "It also collapses duplicate versions so you see only the latest copy.", "calloutText": "keeps only the latest copy", "calloutRole": "benefit", "emphasis": ["latest copy"] },
     { "purpose": "cta", "spokenText": "Visit the repo for docs and try the app today.", "captionText": "Visit the repo for docs and try the app today.", "calloutText": "docs and desktop app", "calloutRole": "benefit", "emphasis": [] }
   ]
@@ -174,9 +175,9 @@ const STYLE_EXEMPLARS = [
   `{
   "segments": [
     { "purpose": "identify", "spokenText": "Transit is a free, open-source digital audio workstation written in Rust.", "captionText": "Transit is a free, open-source digital audio workstation written in Rust.", "calloutText": "free open-source DAW", "calloutRole": "purpose", "emphasis": ["open-source"] },
-    { "purpose": "explain", "spokenText": "It builds its own audio engine, a native A S I O backend written from the protocol up, so latency is measurable inside the app.", "captionText": "It builds its own audio engine, a native ASIO backend written from the protocol up, so latency is measurable inside the app.", "calloutText": "native ASIO audio engine", "calloutRole": "mechanism", "emphasis": ["audio engine", "latency"] },
-    { "purpose": "demo", "spokenText": "You can record a guitar, edit M I D I, and load a V S T 3 plug-in without freezing the window.", "captionText": "You can record a guitar, edit MIDI, and load a VST3 plug-in without freezing the window.", "calloutText": "record, edit, load VST3", "calloutRole": "example", "emphasis": ["without freezing"] },
-    { "purpose": "install", "spokenText": "Grab the latest release for Windows, Mac O S or Linux and run the installer or extract the portable archive.", "captionText": "Grab the latest release for Windows, macOS or Linux and run the installer or extract the portable archive.", "calloutText": "Windows, macOS, Linux builds", "calloutRole": "installation", "emphasis": [] },
+    { "purpose": "explain", "spokenText": "It builds its own audio engine, a native ASIO backend written from the protocol up, so latency is measurable inside the app.", "captionText": "It builds its own audio engine, a native ASIO backend written from the protocol up, so latency is measurable inside the app.", "calloutText": "native ASIO audio engine", "calloutRole": "mechanism", "emphasis": ["audio engine", "latency"] },
+    { "purpose": "demo", "spokenText": "You can record a guitar, edit MIDI, and load a VST3 plug-in without freezing the window.", "captionText": "You can record a guitar, edit MIDI, and load a VST3 plug-in without freezing the window.", "calloutText": "record, edit, load VST3", "calloutRole": "example", "emphasis": ["without freezing"] },
+    { "purpose": "install", "spokenText": "Pick a build for your platform from the releases page.", "captionText": "Pick a build for your platform from the releases page.", "calloutText": "builds for each platform", "calloutRole": "installation", "emphasis": [] },
     { "purpose": "caveat", "spokenText": "It is still alpha software, so the U I has rough edges and some features are missing.", "captionText": "It is still alpha software, so the UI has rough edges and some features are missing.", "calloutText": "alpha, rough edges", "calloutRole": "tradeoff", "emphasis": ["alpha"] },
     { "purpose": "cta", "spokenText": "Check the Git Hub repo for docs, updates and how to contribute.", "captionText": "Check the GitHub repo for docs, updates and how to contribute.", "calloutText": "docs and how to contribute", "calloutRole": "benefit", "emphasis": [] }
   ]
@@ -195,8 +196,9 @@ export function buildSystemPrompt(targetSeconds: number): string {
     "someone who has never opened this repo.",
     "",
     "Voice and tone:",
-    "- Not a press release. Short sentences. Contractions. Concrete claims. Natural rhythm with the",
-    "  occasional question.",
+    "- Not a press release. Short sentences. Contractions. Concrete claims. Flat, even delivery.",
+    "- NEVER ask a question. No rhetorical questions, no question marks, no rising-intonation prompts",
+    "  that invite a reply. The voice model cannot deliver questions. Every line is a statement.",
     "- Front-load the verb. Banned openers: \"designed to\", \"built to\", \"whether you\", \"it is worth",
     "  noting\", \"seamlessly\", \"powerful\", \"simple\", \"easily\", \"just\", \"simply\".",
     "- Keep the real terminology. Never strip proper terms (embeddings, reranker, ASIO): a viewer who",
@@ -212,32 +214,39 @@ export function buildSystemPrompt(targetSeconds: number): string {
     "- Every sentence names at least one concrete noun from THIS repository: a feature, command, number,",
     "  file, artifact or outcome. A sentence that would fit any repository is deleted.",
     "- The demo must contain an artifact or a number (the clause, the PDF, the failing test, the three",
-    "  seconds it took). A demo with no artifact is abstract, and abstract is skipped.",
+    "  seconds it took). Describe one concrete use from the README with its real artifact. Never invent",
+    "  times of day, exact commands typed or verbatim replies; a demo with no artifact is skipped.",
     "- No segment may restate another. No adjective without a supporting artifact in the same breath.",
-    "- If a segment has no fact and no scene behind it, drop the segment. Five sharp segments beat",
-    "  eight soft ones.",
+    "- Keep all five core beats in every script: identify, explain, demo, install, cta. Use 5 to 9",
+    "  segments. Never omit the demo — it is the beat viewers stay for. When evidence is thin, make the",
+    "  demo smaller and concrete instead of dropping it.",
     "",
     "Spoken delivery rules (the TTS engine reads these exact words):",
-    "- Plain ASCII only. Allowed punctuation: commas, periods, apostrophes, question marks. Never use emoji,",
-    "  em/en dashes, non-breaking hyphens, curly quotes, colons, semicolons, parentheses or slashes.",
-    "- Never put a URL, domain or install command path in spokenText or captionText. Say \"install it with",
-    "  Go's install command\" — never \"go install github.com/you/repo@latest\".",
+    "- Plain ASCII only. Allowed punctuation: commas, periods, apostrophes. Never use emoji,",
+    "  em/en dashes, non-breaking hyphens, curly quotes, colons, semicolons, parentheses, slashes",
+    "  or question marks.",
+    "- Never speak an install command, package path or URL in spokenText or captionText. Describe",
+    "  setup in plain words (\"the readme has the setup steps\", \"pick a build for your platform\")",
+    "  instead of reading a command.",
     "- Short sentences, one idea each, natural contractions, occasional \"you\" address.",
-    "- If a technical acronym is uncommon, spell it out: \"V L L M\", \"M C P\", \"T U I\".",
+    "- If a technical acronym is uncommon, write it in normal casing: \"LLM\", \"CSS\", \"CLI\". The",
+    "  TTS layer spells them for speech; do not write spaced-out letters yourself.",
     "- At least one punchy sentence under 6 words. No sentence over 18 words.",
     "",
     "Structure (in this order, but let the evidence shape the wording):",
     "  1. hook/identity — the viewer's pain or superpower FIRST, then the repository name, then the",
-    "     one-line purpose. Formula: \"Invoices every month? NAME does it for you.\" Two sentences max,",
-    "     with the name inside them.",
+    "     one-line purpose. Formula: \"Monthly invoices pile up. NAME does the math for you.\" Two",
+    "     statements max, with the name inside them. Declarative only, never a question. Vary the",
+    "     opening; avoid stock starts like 'Struggling to' or 'Need to'.",
     "  2. explain — how it actually works. Mechanism before metrics, always. Anchor the machinery in",
     "     plain words as you go.",
-    "  3. demo — a 15-second scene from the viewer's actual day (\"It is 11pm and the podcast ran",
-    "     long...\"). Derive the scene ONLY from the evidence. What would I actually use this for?",
-    "  4. install — how to get started, briefly (name the install command or package, not a character-by-character reading).",
+    "  3. demo — a concrete, practical use from the evidence, with its artifact or number. Derive the",
+    "     scene ONLY from the evidence. Show the concrete use, not a question.",
+    "  4. install — describe setup in plain words: where the steps live, which platforms are supported.",
+    "     Never speak an install command, a package path or a command-line flag.",
     "  5. caveat (optional) — an honest limitation, only if one exists in the evidence.",
-    "  6. cta — tie the action to THEIR life (\"if you invoice clients every month, star this tonight\"),",
-    "     not a generic \"check the repo\".",
+    "  6. cta — tie the action to THEIR life (\"try it on your next deploy\", \"compare it with your",
+    "     current setup\"). Avoid 'star the repo' as a stock CTA; name a concrete next action.",
     "",
     "Hard honesty rules:",
     "- Use ONLY what is in the facts and README excerpt you are given. Never invent benchmarks, user counts,",
@@ -264,7 +273,7 @@ export function buildSystemPrompt(targetSeconds: number): string {
     '      "spokenText": "the sentence(s) the narrator reads — plain spoken English",',
     '      "captionText": "the same words for on-screen captions (correct spelling)",',
     '      "visualAnchor": "repo-header" | "file-list" | "readme-intro" | "install-command" | "features" | "license" | "release",',
-    '      "calloutText": "SPECIFIC 3-6 word phrase naming the actual thing — e.g. terminal coding agent, fixes Go tests, go install — never generic filler like what it is or how it works, or null",',
+    '      "calloutText": "SPECIFIC 3-6 word phrase naming the actual thing — e.g. terminal coding agent, fixes Go tests, local file search — never generic filler like what it is or how it works, or null",',
     '      "calloutRole": "purpose" | "mechanism" | "example" | "benefit" | "tradeoff" | "installation" | null,',
     '      "emphasis": ["up-to-3 words captions should highlight"]',
     "    }",
@@ -591,9 +600,16 @@ export async function composeLlmScript(
 
   let parsed = parseCompletion(first.content, warnings, ledger);
   let plan = buildPlan(repo, parsed.segments, target, model, options);
+
+  const missingBeats = (segments: NarrationSegment[]): boolean =>
+    segments.length < 5 ||
+    !segments.some(segment => segment.purpose === "demo") ||
+    !segments.some(segment => segment.purpose === "explain");
+
   // Over the soft budget? One compression pass is allowed (the model tends
   // to overshoot word budgets).
   const overBudget = estimateSeconds(plan) > Math.min(target + 4, MAX_DURATION_SECONDS);
+  let thin = missingBeats(parsed.segments);
 
   if (overBudget) {
     // One permitted follow-up: ask the model to compress its own draft.
@@ -608,9 +624,9 @@ export async function composeLlmScript(
         {
           role: "user",
           content:
-            "That draft is too long. Cut the weakest two segments entirely, tighten the rest by about a " +
-            "third, keep the structure, the honesty rules and the exact JSON contract. " +
-            "Respond with ONLY the JSON object.",
+            "That draft is too long. Cut wordiness, not beats: keep 5 to 9 segments including the demo, " +
+            "and tighten the sentences by about a third. Keep the honesty rules and the exact JSON " +
+            "contract. Respond with ONLY the JSON object.",
         },
       ],
       {
@@ -633,6 +649,50 @@ export async function composeLlmScript(
         null
       );
     }
+    thin = missingBeats(parsed.segments);
+  } else if (thin) {
+    // The opposite failure: a 4-segment draft with no demo. Previously these
+    // shipped unchanged because only over-long drafts got a retry.
+    log(
+      `  groq: draft has ${parsed.segments.length} segment(s) without the core beats; ` +
+        "asking for one fuller draft..."
+    );
+    const second = await groqChatCompletion(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+        { role: "assistant", content: first.content },
+        {
+          role: "user",
+          content:
+            "That draft is too thin: fewer than five segments or missing the demo or the mechanism. " +
+            "Rewrite it with 5 to 9 segments, always including identify, explain, demo, install and cta. " +
+            "Expand the demo and the mechanism using ONLY the facts and README provided; keep the " +
+            "honesty rules, ask no questions, speak no install commands, and keep the exact JSON " +
+            `contract. Aim for about ${estimatedWordsForSeconds(target)} spoken words. ` +
+            "Respond with ONLY the JSON object.",
+        },
+      ],
+      {
+        model: GROQ_MODEL,
+        maxTokens: GROQ_MAX_TOKENS,
+        fetchImpl: options.fetchImpl,
+        sleep: options.sleep,
+        log,
+      }
+    );
+    totalRetries += second.retries;
+    completions.push({ content: second.content, model: second.model, usage: second.usage });
+    parsed = parseCompletion(second.content, warnings, ledger);
+    plan = buildPlan(repo, parsed.segments, target, model, options);
+    thin = missingBeats(parsed.segments);
+  }
+
+  if (thin) {
+    warnings.push(
+      "draft is still missing core beats after one expansion retry (5+ segments with a demo " +
+        "and an explanation are required)"
+    );
   }
 
   const estimated = estimateSeconds(plan);
