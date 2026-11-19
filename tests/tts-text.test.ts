@@ -79,6 +79,14 @@ describe("speech text normalisation", () => {
     assert.ok(!/Next\.js|50%|v1\.2\.0/.test(speech), speech);
   });
 
+  test("lowercase acronyms are spelled for the voice, not the captions", () => {
+    assert.equal(prepareTtsText("A cli for llms."), "A C L I for L L M s.");
+    assert.equal(
+      prepareTtsText("Build an mcp server and a rag pipeline."),
+      "Build an M C P server and a rag pipeline."
+    );
+  });
+
   test("slashes and dashes do not cause double pronunciations or stutters", () => {
     // Parenthetical route paths with slashes should not repeat the preceding noun
     const opendray = prepareTtsText(
