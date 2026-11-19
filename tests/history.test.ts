@@ -67,6 +67,21 @@ describe("history store", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  test("every attempted repository is excluded from auto-selection", () => {
+    const { store, dir } = freshStore();
+    seed(store, "N1", "acme/failed-once");
+    store.reserveRepository("N1", "r1");
+    store.failRepository("N1", "tts", new Error("boom"));
+    seed(store, "N2", "acme/untouched");
+    const excluded = store.excludedIdentities();
+    assert.ok(excluded.fullNames.has("acme/failed-once"));
+    assert.ok(excluded.nodeIds.has("N1"));
+    assert.equal(excluded.fullNames.has("acme/untouched"), false);
+    assert.equal(excluded.nodeIds.has("N2"), false);
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   test("failure is distinct from completion and stays retryable", () => {
     const { store, dir } = freshStore();
     seed(store, "N1", "acme/one");
