@@ -708,9 +708,15 @@ export type Rejection = { rule: string; reason: string };
 
 export function hardReject(
   repo: Repo,
-  context: { excluded: Set<string> }
+  context: { excluded: Set<string>; excludedNodeIds?: Set<string> }
 ): Rejection | null {
   const fullName = repo.full_name.toLowerCase();
+  if (repo.node_id && context.excludedNodeIds?.has(repo.node_id)) {
+    return {
+      rule: "history",
+      reason: "repository identity was already used (including after a rename)",
+    };
+  }
   if (repo.archived) return { rule: "archived", reason: "repository is archived" };
   if (repo.disabled) return { rule: "disabled", reason: "repository is disabled" };
   if (repo.fork) return { rule: "fork", reason: "repository is a fork" };
